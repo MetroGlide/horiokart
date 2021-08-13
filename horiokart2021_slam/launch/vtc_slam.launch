@@ -1,0 +1,90 @@
+<launch>
+    <!-- Arguments -->
+    <arg name="slam_methods" default="gmapping" doc="slam type [gmapping, cartographer, hector]"/>
+    <arg name="open_rviz" default="true"/>
+
+    <!-- robot -->
+    <arg name="urdf_model" default="$(find vtc_robot_description)/urdf/robot_description.urdf" />
+    <arg name="gui" default="false" />
+
+    <param name="robot_description" textfile="$(arg urdf_model)" />
+    <param name="use_gui" value="$(arg gui)" />
+
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
+    <node name="robot_state_publisher" pkg=
+    "robot_state_publisher" type="robot_state_publisher" />
+
+    <!-- IMU to Odom ref:https://qiita.com/srs/items/7e8454d4d616983e5cb8 -->
+    <node pkg="robot_localization" type="ekf_localization_node" name="ekf_se" clear_params="true" output="screen">
+        <!--rosparam command="load" file="$(find nav_lecture)/config/ekf_localization/mode1.yaml" /-->
+        <remap from="/odometry/filtered" to="odom" />
+        <!--remap from="odom0" to="odom" /-->
+        <remap from="imu0"  to="imu" />
+        <rosparam>
+            frequency: 30
+            sensor_timeout: 0.1
+            two_d_mode: true
+            transform_time_offset: 0.0
+            transform_timeout: 0.0
+            print_diagnostics: true
+            publish_tf: true
+            publish_acceleration: false
+
+            map_frame: map
+            odom_frame: odom
+            base_link_frame: base_footprint
+
+            #odom0: wheel odometry
+            #odom0: odom0
+            #odom0_config: [false, false, false,
+            #            false, false, false,
+            #            true , false, false,
+            #            false, false, true,
+            #            false, false, false]
+
+            #imu0
+            imu0: imu0
+            imu0_config: [false, false, false,
+                        false, false, true,
+                        false, false, false,
+                        false, false, true,
+                        false, false, false]
+        </rosparam>
+    </node>
+
+
+    <!-- Velodyne Pointcloud -->
+    <include file="$(find velodyne_pointcloud)/launch/vtc.launch"></include>
+
+    <!-- Pointcloud to Scan -->
+    <node pkg="pointcloud_to_laserscan" type="pointcloud_to_laserscan_node" name="pointcloud_to_laserscan">
+    <remap from="cloud_in" to="/velodyne_points"/>
+    <remap from="scan" to="scan"/>
+    <rosparam>
+        target_frame: lrf_link
+        transform_tolerance: 0.01
+        min_height: 0.0
+        max_height: 1.0
+
+        angle_min: -1.5708
+        angle_max: 1.5708
+        angle_increment: 0.0087
+        scan_time: 0.3333
+        range_min: 0.45
+        range_max: 4000.0
+        use_inf: true
+
+        concurrency_level: 1
+    </rosparam>
+    </node>
+
+    <!-- SLAM: Gmapping, Hector -->
+    <include file="$(find vtc_slam)/launch/vtc_$(arg slam_methods).launch">
+    </include>
+
+    <!-- rviz -->
+    <group if="$(arg open_rviz)"> 
+        <node pkg="rviz" type="rviz" name="rviz" required="true"
+                args="-d $(find vtc_slam)/rviz/slam.rviz"/>
+    </group>
+</launch>
