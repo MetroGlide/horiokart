@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<robot name="horiokart2021_robot">
+  <!-- =============== Link & Joint =============== -->
+  <!-- Base -->
+  <link name="base_footprint"/>
+
+  <joint name="base_link_joint" type="fixed">
+    <origin xyz="0 0 0.20316"/>
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+  </joint>
+  <link name="base_link">
+  </link>
+
+  <joint name="right_wheel_joint" type="continuous">
+    <origin xyz="0 -0.214375 0"/>
+    <parent link="base_link"/>
+    <child link="right_wheel_link"/>
+    <axis xyz="0 1 0"/>
+  </joint>
+  <link name="right_wheel_link">
+  </link>
+
+  <joint name="left_wheel_joint" type="continuous">
+    <origin rpy="0 0 3.14159274" xyz="0 0.214375 0"/>
+    <parent link="base_link"/>
+    <child link="left_wheel_link"/>
+    <axis xyz="0 -1 0"/>
+  </joint>
+  <link name="left_wheel_link">
+  </link>
+
+    <joint name="lrf_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="lrf_link"/>
+    <origin xyz="0 0 0.04684"/>
+  </joint>
+  <link name="lrf_link"/>
