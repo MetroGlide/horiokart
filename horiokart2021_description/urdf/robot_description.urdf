@@ -34,6 +34,8 @@
     <joint name="lrf_link_joint" type="fixed">
     <parent link="base_link"/>
     <child link="lrf_link"/>
-    <origin xyz="0 0 0.04684"/>
+    <origin xyz="0.27 0 0.15"/>
   </joint>
   <link name="lrf_link"/>
+
+ </robot>

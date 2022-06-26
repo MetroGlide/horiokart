@@ -1,13 +1,24 @@
 <launch>
     <!-- Odometry -->
-    <node pkg="horiokart2021_sensors" type="serial_motordriver" name="serial_motordriver"/>
+    <node pkg="horiokart2021_sensors" type="serial_odom" name="serial_odom">
+        <param name="device_name" type="string" value="/dev/ttyACM0" />
+        <param name="odom_frame" type="string" value="odom" />
+        <param name="base_frame" type="string" value="base_footprint" />
+        <param name="odom_pub_rate" type="int" value="20" />
+
+        <param name="inv_x" type="bool" value="false" />
+        <param name="inv_y" type="bool" value="false" />
+        <param name="inv_th" type="bool" value="false" />
+
+        <param name="csv" type="bool" value="true" />
+    </node>
 
     <!-- rplidar -->
     <node name="rplidarNode" pkg="rplidar_ros"  type="rplidarNode" output="screen">
         <param name="serial_port"         type="string" value="/dev/ttyUSB0"/>
         <param name="serial_baudrate"     type="int"    value="115200"/><!--A1/A2 -->
         <!--param name="serial_baudrate"     type="int"    value="256000"--><!--A3 -->
-        <param name="frame_id"            type="string" value="laser"/>
+        <param name="frame_id"            type="string" value="lrf_link"/>
         <param name="inverted"            type="bool"   value="false"/>
         <param name="angle_compensate"    type="bool"   value="true"/>
     </node>
