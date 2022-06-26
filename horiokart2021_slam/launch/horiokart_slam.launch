@@ -4,7 +4,7 @@
     <arg name="open_rviz" default="true"/>
 
     <!-- robot -->
-    <arg name="urdf_model" default="$(find vtc_robot_description)/urdf/robot_description.urdf" />
+    <arg name="urdf_model" default="$(find horiokart2021_description)/urdf/robot_description.urdf" />
     <arg name="gui" default="false" />
 
     <param name="robot_description" textfile="$(arg urdf_model)" />
@@ -16,16 +16,16 @@
 
     
     <!-- Odom, rplidar -->
-    <include file="$(find velodyne_pointcloud)/launch/vtc.launch"></include>
+    <include file="$(find horiokart2021_sensors)/launch/sensors.launch"></include>
 
 
     <!-- SLAM: Gmapping, Hector -->
-    <include file="$(find vtc_slam)/launch/vtc_$(arg slam_methods).launch">
+    <include file="$(find horiokart2021_slam)/launch/$(arg slam_methods).launch">
     </include>
 
     <!-- rviz -->
     <group if="$(arg open_rviz)"> 
         <node pkg="rviz" type="rviz" name="rviz" required="true"
-                args="-d $(find vtc_slam)/rviz/slam.rviz"/>
+                args="-d $(find horiokart2021_slam)/rviz/slam.rviz"/>
     </group>
 </launch>

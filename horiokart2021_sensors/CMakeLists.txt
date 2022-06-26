@@ -137,6 +137,8 @@ include_directories(
 ## The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/horiokart2021_slam_node.cpp)
 add_executable(serial_motordriver src/serial_motordriver.cpp)
+add_executable(serial_odom src/serial_odom.cpp)
+add_executable(serial_gps src/serial_gps.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -150,6 +152,12 @@ add_executable(serial_motordriver src/serial_motordriver.cpp)
 
 ## Specify libraries to link a library or executable target against
  target_link_libraries(serial_motordriver
+   ${catkin_LIBRARIES}
+ )
+ target_link_libraries(serial_odom
+   ${catkin_LIBRARIES}
+ )
+ target_link_libraries(serial_gps
    ${catkin_LIBRARIES}
  )
 
