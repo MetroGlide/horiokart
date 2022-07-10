@@ -20,6 +20,8 @@
 
   <!-- Odom, rplidar -->
   <include file="$(find horiokart2021_sensors)/launch/sensors.launch"></include>
+  <!-- motordriver -->
+  <include file="$(find horiokart2021_sensors)/launch/motordriver.launch"></include>
 
   <!-- Map server -->
   <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)">
