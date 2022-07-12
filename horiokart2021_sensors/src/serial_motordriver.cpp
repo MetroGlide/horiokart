@@ -67,6 +67,13 @@ int serial_read(int fd, uint8_t buf[], int buf_size){
     }
 }
 
+void buf_print(uint8_t buf[], int buf_size){
+    for(int i=0;i<buf_size;i++){
+        printf("%#x ", buf[i]);
+    }
+    printf("\n");
+}
+
 int fd1;
 ofstream ofs;
 bool is_write_csv;
@@ -96,18 +103,40 @@ void serial_callback(const geometry_msgs::Twist vel){
 
     // send
     //uint8_t sendBuf[] = {0x96, 0x46, rspd, lspd, 0};
-    uint8_t sendBuf[] = {0x96, 0x45, rspd, lspd, 0x00, 0};
+    // uint8_t sendBuf[] = {0x96, 0x45, rspd, lspd, 0x00, 0};
+    // uint8_t sendBuf[] = {0x96, 0x45, 0x01, 0x05, 0x00, 0x00};
+    uint8_t sendBuf[] = {0x96, 0x39, 0x01, 0x05, 0x00, 0x00};
+    // uint8_t sendBuf[] = {0x96, 0x45, 0x00, 0x00, 0x00, 0x00};
+    // uint8_t sendBuf[] = {0x96, 0x96, 0x96};
+    // uint8_t sendBuf[] = {0x96, 0xff};
+
     int bufSize = sizeof(sendBuf) / sizeof(sendBuf[0]);
     //sendBuf[bufSize-1] = calc_checksum(sendBuf, bufSize);
+
     uint8_t c_sum = calc_checksum(sendBuf, bufSize);
     sendBuf[bufSize-1] = c_sum;
 
+    // cout << "rspd:" << rspd;
+    // cout << ",lspd:" << lspd;
+    // cout << ",c_sum:" << c_sum << endl;
+
+    printf("rspd: %#x ", rspd);
+    printf("lspd: %#x ", lspd);
+    printf("\n");
+
+    printf("write:");
+    buf_print(sendBuf, bufSize);
     int rec=serial_write(fd1, sendBuf, sizeof(sendBuf));
+
+    usleep(50000);
 
     if(rec>=0){
         uint8_t retbuf[64]={0};
         int recv_data=serial_read(fd1, retbuf, sizeof(retbuf));
         printf("recv %d \n", recv_data);
+
+        printf("recv:");
+        buf_print(retbuf, recv_data);
     }
 
     if(is_write_csv){
