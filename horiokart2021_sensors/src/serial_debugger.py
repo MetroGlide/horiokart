@@ -16,17 +16,17 @@ port = args.port
 baud = args.baud
 timeout = args.timeout
 
-# ser = serial.Serial(port, baud, timeout)
+ser = serial.Serial(port, baud, timeout)
 
 def readwrite(send_buf):
     print(f"write:{''.join([f'0x{x:02x} ' for x in send_buf])}")
     print(f"raw:{send_buf}")
     print("---")
 
-    # ser.write(send_buf)
-    # line = ser.readline()
-    # print(f"read:{''.join([f'0x{x:02x} ' for x in line])}")
-    # print(f"raw:{line}")
+    ser.write(send_buf)
+    line = ser.readline()
+    print(f"read:{''.join([f'0x{x:02x} ' for x in line])}")
+    print(f"raw:{line}")
     print("---")
 
 h = b""
