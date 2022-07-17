@@ -1,7 +1,7 @@
 <launch>
     <!-- Arguments -->
     <arg name="slam_methods" default="gmapping" doc="slam type [gmapping, cartographer, hector]"/>
-    <arg name="open_rviz" default="true"/>
+    <arg name="open_rviz" default="false"/>
 
     <!-- robot -->
     <arg name="urdf_model" default="$(find horiokart2021_description)/urdf/robot_description.urdf" />

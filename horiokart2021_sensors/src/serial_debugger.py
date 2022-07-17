@@ -15,7 +15,9 @@ port = args.port
 baud = args.baud
 timeout = args.timeout
 
-ser = serial.Serial(port, baud, timeout)
+print(f"port:{port}")
+
+ser = serial.Serial(port, baud, timeout=timeout)
 
 def readwrite(send_buf):
     print(f"write:{''.join([f'0x{x:02x} ' for x in send_buf])}")

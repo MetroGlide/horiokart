@@ -103,15 +103,10 @@ void serial_callback(const geometry_msgs::Twist vel){
 
     // send
     //uint8_t sendBuf[] = {0x96, 0x46, rspd, lspd, 0};
-    // uint8_t sendBuf[] = {0x96, 0x45, rspd, lspd, 0x00, 0};
-    // uint8_t sendBuf[] = {0x96, 0x45, 0x01, 0x05, 0x00, 0x00};
-    uint8_t sendBuf[] = {0x96, 0x39, 0x01, 0x05, 0x00, 0x00};
-    // uint8_t sendBuf[] = {0x96, 0x45, 0x00, 0x00, 0x00, 0x00};
-    // uint8_t sendBuf[] = {0x96, 0x96, 0x96};
-    // uint8_t sendBuf[] = {0x96, 0xff};
+    uint8_t sendBuf[] = {0x96, 0x45, rspd, lspd, 0x00, 0};
 
     int bufSize = sizeof(sendBuf) / sizeof(sendBuf[0]);
-    //sendBuf[bufSize-1] = calc_checksum(sendBuf, bufSize);
+    // sendBuf[bufSize-1] = calc_checksum(sendBuf, bufSize);
 
     uint8_t c_sum = calc_checksum(sendBuf, bufSize);
     sendBuf[bufSize-1] = c_sum;
