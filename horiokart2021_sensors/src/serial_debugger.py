@@ -1,4 +1,3 @@
-from nbformat import read
 import serial
 import argparse
 import time
@@ -6,7 +5,7 @@ import re
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--port", default="/dev/ttyACM1")
+parser.add_argument("--port", default="/dev/ttyACM0")
 parser.add_argument("--baud", default=115200, type=int)
 parser.add_argument("--timeout", default=3, type=int)
 args = parser.parse_args()
