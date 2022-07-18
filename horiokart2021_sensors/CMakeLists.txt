@@ -108,7 +108,7 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES horiokart2021_sensors
   CATKIN_DEPENDS roscpp tf sensor_msgs std_msgs nav_msgs  
-  DEPENDS system_lib
+  #DEPENDS system_lib
 )
 
 ###########

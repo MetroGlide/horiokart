@@ -4,20 +4,10 @@
     <arg name="open_rviz" default="false"/>
 
     <!-- robot -->
-    <arg name="urdf_model" default="$(find horiokart2021_description)/urdf/robot_description.urdf" />
-    <arg name="gui" default="false" />
+    <include file="$(find horiokart2021_description)/launch/horiokart_description.launch"></include>
 
-    <param name="robot_description" textfile="$(arg urdf_model)" />
-    <param name="use_gui" value="$(arg gui)" />
-
-    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
-    <node name="robot_state_publisher" pkg=
-    "robot_state_publisher" type="robot_state_publisher" />
-
-    
     <!-- Odom, rplidar -->
     <include file="$(find horiokart2021_sensors)/launch/sensors.launch"></include>
-
 
     <!-- SLAM: Gmapping, Hector -->
     <include file="$(find horiokart2021_slam)/launch/$(arg slam_methods).launch">
