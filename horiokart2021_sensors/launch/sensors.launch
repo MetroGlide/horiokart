@@ -17,6 +17,9 @@
 
             <param name="csv" type="bool" value="true" />
         </node>
+
+        <node pkg="horiokart2021_sensors" type="odom2tf" name="odom2tf">
+        </node>
     </group>
 
     <!-- rplidar -->

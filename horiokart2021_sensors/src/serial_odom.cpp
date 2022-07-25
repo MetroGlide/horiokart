@@ -80,7 +80,6 @@ int main(int argc, char **argv)
     //Publisher
     ros::Publisher serial_pub = n.advertise<nav_msgs::Odometry>("odom", 1000);
 
-    tf::TransformBroadcaster odom_broadcaster;
     ros::Time current_time;
     current_time = ros::Time::now();
 
@@ -234,18 +233,6 @@ int main(int argc, char **argv)
 
             current_time = ros::Time::now();
             
-            geometry_msgs::TransformStamped odom_trans;
-            odom_trans.header.stamp = current_time;
-            odom_trans.header.frame_id = odom_frame;
-            odom_trans.child_frame_id = base_frame;
-
-            odom_trans.transform.translation.x = odom_x;
-            odom_trans.transform.translation.y = odom_y;
-            odom_trans.transform.translation.z = 0.0;
-            odom_trans.transform.rotation = odom_quat;
-
-            odom_broadcaster.sendTransform(odom_trans);
-
             nav_msgs::Odometry odom;
             odom.header.stamp = current_time;
             odom.header.frame_id = odom_frame;
