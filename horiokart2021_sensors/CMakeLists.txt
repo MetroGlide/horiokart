@@ -105,7 +105,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-  INCLUDE_DIRS include
+  #INCLUDE_DIRS include
   LIBRARIES horiokart2021_sensors
   CATKIN_DEPENDS roscpp tf sensor_msgs std_msgs nav_msgs  
   #DEPENDS system_lib
@@ -139,7 +139,7 @@ include_directories(
 add_executable(serial_motordriver src/serial_motordriver.cpp)
 add_executable(serial_odom src/serial_odom.cpp)
 add_executable(serial_gps src/serial_gps.cpp)
-add_executable(odom2tf src/odom2tf.cpp)
+add_executable(hj_sensor_odom2tf src/odom2tf.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -161,7 +161,7 @@ add_executable(odom2tf src/odom2tf.cpp)
  target_link_libraries(serial_gps
    ${catkin_LIBRARIES}
  )
-target_link_libraries(odom2tf
+target_link_libraries(hj_sensor_odom2tf
   ${catkin_LIBRARIES}
 )
 
