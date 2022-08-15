@@ -1,0 +1,47 @@
+<launch>
+  <!-- Arguments -->
+
+  <arg name="map_file" default="$(env MAP_PATH)"/>
+  <arg name="open_rviz" default="true"/>
+  <arg name="move_forward_only" default="false"/>
+
+  <!-- robot -->
+  <arg name="urdf_model" default="$(find horiokart2021_description)/urdf/robot_description.urdf" />
+  <arg name="gui" default="false" />
+
+  <param name="robot_description" textfile="$(arg urdf_model)" />
+
+  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
+
+  <node name="robot_state_publisher" pkg=
+  "robot_state_publisher" type="robot_state_publisher" >
+  </node>
+
+
+  <!-- Odom, rplidar -->
+  <!-- motordriver -->
+
+  <!-- Map server -->
+  <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)">
+    <!-- Topic Name -->
+    <remap from="map" to="/map" />
+    <remap from="map_metadata" to="/map_metadata" />
+    <!-- Frame Name -->
+    <param name="frame_id" value="map" />
+  </node>
+
+  <!-- AMCL -->
+  <include file="$(find horiokart2021_navigation)/launch/amcl.launch"/>
+
+  <!-- move_base -->
+  <include file="$(find horiokart2021_navigation)/launch/move_base.launch">
+    <arg name="move_forward_only" value="$(arg move_forward_only)"/>
+    <arg name="cmd_vel_topic" value="/cmd_vel"/>
+  </include>
+
+  <!-- rviz -->
+  <group if="$(arg open_rviz)"> 
+    <node pkg="rviz" type="rviz" name="rviz" required="true"
+          args="-d $(find horiokart2021_navigation)/rviz/navigation.rviz"/>
+  </group>
+</launch>
