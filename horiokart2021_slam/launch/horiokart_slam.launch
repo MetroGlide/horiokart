@@ -3,14 +3,19 @@
     <arg name="slam_methods" default="gmapping" doc="slam type [gmapping, cartographer, hector]"/>
     <arg name="open_rviz" default="false"/>
 
+    <arg name="simulation" default="false"/>
+
     <!-- robot -->
     <include file="$(find horiokart2021_description)/launch/horiokart_description.launch"></include>
 
-    <!-- Odom, rplidar -->
-    <include file="$(find horiokart2021_sensors)/launch/sensors.launch"></include>
+    <group unless="$(arg simulation)"> 
+        <!-- Odom, rplidar -->
+        <include file="$(find horiokart2021_sensors)/launch/sensors.launch"></include>
+    </group>
 
-    <!-- SLAM: Gmapping, Hector -->
+    <!-- SLAM: Gmapping -->
     <include file="$(find horiokart2021_slam)/launch/$(arg slam_methods).launch">
+        <arg name="set_scan_topic"  value="scan_filtered"/>
     </include>
 
     <!-- rviz -->

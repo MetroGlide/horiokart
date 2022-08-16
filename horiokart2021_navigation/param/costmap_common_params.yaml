@@ -11,4 +11,4 @@ transform_tolerance: 5.0
 
 map_type: costmap
 observation_sources: scan
-scan: {sensor_frame: lrf_link, data_type: LaserScan, topic: scan, marking: true, clearing: true}
+scan: {sensor_frame: lrf_link, data_type: LaserScan, topic: scan_filtered, marking: true, clearing: true}

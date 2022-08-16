@@ -31,7 +31,9 @@
   </node>
 
   <!-- AMCL -->
-  <include file="$(find horiokart2021_navigation)/launch/amcl.launch"/>
+  <include file="$(find horiokart2021_navigation)/launch/amcl.launch">
+    <arg name="scan_topic" value="scan_filtered" />
+  </include>/>
 
   <!-- move_base -->
   <include file="$(find horiokart2021_navigation)/launch/move_base.launch">

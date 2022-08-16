@@ -35,6 +35,7 @@
             <param name="inverted"            type="bool"   value="false"/>
             <param name="angle_compensate"    type="bool"   value="true"/>
         </node>
+        <include file="$(find horiokart2021_sensors)/launch/laser_filter.launch"></include>
     </group>
 
     
