@@ -50,7 +50,7 @@
   <joint name="lrf_link_joint" type="fixed">
     <parent link="base_link"/>
     <child link="lrf_link"/>
-    <origin xyz="0.27 0 0.15"/>
+    <origin xyz="0.31 0 0.15" rpy="0 0 3.14"/>
   </joint>
   <link name="lrf_link">
     <visual>

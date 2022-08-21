@@ -1,11 +1,11 @@
 <launch>
 
     <!-- Odometry -->
-    <arg name="odom_port" default="/dev/ttyACM1"/>
+    <arg name="odom_port" default="/dev/ttyACM0"/>
     <arg name="use_odom" default="true"/>
 
     <group if="$(arg use_odom)">
-        <node pkg="horiokart2021_sensors" type="serial_odom" name="serial_odom">
+        <node pkg="horiokart2021_sensors" type="serial_odom" name="serial_odom" output="screen">
             <param name="device_name" type="string" value="$(arg odom_port)" />
             <param name="odom_frame" type="string" value="odom" />
             <param name="base_frame" type="string" value="base_footprint" />
@@ -18,7 +18,7 @@
             <param name="csv" type="bool" value="true" />
         </node>
 
-        <node pkg="horiokart2021_sensors" type="odom2tf" name="odom2tf">
+        <node pkg="horiokart2021_sensors" type="hj_sensor_odom2tf" name="odom2tf">
         </node>
     </group>
 
