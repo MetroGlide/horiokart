@@ -1,7 +1,7 @@
 <launch>
     <!-- Arguments -->
     <arg name="slam_methods" default="gmapping" doc="slam type [gmapping, cartographer, hector]"/>
-    <arg name="open_rviz" default="false"/>
+    <arg name="rviz" default="false"/>
 
     <arg name="simulation" default="false"/>
 
@@ -15,11 +15,11 @@
 
     <!-- SLAM: Gmapping -->
     <include file="$(find horiokart2021_slam)/launch/$(arg slam_methods).launch">
-        <arg name="set_scan_topic"  value="scan_filtered"/>
+        <arg name="set_scan_topic"  value="scan_filtered/scan_top_lrf"/>
     </include>
 
     <!-- rviz -->
-    <group if="$(arg open_rviz)"> 
+    <group if="$(arg rviz)"> 
         <node pkg="rviz" type="rviz" name="rviz" required="true"
                 args="-d $(find horiokart2021_slam)/rviz/slam.rviz"/>
     </group>

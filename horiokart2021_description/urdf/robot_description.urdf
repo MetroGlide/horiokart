@@ -47,12 +47,25 @@
     </visual>
   </link>
 
-  <joint name="lrf_link_joint" type="fixed">
+  <joint name="front_lrf_link_joint" type="fixed">
     <parent link="base_link"/>
-    <child link="lrf_link"/>
+    <child link="front_lrf_link"/>
     <origin xyz="0.31 0 0.15" rpy="0 0 3.14"/>
   </joint>
-  <link name="lrf_link">
+  <link name="front_lrf_link">
+    <visual>
+      <geometry>
+        <cylinder length="0.05" radius="0.05"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <joint name="top_lrf_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="top_lrf_link"/>
+    <origin xyz="0.31 0 0.65" rpy="0 0 0"/>
+  </joint>
+  <link name="top_lrf_link">
     <visual>
       <geometry>
         <cylinder length="0.05" radius="0.05"/>
