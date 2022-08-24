@@ -1,7 +1,7 @@
 <launch>
   <!-- Arguments -->
   <arg name="map_file" default="$(env MAP_PATH)"/>
-  <arg name="open_rviz" default="true"/>
+  <arg name="rviz" default="false"/>
   <arg name="move_forward_only" default="false"/>
 
   <!--<arg name="simulation" default="$(eval (import sim_eval;sim_eval.get_bool_param()))"/>-->
@@ -28,7 +28,7 @@
 
   <!-- AMCL -->
   <include file="$(find horiokart2021_navigation)/launch/amcl.launch">
-    <arg name="scan_topic" value="scan_filtered" />
+    <arg name="scan_topic" value="scan_filtered/scan_top_lrf" />
   </include>
 
   <!-- move_base -->
@@ -38,7 +38,7 @@
   </include>
 
   <!-- rviz -->
-  <group if="$(arg open_rviz)"> 
+  <group if="$(arg rviz)"> 
     <node pkg="rviz" type="rviz" name="rviz" required="true"
           args="-d $(find horiokart2021_navigation)/rviz/navigation.rviz"/>
   </group>
