@@ -1,0 +1,25 @@
+version: "3.4"
+
+services:
+  ros-master:
+    image: tiryoh/ros-desktop-vnc:melodic
+    hostname: ros-host
+    command: stdbuf -o L roscore
+    network_mode: "host"
+
+  horiokart:
+    image: horiokart
+    build:
+      context: "./"
+      dockerfile: "docker/Dockerfile"
+    network_mode: "host"
+    privileged: true
+    environment:
+      DISPLAY: ${DISPLAY}
+      PYTHONUNBUFFERED: 1
+    tty: true
+    volumes:
+      - type: bind
+        source: ./
+        target: /app/horiokart/
+    command: "/app/org/docker/docker-entrypoint.sh"
