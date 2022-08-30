@@ -1,5 +1,5 @@
 map_update_interval: 2.0
-maxUrange: 30.0
+maxUrange: 35.0
 sigma: 0.05
 kernelSize: 1
 lstep: 0.05
@@ -8,7 +8,7 @@ iterations: 5
 lsigma: 0.01
 ogain: 1.0
 lskip: 0
-minimumScore: 50
+minimumScore: 10
 srr: 0.1
 srt: 0.2
 str: 0.1

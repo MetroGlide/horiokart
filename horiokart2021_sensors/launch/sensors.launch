@@ -29,7 +29,7 @@
 
     <group if="$(arg use_rplidar)">
         <!-- rplidar A1 -->
-        <node name="rplidarNode" pkg="rplidar_ros"  type="front_rplidarNode" output="screen">
+        <node name="front_rplidarNode" pkg="rplidar_ros"  type="rplidarNode" output="screen">
             <param name="serial_port"         type="string" value="$(arg front_rplidar_port)"/>
             <param name="serial_baudrate"     type="int"    value="115200"/><!--A1/A2 -->
             <!--param name="serial_baudrate"     type="int"    value="256000"--><!--A3 -->
@@ -39,7 +39,7 @@
         </node>
 
         <!-- rplidar S2 -->
-        <node name="rplidarNode" pkg="rplidar_ros"  type="top_rplidarNode" output="screen">
+        <node name="top_rplidarNode" pkg="rplidar_ros"  type="rplidarNode" output="screen">
             <param name="serial_port"         type="string" value="$(arg top_rplidar_port)"/>
             <param name="serial_baudrate"     type="int"    value="1000000"/>
             <param name="frame_id"            type="string" value="top_lrf_link"/>
