@@ -162,7 +162,7 @@ int main(int argc, char **argv)
 
         // TODO: バッファクリア
         int rec=serial_write(fd1, odomBuf, sizeof(odomBuf));
-        printf("send:%#x %#x\n",odomBuf[0], odomBuf[1]);
+        //printf("send:%#x %#x\n",odomBuf[0], odomBuf[1]);
 
         usleep(TIME_TO_SLEEP);
         if(rec>=0){
@@ -171,11 +171,11 @@ int main(int argc, char **argv)
             // printf("recv %d \n", recv_data);
 
             if(recv_data>0){
-                printf("recv:");
-                for(int i=0;i<recv_data;i++){
-                    printf("%#x ", retbuf[i]);
-                }
-                printf("\n");
+                //printf("recv:");
+                //for(int i=0;i<recv_data;i++){
+                //    printf("%#x ", retbuf[i]);
+                //}
+                //printf("\n");
 
                 if(retbuf[0] == 0x24){
         
@@ -226,8 +226,8 @@ int main(int argc, char **argv)
             // 何かしら返ってきてたらとりあえずpublish
             double th = odom_th * 180 / 3.14;
             double vth = odom_vth * 180 / 3.14;
-            printf("x:%lf y:%lf th:%lf \n", odom_x, odom_y, th);
-            printf("vx:%lf vy:%lf vth%lf \n", odom_vx, odom_vy, vth);
+            //printf("x:%lf y:%lf th:%lf \n", odom_x, odom_y, th);
+            //printf("vx:%lf vy:%lf vth%lf \n", odom_vx, odom_vy, vth);
 
             geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(odom_th);
 

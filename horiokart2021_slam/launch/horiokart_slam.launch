@@ -15,7 +15,7 @@
 
     <!-- SLAM: Gmapping -->
     <include file="$(find horiokart2021_slam)/launch/$(arg slam_methods).launch">
-        <arg name="set_scan_topic"  value="scan_filtered/scan_top_lrf"/>
+        <arg name="set_scan_topic"  value="/scan_top_lrf"/>
     </include>
 
     <!-- rviz -->

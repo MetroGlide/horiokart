@@ -124,12 +124,12 @@ void serial_callback(const geometry_msgs::Twist vel){
     // cout << ",lspd:" << lspd;
     // cout << ",c_sum:" << c_sum << endl;
 
-    printf("rspd: %#x ", rspd);
-    printf("lspd: %#x ", lspd);
-    printf("\n");
+    //printf("rspd: %#x ", rspd);
+    //printf("lspd: %#x ", lspd);
+    //printf("\n");
 
-    printf("write:");
-    buf_print(sendBuf, bufSize);
+    //printf("write:");
+    //buf_print(sendBuf, bufSize);
     tcflush(fd1, TCOFLUSH);
     int rec=serial_write(fd1, sendBuf, sizeof(sendBuf));
 
@@ -138,10 +138,10 @@ void serial_callback(const geometry_msgs::Twist vel){
     if(rec>=0){
         uint8_t retbuf[64]={0};
         int recv_data=serial_read(fd1, retbuf, sizeof(retbuf));
-        printf("recv %d \n", recv_data);
+        //printf("recv %d \n", recv_data);
 
-        printf("recv:");
-        buf_print(retbuf, recv_data);
+        //printf("recv:");
+        //buf_print(retbuf, recv_data);
     }
 
     if(is_write_csv){

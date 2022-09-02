@@ -1,7 +1,7 @@
 <launch>
 
     <!-- Odometry -->
-    <arg name="odom_port" default="/dev/ttyACM0"/>
+    <arg name="odom_port" default="/dev/ttyACM1"/>
     <arg name="use_odom" default="true"/>
 
     <group if="$(arg use_odom)">
@@ -23,13 +23,14 @@
     </group>
 
     <!-- rplidar -->
-    <arg name="front_rplidar_port" default="/dev/ttyUSB0"/>
-    <arg name="top_rplidar_port" default="/dev/ttyUSB1"/>
+    <arg name="front_rplidar_port" default="/dev/ttyUSB1"/>
+    <arg name="top_rplidar_port" default="/dev/ttyUSB0"/>
     <arg name="use_rplidar" default="true"/>
 
     <group if="$(arg use_rplidar)">
         <!-- rplidar A1 -->
-        <node name="rplidarNode" pkg="rplidar_ros"  type="front_rplidarNode" output="screen">
+        <node name="front_rplidarNode" pkg="rplidar_ros"  type="rplidarNode" output="screen">
+            <remap from="scan" to="scan_front_lrf" />
             <param name="serial_port"         type="string" value="$(arg front_rplidar_port)"/>
             <param name="serial_baudrate"     type="int"    value="115200"/><!--A1/A2 -->
             <!--param name="serial_baudrate"     type="int"    value="256000"--><!--A3 -->
@@ -39,9 +40,11 @@
         </node>
 
         <!-- rplidar S2 -->
-        <node name="rplidarNode" pkg="rplidar_ros"  type="top_rplidarNode" output="screen">
+        <node name="top_rplidarNode" pkg="rplidar_ros"  type="rplidarNode" output="screen">
+            <remap from="scan" to="scan_top_lrf" />
             <param name="serial_port"         type="string" value="$(arg top_rplidar_port)"/>
             <param name="serial_baudrate"     type="int"    value="1000000"/>
+            <!--<param name="serial_baudrate"     type="int"    value="1000000"/>-->
             <param name="frame_id"            type="string" value="top_lrf_link"/>
             <param name="inverted"            type="bool"   value="false"/>
             <param name="angle_compensate"    type="bool"   value="true"/>
