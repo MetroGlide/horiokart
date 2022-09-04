@@ -171,11 +171,11 @@ int main(int argc, char **argv)
             // printf("recv %d \n", recv_data);
 
             if(recv_data>0){
-                //printf("recv:");
-                //for(int i=0;i<recv_data;i++){
-                //    printf("%#x ", retbuf[i]);
-                //}
-                //printf("\n");
+                printf("recv:");
+                for(int i=0;i<recv_data;i++){
+                    printf("%#x ", retbuf[i]);
+                }
+                printf("\n");
 
                 if(retbuf[0] == 0x24){
         
