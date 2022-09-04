@@ -1,11 +1,11 @@
 version: "3.4"
 
 services:
-  ros-master:
-    image: tiryoh/ros-desktop-vnc:melodic
-    hostname: ros-host
-    command: stdbuf -o L roscore
-    network_mode: "host"
+  #ros-master:
+  #  image: tiryoh/ros-desktop-vnc:melodic
+  #  hostname: ros-host
+  #  command: stdbuf -o L roscore
+  #  network_mode: "host"
 
   horiokart:
     image: horiokart
