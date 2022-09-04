@@ -1,30 +1,38 @@
 <launch>
     <!-- Arguments -->
     <arg name="slam_methods" default="gmapping" doc="slam type [gmapping, cartographer, hector]"/>
-    <arg name="open_rviz" default="false"/>
+    <arg name="rviz" default="false"/>
+
+    <arg name="simulation" default="false"/>
 
     <!-- robot -->
-    <arg name="urdf_model" default="$(find horiokart2021_description)/urdf/robot_description.urdf" />
-    <arg name="gui" default="false" />
+    <include file="$(find horiokart2021_description)/launch/horiokart_description.launch"></include>
 
-    <param name="robot_description" textfile="$(arg urdf_model)" />
-    <param name="use_gui" value="$(arg gui)" />
+    <group unless="$(arg simulation)"> 
+        <!-- Odom, rplidar -->
+        <include file="$(find horiokart2021_sensors)/launch/sensors.launch"></include>
+    </group>
 
-    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
-    <node name="robot_state_publisher" pkg=
-    "robot_state_publisher" type="robot_state_publisher" />
+    <node name="top_rplidar_reducer" pkg="horiokart2021_sensors" type="laser_reducer.py" output="screen">
+        <remap from="scan" to="/scan_filtered/scan_top_lrf"/>
+        <remap from="scan_reduced" to="/scan_reduced/scan_filtered/scan_top_lrf"/>
+        <param name="skip_num" type="int" value="2"/>
+    </node>
+    <node name="top_rplidar_reducer_matching_point" pkg="horiokart2021_sensors" type="laser_reducer.py" output="screen">
+        <remap from="scan" to="/scan_filtered/scan_top_lrf"/>
+        <remap from="scan_reduced" to="/scan_reduced/scan_filtered/scan_top_lrf_matching_point"/>
+        <param name="skip_num" type="int" value="14"/>
+    </node>
 
-    
-    <!-- Odom, rplidar -->
-    <include file="$(find horiokart2021_sensors)/launch/sensors.launch"></include>
 
-
-    <!-- SLAM: Gmapping, Hector -->
+    <!-- SLAM: Gmapping -->
     <include file="$(find horiokart2021_slam)/launch/$(arg slam_methods).launch">
+        <!--<arg name="set_scan_topic"  value="scan_filtered/scan_top_lrf"/>-->
+        <arg name="set_scan_topic"  value="/scan_reduced/scan_filtered/scan_top_lrf"/>
     </include>
 
     <!-- rviz -->
-    <group if="$(arg open_rviz)"> 
+    <group if="$(arg rviz)"> 
         <node pkg="rviz" type="rviz" name="rviz" required="true"
                 args="-d $(find horiokart2021_slam)/rviz/slam.rviz"/>
     </group>

@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>horiokart2021_sensors</name>
+  <name>horiokart2021_simulator_client</name>
   <version>0.0.0</version>
-  <description>The horiokart2021_sensors package</description>
+  <description>The horiokart2021_simulator_client package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -19,7 +19,7 @@
   <!-- Url tags are optional, but multiple are allowed, one per tag -->
   <!-- Optional attribute type can be: website, bugtracker, or repository -->
   <!-- Example: -->
-  <!-- <url type="website">http://wiki.ros.org/horiokart2021_slam</url> -->
+  <!-- <url type="website">http://wiki.ros.org/horiokart2021_simulator_client</url> -->
 
 
   <!-- Author tags are optional, multiple are allowed, one per tag -->
@@ -50,12 +50,8 @@
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
   <depend>roscpp</depend>
-  <depend>sensor_msgs</depend>
-  <depend>std_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>tf</depend>
-  <depend>rospy</depend>
-
 
 
   <!-- The export tag contains other, unspecified, tags -->

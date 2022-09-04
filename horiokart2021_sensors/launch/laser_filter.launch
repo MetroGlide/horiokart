@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <arg name="front_laser_filter_file" default="front_laser_filter.yaml"/>  
+  <arg name="top_laser_filter_file" default="top_laser_filter.yaml"/>  
+
+  <!-- front laser -->
+  <node pkg="laser_filters" type="scan_to_scan_filter_chain" name="front_laser_filter">
+    <rosparam command="load" file="$(find horiokart2021_sensors)/config/$(arg front_laser_filter_file)" />
+    <remap from="scan" to="scan_front_lrf" />
+    <remap from="scan_filtered" to="/scan_filtered/scan_front_lrf" />
+  </node>
+
+  <!-- top laser -->
+  <node pkg="laser_filters" type="scan_to_scan_filter_chain" name="top_laser_filter">
+    <rosparam command="load" file="$(find horiokart2021_sensors)/config/$(arg top_laser_filter_file)" />
+    <remap from="scan" to="scan_top_lrf" />
+    <remap from="scan_filtered" to="/scan_filtered/scan_top_lrf" />
+  </node>
+
+</launch>

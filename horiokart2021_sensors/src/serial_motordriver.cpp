@@ -88,22 +88,31 @@ void serial_callback(const geometry_msgs::Twist vel){
     float vel_y = vel.linear.y;
     float ang_z = vel.angular.z; // rad/s
 
-    int d = 100;
+    //float ro = vel_x / ang_z;
 
-    float v_r = ( vel_x + d * ang_z ) * 1000; // mm/s
-    float v_l = ( vel_x - d * ang_z ) * 1000; // mm/s
+    float d = 358/2;// ピッチ358.0mm d127.3mm
+    d = d/1000;//m
+
+    //float v_r = ((ro + d) * ang_z ) * 1000; // mm/s
+    //float v_l = ((ro - d) * ang_z ) * 1000; // mm/s
+    float v_r = (vel_x + d * ang_z ) * 1000; // mm/s
+    float v_l = (vel_x - d * ang_z ) * 1000; // mm/s
+
 
     if(abs(v_r) > MAX_SPEED || abs(v_l) > MAX_SPEED){
         // todo ROSERROR
-        return;
+        printf("max speed");
+        //return;
     }
 
-    uint8_t rspd = static_cast<uint8_t>((v_r / MAX_SPEED) * 127);
-    uint8_t lspd = static_cast<uint8_t>((v_l / MAX_SPEED) * 127);
+    //uint16_t rspd = static_cast<uint16_t>((v_r / MAX_SPEED) * 127);
+    //uint16_t lspd = static_cast<uint16_t>((v_l / MAX_SPEED) * 127);
+    int16_t rspd = static_cast<int16_t>(v_r);
+    int16_t lspd = static_cast<int16_t>(v_l);
 
     // send
     //uint8_t sendBuf[] = {0x96, 0x46, rspd, lspd, 0};
-    uint8_t sendBuf[] = {0x96, 0x45, rspd, lspd, 0x00, 0};
+    uint8_t sendBuf[] = {0x96, 0x47, static_cast<uint8_t>(rspd>>8), static_cast<uint8_t>(rspd), static_cast<uint8_t>(lspd>>8), static_cast<uint8_t>(lspd), 0};
 
     int bufSize = sizeof(sendBuf) / sizeof(sendBuf[0]);
     // sendBuf[bufSize-1] = calc_checksum(sendBuf, bufSize);
@@ -115,23 +124,24 @@ void serial_callback(const geometry_msgs::Twist vel){
     // cout << ",lspd:" << lspd;
     // cout << ",c_sum:" << c_sum << endl;
 
-    printf("rspd: %#x ", rspd);
-    printf("lspd: %#x ", lspd);
-    printf("\n");
+    //printf("rspd: %#x ", rspd);
+    //printf("lspd: %#x ", lspd);
+    //printf("\n");
 
-    printf("write:");
-    buf_print(sendBuf, bufSize);
+    //printf("write:");
+    //buf_print(sendBuf, bufSize);
+    tcflush(fd1, TCOFLUSH);
     int rec=serial_write(fd1, sendBuf, sizeof(sendBuf));
 
-    usleep(50000);
+    usleep(5000);
 
     if(rec>=0){
         uint8_t retbuf[64]={0};
         int recv_data=serial_read(fd1, retbuf, sizeof(retbuf));
-        printf("recv %d \n", recv_data);
+        //printf("recv %d \n", recv_data);
 
-        printf("recv:");
-        buf_print(retbuf, recv_data);
+        //printf("recv:");
+        //buf_print(retbuf, recv_data);
     }
 
     if(is_write_csv){
@@ -207,7 +217,7 @@ int main(int argc, char **argv)
 
 
     //Subscriber
-    ros::Subscriber serial_sub = n.subscribe(twist_frame, 10, serial_callback); 
+    ros::Subscriber serial_sub = n.subscribe(twist_frame, 1, serial_callback); 
 
     fd1=open_serial(device_name.c_str());
 
@@ -217,6 +227,7 @@ int main(int argc, char **argv)
         // ros::shutdown();
     }
 
+    /*
     uint8_t state1 = 0b01100001;
     if(!r_dir){
         state1 ^= 0b01000000;
@@ -233,8 +244,7 @@ int main(int argc, char **argv)
         int recv_data=serial_read(fd1, retbuf, sizeof(retbuf));
         printf("recv %d \n", recv_data);
     }
-
-
+    */
 
     ros::spin();
      
