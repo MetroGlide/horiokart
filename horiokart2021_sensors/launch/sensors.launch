@@ -1,57 +1,93 @@
 <launch>
 
-    <!-- Odometry -->
-    <arg name="odom_port" default="/dev/ttyACM1"/>
+    <arg name="simulation" default="false"/>
+
     <arg name="use_odom" default="true"/>
+    <arg name="odom_port" default="/dev/ttyACM1"/>
 
-    <group if="$(arg use_odom)">
-        <node pkg="horiokart2021_sensors" type="serial_odom" name="serial_odom" output="screen">
-            <param name="device_name" type="string" value="$(arg odom_port)" />
-            <param name="odom_frame" type="string" value="odom" />
-            <param name="base_frame" type="string" value="base_footprint" />
-            <param name="odom_pub_rate" type="int" value="10" />
-
-            <param name="inv_x" type="bool" value="true" />
-            <param name="inv_y" type="bool" value="true" />
-            <param name="inv_th" type="bool" value="false" />
-
-            <param name="csv" type="bool" value="true" />
-        </node>
-
-        <node pkg="horiokart2021_sensors" type="hj_sensor_odom2tf" name="odom2tf">
-        </node>
-    </group>
-
-    <!-- rplidar -->
+    <arg name="use_rplidar" default="true"/>
     <arg name="front_rplidar_port" default="/dev/ttyUSB1"/>
     <arg name="top_rplidar_port" default="/dev/ttyUSB0"/>
-    <arg name="use_rplidar" default="true"/>
 
-    <group if="$(arg use_rplidar)">
-        <!-- rplidar A1 -->
-        <node name="front_rplidarNode" pkg="rplidar_ros"  type="rplidarNode" output="screen">
-            <remap from="scan" to="scan_front_lrf" />
-            <param name="serial_port"         type="string" value="$(arg front_rplidar_port)"/>
-            <param name="serial_baudrate"     type="int"    value="115200"/><!--A1/A2 -->
-            <!--param name="serial_baudrate"     type="int"    value="256000"--><!--A3 -->
-            <param name="frame_id"            type="string" value="front_lrf_link"/>
-            <param name="inverted"            type="bool"   value="false"/>
-            <param name="angle_compensate"    type="bool"   value="true"/>
-        </node>
+    <arg name="use_gps" default="true"/>
+    <arg name="gps_port" default="/dev/ttyUSB3"/>
 
-        <!-- rplidar S2 -->
-        <node name="top_rplidarNode" pkg="rplidar_ros"  type="rplidarNode" output="screen">
-            <remap from="scan" to="scan_top_lrf" />
-            <param name="serial_port"         type="string" value="$(arg top_rplidar_port)"/>
-            <param name="serial_baudrate"     type="int"    value="1000000"/>
-            <param name="frame_id"            type="string" value="top_lrf_link"/>
-            <param name="inverted"            type="bool"   value="false"/>
-            <param name="angle_compensate"    type="bool"   value="true"/>
-        </node>
+    <arg name="use_rs_d435i" default="true"/>
+    <arg name="use_imu" default="true"/>
 
-        <include file="$(find horiokart2021_sensors)/launch/laser_filter.launch"></include>
+    <arg name="use_rs_d435" default="true"/>
 
+    <!-- hardware sensor drivers-->
+    <group unless="$(arg simulation)">
+
+        <!-- Odometry -->
+        <group if="$(arg use_odom)">
+
+            <node pkg="horiokart2021_sensors" type="serial_odom" name="serial_odom" output="screen">
+                <param name="device_name" type="string" value="$(arg odom_port)" />
+                <param name="odom_frame" type="string" value="odom" />
+                <param name="base_frame" type="string" value="base_footprint" />
+                <param name="odom_pub_rate" type="int" value="10" />
+
+                <param name="inv_x" type="bool" value="true" />
+                <param name="inv_y" type="bool" value="true" />
+                <param name="inv_th" type="bool" value="false" />
+
+                <param name="csv" type="bool" value="true" />
+            </node>
+
+            <node pkg="horiokart2021_sensors" type="hj_sensor_odom2tf" name="odom2tf">
+            </node>
+
+        </group>
+
+        <!-- rplidar -->
+        <group if="$(arg use_rplidar)">
+            
+            <!-- rplidar A1 -->
+            <node name="front_rplidarNode" pkg="rplidar_ros"  type="rplidarNode" output="screen">
+                <remap from="scan" to="scan_front_lrf" />
+                <param name="serial_port"         type="string" value="$(arg front_rplidar_port)"/>
+                <param name="serial_baudrate"     type="int"    value="115200"/><!--A1/A2 -->
+                <param name="frame_id"            type="string" value="front_lrf_link"/>
+                <param name="inverted"            type="bool"   value="false"/>
+                <param name="angle_compensate"    type="bool"   value="true"/>
+            </node>
+
+            <!-- rplidar S2 -->
+            <node name="top_rplidarNode" pkg="rplidar_ros"  type="rplidarNode" output="screen">
+                <remap from="scan" to="scan_top_lrf" />
+                <param name="serial_port"         type="string" value="$(arg top_rplidar_port)"/>
+                <param name="serial_baudrate"     type="int"    value="1000000"/>
+                <param name="frame_id"            type="string" value="top_lrf_link"/>
+                <param name="inverted"            type="bool"   value="false"/>
+                <param name="angle_compensate"    type="bool"   value="true"/>
+            </node>
+
+            <include file="$(find horiokart2021_sensors)/launch/laser_filter.launch"></include>
+
+        </group>
+
+        <!-- GPS -->
+        <group if="$(arg use_gps)">
+
+            <node name="gps_serial_driver" pkg="nmea_navsat_driver"  type="nmea_topic_serial_reader" output="screen">
+                <remap from="nmea_sentence" to="/gps/nmea_sentence"/>
+                <param name="port"  type="string"   value="$(arg gps_port)"/>
+                <param name="baud"  type="int"   value="4800"/>
+                <param name="frame_id"  type="string"   value="gps_link"/>
+            </node>
+        </group>
+
+        <!-- Realsense D435 -->
+        <!-- Realsense D435i -->
     </group>
 
-    
+    <!-- sensors processing node -->
+    <!-- GPS -->
+    <node name="gps_topic_driver" pkg="nmea_navsat_driver" type="nmea_serial_driver" output="screen">
+        <remap from="nmea_sentence" to="/gps/nmea_sentence"/>
+        <remap from="fix" to="/gps/fix"/>
+    </node>
+
 </launch>
