@@ -8,10 +8,10 @@
     <!-- robot -->
     <include file="$(find horiokart2021_description)/launch/horiokart_description.launch"></include>
 
-    <group unless="$(arg simulation)"> 
-        <!-- Odom, rplidar -->
-        <include file="$(find horiokart2021_sensors)/launch/sensors.launch"></include>
-    </group>
+    <!-- Odom, rplidar -->
+    <include file="$(find horiokart2021_sensors)/launch/sensors.launch">
+    <arg name="simulation" value="$(arg simulation)"/>
+    </include>
 
     <node name="top_rplidar_reducer" pkg="horiokart2021_sensors" type="laser_reducer.py" output="screen">
         <remap from="scan" to="/scan_filtered/scan_top_lrf"/>

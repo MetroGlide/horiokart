@@ -8,6 +8,5 @@
   <arg name="tcp_ip" value="192.168.235.191"/>
   -->
   </include>
-  <include file="$(find horiokart2021_simulator_client)/launch/laser_filter.launch"></include>
   <include file="$(find horiokart2021_simulator_client)/launch/vtc_odom2tf.launch"></include>
 </launch>

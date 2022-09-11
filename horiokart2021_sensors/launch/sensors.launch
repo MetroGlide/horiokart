@@ -5,7 +5,7 @@
     <arg name="use_odom" default="true"/>
     <arg name="odom_port" default="/dev/ttyACM1"/>
 
-    <arg name="use_rplidar" default="true"/>
+    <arg name="use_lidar" default="true"/>
     <arg name="front_rplidar_port" default="/dev/ttyUSB1"/>
     <arg name="top_rplidar_port" default="/dev/ttyUSB0"/>
 
@@ -42,7 +42,7 @@
         </group>
 
         <!-- rplidar -->
-        <group if="$(arg use_rplidar)">
+        <group if="$(arg use_lidar)">
             
             <!-- rplidar A1 -->
             <node name="front_rplidarNode" pkg="rplidar_ros"  type="rplidarNode" output="screen">
@@ -64,8 +64,6 @@
                 <param name="angle_compensate"    type="bool"   value="true"/>
             </node>
 
-            <include file="$(find horiokart2021_sensors)/launch/laser_filter.launch"></include>
-
         </group>
 
         <!-- GPS -->
@@ -77,17 +75,32 @@
                 <param name="baud"  type="int"   value="4800"/>
                 <param name="frame_id"  type="string"   value="gps_link"/>
             </node>
+
         </group>
 
         <!-- Realsense D435 -->
         <!-- Realsense D435i -->
     </group>
 
-    <!-- sensors processing node -->
+    <!-- 
+        sensors processing node 
+    -->
+    <!-- rplidar -->
+    <group if="$(arg use_lidar)">
+
+        <include file="$(find horiokart2021_sensors)/launch/laser_filter.launch"></include>
+
+    </group>
+
     <!-- GPS -->
-    <node name="gps_topic_driver" pkg="nmea_navsat_driver" type="nmea_serial_driver" output="screen">
-        <remap from="nmea_sentence" to="/gps/nmea_sentence"/>
-        <remap from="fix" to="/gps/fix"/>
-    </node>
+    <group if="$(arg use_gps)">
+
+        <node name="gps_topic_driver" pkg="nmea_navsat_driver" type="nmea_topic_driver" output="screen">
+            <remap from="nmea_sentence" to="/gps/nmea_sentence"/>
+            <remap from="fix" to="/gps/fix"/>
+            <param name="time_ref_source" type="string" value="gps"/>
+        </node>
+
+    </group>
 
 </launch>
