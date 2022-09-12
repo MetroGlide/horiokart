@@ -1,5 +1,10 @@
 <launch>
 
+    <!-- 
+        ###############################
+        base params
+        ###############################
+    -->
     <arg name="simulation" default="false"/>
 
     <arg name="use_odom" default="true"/>
@@ -17,7 +22,11 @@
 
     <arg name="use_rs_d435" default="true"/>
 
-    <!-- hardware sensor drivers-->
+    <!-- 
+        ###############################
+        hardware sensor drivers
+        ###############################
+    -->
     <group unless="$(arg simulation)">
 
         <!-- Odometry -->
@@ -34,9 +43,6 @@
                 <param name="inv_th" type="bool" value="false" />
 
                 <param name="csv" type="bool" value="true" />
-            </node>
-
-            <node pkg="horiokart2021_sensors" type="hj_sensor_odom2tf" name="odom2tf">
             </node>
 
         </group>
@@ -83,8 +89,19 @@
     </group>
 
     <!-- 
+        ###############################
         sensors processing node 
+        -> also using in simulation
+        ###############################
     -->
+    
+    <!-- odom -->
+    <group if="$(arg use_odom)">
+
+        <node pkg="horiokart2021_sensors" type="hj_sensor_odom2tf" name="odom2tf"> </node>
+
+    </group>
+
     <!-- rplidar -->
     <group if="$(arg use_lidar)">
 

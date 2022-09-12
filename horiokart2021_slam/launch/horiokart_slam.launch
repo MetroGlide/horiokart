@@ -13,11 +13,13 @@
     <arg name="simulation" value="$(arg simulation)"/>
     </include>
 
+    <!-- rplidar S2 scan point reduce-->
     <node name="top_rplidar_reducer" pkg="horiokart2021_sensors" type="laser_reducer.py" output="screen">
         <remap from="scan" to="/scan_filtered/scan_top_lrf"/>
         <remap from="scan_reduced" to="/scan_reduced/scan_filtered/scan_top_lrf"/>
         <param name="skip_num" type="int" value="2"/>
     </node>
+    <!-- number of points using in slam -->
     <node name="top_rplidar_reducer_matching_point" pkg="horiokart2021_sensors" type="laser_reducer.py" output="screen">
         <remap from="scan" to="/scan_filtered/scan_top_lrf"/>
         <remap from="scan_reduced" to="/scan_reduced/scan_filtered/scan_top_lrf_matching_point"/>
