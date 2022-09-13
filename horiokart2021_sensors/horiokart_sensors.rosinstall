@@ -1,0 +1,12 @@
+- git:
+  local-name: nmea_navsat_driver
+  uri: git@github.com:ros-drivers/nmea_navsat_driver.git
+  version: melodic-devel
+- git:
+  local-name: rplidar_ros
+  uri: git@github.com:Slamtec/rplidar_ros.git
+  version: master
+- git:
+  local-name: rviz_satellite
+  uri: git@github.com:nobleo/rviz_satellite.git
+  version: master
