@@ -10,9 +10,12 @@
   <!-- robot -->
   <include file="$(find horiokart2021_description)/launch/horiokart_description.launch"></include>
 
+  <!-- Odom, rplidar -->
+  <include file="$(find horiokart2021_sensors)/launch/sensors.launch">
+    <arg name="simulation" value="$(arg simulation"/>
+  </include>
+
   <group unless="$(arg simulation)"> 
-    <!-- Odom, rplidar -->
-    <include file="$(find horiokart2021_sensors)/launch/sensors.launch"></include>
     <!-- motordriver -->
     <include file="$(find horiokart2021_sensors)/launch/motordriver.launch"></include>
   </group>
