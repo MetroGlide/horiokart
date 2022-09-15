@@ -2,20 +2,20 @@
 
     <arg name="simulation" default="false"/>
 
-    <arg name="use_odom" default="true"/>
+    <arg name="use_odom" default="false"/>
     <arg name="odom_port" default="/dev/ttyACM1"/>
 
-    <arg name="use_lidar" default="true"/>
+    <arg name="use_lidar" default="false"/>
     <arg name="front_rplidar_port" default="/dev/ttyUSB1"/>
     <arg name="top_rplidar_port" default="/dev/ttyUSB0"/>
 
     <arg name="use_gps" default="true"/>
-    <arg name="gps_port" default="/dev/ttyUSB3"/>
+    <arg name="gps_port" default="/dev/ttyACM1"/>
 
-    <arg name="use_rs_d435i" default="true"/>
-    <arg name="use_imu" default="true"/>
+    <arg name="use_rs_d435i" default="false"/>
+    <arg name="use_imu" default="false"/>
 
-    <arg name="use_rs_d435" default="true"/>
+    <arg name="use_rs_d435" default="false"/>
 
     <!-- hardware sensor drivers-->
     <group unless="$(arg simulation)">
@@ -72,7 +72,7 @@
             <node name="gps_serial_driver" pkg="nmea_navsat_driver"  type="nmea_topic_serial_reader" output="screen">
                 <remap from="nmea_sentence" to="/gps/nmea_sentence"/>
                 <param name="port"  type="string"   value="$(arg gps_port)"/>
-                <param name="baud"  type="int"   value="4800"/>
+                <param name="baud"  type="int"   value="38400"/>
                 <param name="frame_id"  type="string"   value="gps_link"/>
             </node>
 
@@ -80,6 +80,13 @@
 
         <!-- Realsense D435 -->
         <!-- Realsense D435i -->
+        <group if="$(arg use_rs_d435i)">
+
+            <include file="$(find realsense2_camera)/launch/rs_aligned_depth.launch">
+                <arg name="serial_no" value=""/>
+            </include>
+
+        </group>
     </group>
 
     <!-- 
