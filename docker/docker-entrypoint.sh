@@ -6,7 +6,7 @@ echo "source $HOME/catkin_ws/devel/setup.bash" >> $HOME/.bashrc
 
 source $HOME/catkin_ws/devel/setup.bash
 
-#export ROS_IP=192.168.0.10
-#export ROS_MASTER_URI=http://$ROS_IP:11311
+export ROS_IP=192.168.0.10
+export ROS_MASTER_URI=http://$ROS_IP:11311
 
 roscore

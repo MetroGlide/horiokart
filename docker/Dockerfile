@@ -16,11 +16,12 @@ RUN apt-get update && apt-get install -y curl git cmake \
 #########################################################################################
 # Install basic ROS tools
 #########################################################################################
-#RUN apt-get update && apt-get install -y \
-#    python3-rosdep python3-rosinstall python3-rosinstall-generator \
-#    python3-wstool build-essential python3-catkin-tools \
-#    && apt-get autoremove --purge \
-#    && rm -rf /var/cache/apt/*
+RUN apt-get update && apt-get install -y \
+    python-rosdep python-rosinstall python-rosinstall-generator \
+    python-wstool build-essential python-catkin-tools \
+    && apt-get autoremove --purge \
+    && rm -rf /var/cache/apt/* \
+    rosdep init && rosdep update
 
 
 #########################################################################################
@@ -38,13 +39,15 @@ RUN pip3 install -r /app/docker/requirements.txt
 #########################################################################################
 # Build ROS custom packages
 #########################################################################################
-WORKDIR /app/org
-COPY . /app/org
+#WORKDIR /app/org
+#COPY . /app/org
 #
 WORKDIR /root/catkin_ws/src
 RUN /bin/bash -c "ln -s /app/horiokart ./"
+RUN git clone -b melodic-devel https://github.com/ros-drivers/nmea_navsat_driver.git
 
 WORKDIR /root/catkin_ws
+#RUN rosdep update && rosdep install -i -y --from-paths src/nmea_navsat_driver
 RUN /bin/bash -c "source /opt/ros/melodic/setup.bash; catkin_make"
 
 
