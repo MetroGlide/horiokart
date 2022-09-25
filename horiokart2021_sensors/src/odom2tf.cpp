@@ -20,18 +20,8 @@ using namespace std;
 
 ros::Time current_time;
 
-string device_name;
 string odom_frame;
 string base_frame;
-int odom_pub_rate;
-int vel_pub_rate;
-bool is_write_csv;
-string csv_name;
-ofstream ofs;
-
-bool inv_x;
-bool inv_y;
-bool inv_th;
 
 void odom2tf_cb(const nav_msgs::Odometry msg)
 {
@@ -67,8 +57,6 @@ int main(int argc, char **argv)
 
     nh_private.param<string>("odom_frame", odom_frame, "odom");
     nh_private.param<string>("base_frame", base_frame, "base_footprint");
-    nh_private.param<int>("odom_pub_rate", odom_pub_rate, 20);
-    nh_private.param<int>("vel_pub_rate", vel_pub_rate, 20);
 
     ros::Subscriber sub = n.subscribe("odom", 1, odom2tf_cb); //<nav_msgs::Odometry>("odom", 1000);
 

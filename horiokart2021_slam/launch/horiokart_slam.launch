@@ -5,6 +5,10 @@
 
     <arg name="simulation" default="false"/>
 
+    <group if="$(arg simulation)">
+        <param name="use_sim_time" value="true"/>
+    </group>
+
     <!-- robot -->
     <include file="$(find horiokart2021_description)/launch/horiokart_description.launch"></include>
 

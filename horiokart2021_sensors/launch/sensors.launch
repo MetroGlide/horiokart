@@ -22,6 +22,8 @@
 
     <arg name="use_rs_d435" default="false"/>
 
+    <arg name="use_ekf" default="false"/>
+
     <!-- 
         ###############################
         hardware sensor drivers
@@ -103,9 +105,13 @@
     -->
     
     <!-- odom -->
-    <group if="$(arg use_odom)">
+    <!--<group if="$(arg use_odom)">-->
+    <group if="$(eval use_odom and not use_ekf)">
 
-        <node pkg="horiokart2021_sensors" type="hj_sensor_odom2tf" name="odom2tf"> </node>
+        <node pkg="horiokart2021_sensors" type="hj_sensor_odom2tf" name="odom2tf">
+            <param name="odom_frame" type="string" value="odom"/>
+            <remap from="odom" to="odom"/>
+        </node>
 
     </group>
 
@@ -124,6 +130,26 @@
             <remap from="fix" to="/gps/fix"/>
             <param name="time_ref_source" type="string" value="gps"/>
         </node>
+
+    </group>
+
+    <!-- EKF -->
+    <group if="$(arg use_ekf)">
+    
+        <node name="ekf_localization_odom" pkg="robot_localization" type="ekf_localization_node">
+            <rosparam command="load" file="$(find horiokart2021_sensors)/config/ekf_odom_params.yaml" />
+
+            <remap from="odometry/filtered" to="ekf_odom"/>
+        </node>
+
+        <node name="navsat_transform_node" pkg="robot_localization" type="navsat_transform_node" >
+            <rosparam command="load" file="$(find horiokart2021_sensors)/config/navsat_transform_params.yaml" />
+
+            <!--<remap from="imu/data" to=""/>-->
+            <remap from="odometry/filtered" to="ekf_odom"/>
+            <remap from="gps/fix" to="/gps/fix"/>
+        </node>
+
 
     </group>
 
