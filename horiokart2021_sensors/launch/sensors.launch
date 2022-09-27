@@ -105,8 +105,8 @@
     -->
     
     <!-- odom -->
-    <!--<group if="$(arg use_odom)">-->
-    <group if="$(eval use_odom and not use_ekf)">
+    <group if="$(arg use_odom)">
+    <!--<group if="$(eval use_odom and not use_ekf)">-->
 
         <node pkg="horiokart2021_sensors" type="hj_sensor_odom2tf" name="odom2tf">
             <param name="odom_frame" type="string" value="odom"/>
