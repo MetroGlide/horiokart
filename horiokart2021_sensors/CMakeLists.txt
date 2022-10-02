@@ -106,7 +106,7 @@ catkin_python_setup()
 # # DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 
-  # INCLUDE_DIRS include
+  INCLUDE_DIRS include
   LIBRARIES horiokart2021_sensors
   CATKIN_DEPENDS roscpp tf sensor_msgs std_msgs nav_msgs rospy
 
@@ -120,15 +120,14 @@ catkin_package(
 # # Specify additional locations of header files
 # # Your package locations should be listed before other locations
 include_directories(
-
-  # include
+  include
   ${catkin_INCLUDE_DIRS}
 )
 
 # # Declare a C++ library
-# add_library(${PROJECT_NAME}
-# src/${PROJECT_NAME}/horiokart2021_slam.cpp
-# )
+add_library(serial_communicator
+  src/serial_communicator.cpp
+)
 
 # # Add cmake target dependencies of the library
 # # as an example, code may need to be generated before libraries
@@ -141,7 +140,6 @@ include_directories(
 # add_executable(${PROJECT_NAME}_node src/horiokart2021_slam_node.cpp)
 add_executable(serial_motordriver src/serial_motordriver.cpp)
 add_executable(serial_odom src/serial_odom.cpp)
-add_executable(serial_gps src/serial_gps.cpp)
 add_executable(hj_sensor_odom2tf src/odom2tf.cpp)
 
 # # Rename C++ executable without prefix
@@ -159,9 +157,7 @@ target_link_libraries(serial_motordriver
   ${catkin_LIBRARIES}
 )
 target_link_libraries(serial_odom
-  ${catkin_LIBRARIES}
-)
-target_link_libraries(serial_gps
+  serial_communicator
   ${catkin_LIBRARIES}
 )
 target_link_libraries(hj_sensor_odom2tf
