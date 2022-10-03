@@ -29,13 +29,12 @@ class SerialOdom
         string odom_frame;
         string base_frame;
         int odom_pub_rate;
+
         bool is_write_csv;
         string csv_name;
         ofstream ofs;
 
-        bool inv_x;
-        bool inv_y;
-        bool inv_th;
+        bool inv_x, inv_y, inv_th;
 
         int odom_ret_buf_size = 19;
         double odom_x = 0, odom_y = 0, odom_th = 0;
@@ -47,7 +46,7 @@ class SerialOdom
         const vector<uint8_t> odomBuf{0x24, 0x75};
         uint8_t checksum = 0;
 
-        const int TIME_TO_SLEEP = 1000; // usec
+        const int TIME_TO_SLEEP = 2000; // usec
 
     public:
         SerialOdom();
@@ -56,6 +55,9 @@ class SerialOdom
 
         void init_ros_params();
         int update_odom(vector<uint8_t>&);
+        void publish_odom();
+
+        void write_log_csv(int debug_status, vector<uint8_t> buf);
         void run();
 };
 
@@ -86,13 +88,6 @@ SerialOdom::SerialOdom()
         ROS_ERROR("Serial Fail: cound not open %s", device_name.c_str());
     }
 
-    vector<uint8_t> ret = serial.serial_readwrite(zeroBuf);
-    if(ret.empty()){
-        ROS_ERROR("Odom error zero reset!");
-    }
-    else{
-        ROS_INFO("Odom zero reset");
-    }
 
 }
 
@@ -121,7 +116,7 @@ int SerialOdom::update_odom(vector<uint8_t>& retbuf)
     int rec=serial.serial_write(odomBuf);
     ROS_DEBUG("send:%#x %#x\n",odomBuf[0], odomBuf[1]);
 
-    //usleep(TIME_TO_SLEEP);
+    usleep(TIME_TO_SLEEP);
     if(rec<=0){
         ROS_ERROR("Odom write error");
         return 1;
@@ -176,9 +171,73 @@ int SerialOdom::update_odom(vector<uint8_t>& retbuf)
 
 }
 
+void SerialOdom::publish_odom()
+{
+    double th = odom_th * 180 / 3.14;
+    double vth = odom_vth * 180 / 3.14;
+    ROS_DEBUG("x:%lf y:%lf th:%lf \n", odom_x, odom_y, th);
+    ROS_DEBUG("vx:%lf vy:%lf vth%lf \n", odom_vx, odom_vy, vth);
+
+    geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(odom_th);
+
+    ros::Time current_time = ros::Time::now();
+    
+    nav_msgs::Odometry odom;
+    odom.header.stamp = current_time;
+    odom.header.frame_id = odom_frame;
+
+    odom.pose.pose.position.x = odom_x;
+    odom.pose.pose.position.y = odom_y;
+    odom.pose.pose.position.z = 0.0;
+    odom.pose.pose.orientation = odom_quat;
+
+    odom.child_frame_id = base_frame;
+    odom.twist.twist.linear.x = odom_vx;
+    odom.twist.twist.linear.y = odom_vy;
+    odom.twist.twist.angular.z = odom_vth;
+
+    serial_pub.publish(odom);
+}
+
+void SerialOdom::write_log_csv(int debug_status, vector<uint8_t> retbuf)
+{
+    if(is_write_csv){
+        char date[64];
+        time_t t = ros::Time::now().nsec / 1000000; // sec
+        strftime(date, sizeof(date), "%H%M%S", localtime(&t));
+        char output_date[32];
+        snprintf(output_date, 32, "%s.%03d", date, static_cast<int>(t));
+
+        ofs << output_date << ",";
+        ofs << odom_x << ",";
+        ofs << odom_y << ",";
+        ofs << odom_th << ",";
+        ofs << odom_x << ",";
+        ofs << odom_y << ",";
+        ofs << odom_th << ",";
+        ofs << ",";
+        ofs << static_cast<int>(checksum) << ",";
+        ofs << debug_status << ",";
+        ofs << ",";
+        for(auto& b:retbuf){
+            ofs << static_cast<int>(b) << ",";
+        }
+        ofs << endl;
+    }
+
+}
+
 void SerialOdom::run()
 {
     ROS_INFO("start serial odom");
+
+    vector<uint8_t> ret = serial.serial_readwrite(zeroBuf);
+    if(ret.empty()){
+        ROS_ERROR("Odom error zero reset!");
+    }
+    else{
+        ROS_INFO("Odom zero reset");
+    }
 
     ros::Rate loop_rate(odom_pub_rate); 
     while (ros::ok()){
@@ -187,55 +246,8 @@ void SerialOdom::run()
         int debug_status = this->update_odom(retbuf);
             
         // とりあえずpublish
-        double th = odom_th * 180 / 3.14;
-        double vth = odom_vth * 180 / 3.14;
-        ROS_DEBUG("x:%lf y:%lf th:%lf \n", odom_x, odom_y, th);
-        ROS_DEBUG("vx:%lf vy:%lf vth%lf \n", odom_vx, odom_vy, vth);
-
-        geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(odom_th);
-
-        ros::Time current_time = ros::Time::now();
-        
-        nav_msgs::Odometry odom;
-        odom.header.stamp = current_time;
-        odom.header.frame_id = odom_frame;
-
-        odom.pose.pose.position.x = odom_x;
-        odom.pose.pose.position.y = odom_y;
-        odom.pose.pose.position.z = 0.0;
-        odom.pose.pose.orientation = odom_quat;
-
-        odom.child_frame_id = base_frame;
-        odom.twist.twist.linear.x = odom_vx;
-        odom.twist.twist.linear.y = odom_vy;
-        odom.twist.twist.angular.z = odom_vth;
-
-        serial_pub.publish(odom);
+        publish_odom();
         // -----------
-
-        if(is_write_csv){
-            char date[64];
-            time_t t = ros::Time::now().nsec / 1000000;
-            strftime(date, sizeof(date), "%H%M%S", localtime(&t));
-            char output_date[32];
-            snprintf(output_date, 32, "%s.%03d", date, static_cast<int>(t));
-
-            ofs << output_date << ",";
-            ofs << odom_x << ",";
-            ofs << odom_y << ",";
-            ofs << odom_th << ",";
-            ofs << odom_x << ",";
-            ofs << odom_y << ",";
-            ofs << odom_th << ",";
-            ofs << ",";
-            ofs << static_cast<int>(checksum) << ",";
-            ofs << debug_status << ",";
-            ofs << ",";
-            for(auto& b:retbuf){
-                ofs << static_cast<int>(b) << ",";
-            }
-            ofs << endl;
-        }
 
         ros::spinOnce();
         loop_rate.sleep();
