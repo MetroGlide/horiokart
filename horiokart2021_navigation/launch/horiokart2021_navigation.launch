@@ -1,6 +1,7 @@
 <launch>
   <!-- Arguments -->
   <arg name="map_file" default="$(env MAP_PATH)"/>
+  <arg name="plannning_map_file" default="$(env PLANNING_MAP_PATH)"/>
   <arg name="rviz" default="false"/>
   <arg name="move_forward_only" default="false"/>
 
@@ -24,11 +25,19 @@
     <include file="$(find horiokart2021_sensors)/launch/motordriver.launch"></include>
   </group>
 
-  <!-- Map server -->
+  <!-- Map server for localization -->
   <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)">
     <!-- Topic Name -->
     <remap from="map" to="/map" />
     <remap from="map_metadata" to="/map_metadata" />
+    <!-- Frame Name -->
+    <param name="frame_id" value="map" />
+  </node>
+  <!-- Map server for planning-->
+  <node pkg="map_server" name="plannning_map_server" type="map_server" args="$(arg plannning_map_file)">
+    <!-- Topic Name -->
+    <remap from="map" to="/planning/map" />
+    <remap from="map_metadata" to="/plannning/map_metadata" />
     <!-- Frame Name -->
     <param name="frame_id" value="map" />
   </node>
@@ -42,6 +51,8 @@
   <include file="$(find horiokart2021_navigation)/launch/move_base.launch">
     <arg name="move_forward_only" value="$(arg move_forward_only)"/>
     <arg name="cmd_vel_topic" value="/cmd_vel"/>
+    <arg name="map_topic" value="/planning/map"/>
+    <arg name="map_metadata_topic" value="/planning/map_metadata"/>
   </include>
 
   <!-- rviz -->
