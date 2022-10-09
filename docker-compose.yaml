@@ -11,6 +11,8 @@ services:
     environment:
       DISPLAY: ${DISPLAY}
       PYTHONUNBUFFERED: 1
+    env_file:
+      - .env
     tty: true
     volumes:
       - type: bind
