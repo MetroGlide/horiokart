@@ -58,7 +58,7 @@
 
   <depend>nmea_navsat_driver</depend>
   <depend>rplidar_ros</depend>
-  <depend>rviz_satellite</depend>
+  <!--<depend>rviz_satellite</depend>-->
   <depend>laser_filters</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
