@@ -10,6 +10,7 @@ project(horiokart_waypoint_navigator)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   tf
+  tf2
   sensor_msgs
   std_msgs
   nav_msgs
@@ -106,9 +107,9 @@ catkin_python_setup()
 # # DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 
-  #INCLUDE_DIRS include
-  #LIBRARIES horiokart2021_sensors
-  CATKIN_DEPENDS roscpp tf sensor_msgs std_msgs nav_msgs rospy
+  # INCLUDE_DIRS include
+  # LIBRARIES horiokart2021_sensors
+  CATKIN_DEPENDS roscpp tf tf2 sensor_msgs std_msgs nav_msgs rospy
 
   # DEPENDS system_lib
 )
@@ -120,14 +121,14 @@ catkin_package(
 # # Specify additional locations of header files
 # # Your package locations should be listed before other locations
 # include_directories(
-#   include
-#   ${catkin_INCLUDE_DIRS}
+# include
+# ${catkin_INCLUDE_DIRS}
 # )
 
 # # Declare a C++ library
-#add_library(serial_communicator
-#  src/serial_communicator.cpp
-#)
+# add_library(serial_communicator
+# src/serial_communicator.cpp
+# )
 
 # # Add cmake target dependencies of the library
 # # as an example, code may need to be generated before libraries
@@ -138,9 +139,9 @@ catkin_package(
 # # With catkin_make all packages are built within a single CMake context
 # # The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/horiokart2021_slam_node.cpp)
-#add_executable(serial_motordriver src/serial_motordriver.cpp)
-#add_executable(serial_odom src/serial_odom.cpp)
-#add_executable(hj_sensor_odom2tf src/odom2tf.cpp)
+# add_executable(serial_motordriver src/serial_motordriver.cpp)
+# add_executable(serial_odom src/serial_odom.cpp)
+# add_executable(hj_sensor_odom2tf src/odom2tf.cpp)
 
 # # Rename C++ executable without prefix
 # # The above recommended prefix causes long target names, the following renames the
@@ -154,14 +155,14 @@ catkin_package(
 
 # # Specify libraries to link a library or executable target against
 # target_link_libraries(serial_motordriver
-#   ${catkin_LIBRARIES}
+# ${catkin_LIBRARIES}
 # )
 # target_link_libraries(serial_odom
-#   serial_communicator
-#   ${catkin_LIBRARIES}
+# serial_communicator
+# ${catkin_LIBRARIES}
 # )
 # target_link_libraries(hj_sensor_odom2tf
-#   ${catkin_LIBRARIES}
+# ${catkin_LIBRARIES}
 # )
 
 # ############

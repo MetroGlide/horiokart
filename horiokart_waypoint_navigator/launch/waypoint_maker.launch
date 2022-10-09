@@ -1,5 +1,5 @@
 <launch> 
-  <arg name="map_file" default="$(env MAP_PATH)"/>
+  <arg name="map_file" default="$(env PLANNING_MAP_PATH)"/>
   <arg name="waypoint_save_path" default="$(env HOME)/ros_data/"/>
 
   <!-- map -->

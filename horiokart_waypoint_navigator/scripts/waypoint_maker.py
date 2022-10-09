@@ -72,11 +72,11 @@ class WaypointMaker():
         return marker
 
     def run(self, rate: int = 10):
-        rate = rospy.Rate(10)
+        sleep_rate = rospy.Rate(rate)
 
         while not rospy.is_shutdown():
             self._waypoints_pub.publish(self._marker_list)
-            rate.sleep()
+            sleep_rate.sleep()
 
         rospy.spin()
 
