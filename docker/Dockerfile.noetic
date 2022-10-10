@@ -1,0 +1,76 @@
+#########################################################################################
+# Base image
+#########################################################################################
+FROM ros:noetic-ros-base
+
+ARG ROS_VERSION=noetic
+ARG ROS_PYTHON=python3
+
+
+#########################################################################################
+# Install tools
+#########################################################################################
+RUN apt-get update && apt-get install -y curl git cmake apt-utils \
+    && apt-get autoremove --purge \
+    && rm -rf /var/cache/apt/*
+
+
+#########################################################################################
+# Install basic ROS tools
+#########################################################################################
+RUN apt-get update && apt-get install -y \
+    python3-rosdep python3-rosinstall python3-rosinstall-generator \
+    python3-wstool build-essential python3-catkin-tools \
+    && apt-get autoremove --purge \
+    && rm -rf /var/cache/apt/*
+
+RUN apt-get update && apt-get install -y --fix-missing \
+    ros-$ROS_VERSION-rviz ros-$ROS_VERSION-rqt ros-$ROS_VERSION-rqt-common-plugins \
+    ros-$ROS_VERSION-robot-state-publisher ros-$ROS_VERSION-joint-state-publisher  \
+    ros-$ROS_VERSION-laser-filters \
+    ros-$ROS_VERSION-slam-gmapping \
+    && apt-get autoremove --purge \
+    && rm -rf /var/cache/apt/*
+
+#########################################################################################
+# Build ROS external packages
+#########################################################################################
+
+WORKDIR /root/catkin_ws/src
+RUN git clone https://github.com/Unity-Technologies/ROS-TCP-Endpoint.git \
+    && git clone https://github.com/Slamtec/rplidar_ros.git \
+    && git clone -b noetic-devel https://github.com/ros-planning/navigation.git \
+    && git clone -b hj-ros1-devel https://github.com/HORIOJAPAN-OB/nmea_navsat_driver.git
+
+RUN rosdep update && rosdep install -iyr --from-paths .
+WORKDIR /root/catkin_ws
+RUN /bin/bash -c "source /opt/ros/$ROS_VERSION/setup.bash; catkin build"
+
+#########################################################################################
+# Install python packages
+#########################################################################################
+RUN apt-get update && apt-get install -y python3-pip python-is-python3 \
+    && apt-get autoremove --purge \
+    && rm -rf /var/cache/apt/*
+
+WORKDIR /app
+COPY ./docker/requirements.txt /app/docker/requirements.txt
+RUN pip3 install -r /app/docker/requirements.txt
+
+#########################################################################################
+# Build ROS custom packages
+#########################################################################################
+WORKDIR /root/catkin_ws/src
+RUN /bin/bash -c "ln -s /app/horiokart/ ./"
+
+WORKDIR /root/catkin_ws
+RUN /bin/bash -c "source /opt/ros/noetic/setup.bash; catkin build"
+
+
+#########################################################################################
+# Runtime
+#########################################################################################
+ENV NVIDIA_VISIBLE_DEVICES all
+ENV NVIDIA_DRIVER_CAPABILITIES utility,graphics
+RUN echo "source /opt/ros/noetic/setup.bash" >> ~/.bashrc
+RUN echo "source ${HOME}/catkin_ws/devel/setup.bash" >> ~/.bashrc

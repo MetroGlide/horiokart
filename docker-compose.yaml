@@ -5,15 +5,20 @@ services:
     image: horiokart
     build:
       context: "./"
-      dockerfile: "docker/Dockerfile"
+      dockerfile: "docker/Dockerfile.noetic"
     network_mode: "host"
     privileged: true
     environment:
       DISPLAY: ${DISPLAY}
       PYTHONUNBUFFERED: 1
+    env_file:
+      - .env
     tty: true
     volumes:
       - type: bind
         source: ./
         target: /app/horiokart/
-    command: "/app/org/docker/docker-entrypoint.sh"
+      - type: bind
+        source: ${HOME}/ros_data
+        target: /root/ros_data
+    command: "/app/horiokart/docker/docker-entrypoint.sh"

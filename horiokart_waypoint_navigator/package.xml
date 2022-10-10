@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>horiokart2021_sensors</name>
+  <name>horiokart_waypoint_navigator</name>
   <version>0.0.0</version>
-  <description>The horiokart2021_sensors package</description>
+  <description>The horiokart_waypoint_navigator package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
@@ -54,12 +54,9 @@
   <depend>std_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>tf</depend>
+  <depend>tf2</depend>
   <depend>rospy</depend>
 
-  <depend>nmea_navsat_driver</depend>
-  <depend>rplidar_ros</depend>
-  <!--<depend>rviz_satellite</depend>-->
-  <depend>laser_filters</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
