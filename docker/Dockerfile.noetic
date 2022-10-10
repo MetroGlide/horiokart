@@ -25,6 +25,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/cache/apt/*
 
 RUN apt-get update && apt-get install -y --fix-missing \
+    ros-$ROS_VERSION-rviz ros-$ROS_VERSION-rqt ros-$ROS_VERSION-rqt-common-plugins \
     ros-$ROS_VERSION-robot-state-publisher ros-$ROS_VERSION-joint-state-publisher  \
     ros-$ROS_VERSION-laser-filters \
     ros-$ROS_VERSION-slam-gmapping \
@@ -36,7 +37,7 @@ RUN apt-get update && apt-get install -y --fix-missing \
 #########################################################################################
 
 WORKDIR /root/catkin_ws/src
-RUN git clone https://github.com/Unity-Technologies/ROS-TCP-Connector.git \
+RUN git clone https://github.com/Unity-Technologies/ROS-TCP-Endpoint.git \
     && git clone https://github.com/Slamtec/rplidar_ros.git \
     && git clone -b noetic-devel https://github.com/ros-planning/navigation.git \
     && git clone -b hj-ros1-devel https://github.com/HORIOJAPAN-OB/nmea_navsat_driver.git
@@ -71,3 +72,5 @@ RUN /bin/bash -c "source /opt/ros/noetic/setup.bash; catkin build"
 #########################################################################################
 ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES utility,graphics
+RUN echo "source /opt/ros/noetic/setup.bash" >> ~/.bashrc
+RUN echo "source ${HOME}/catkin_ws/devel/setup.bash" >> ~/.bashrc
