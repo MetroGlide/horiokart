@@ -32,7 +32,11 @@ class WaypointLoaderBase(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def load(self):
+    def _load(self):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def get_next_waypoint(self) -> Waypoint:
         raise NotImplementedError()
 
 
@@ -42,15 +46,19 @@ class WaypointLoaderCSV(WaypointLoaderBase):
 
         self._path = path
 
+        rospy.loginfo(f"Waypoints Load from {self._path}")
         self._waypoints: List[Waypoint] = self._load()
         self._current_waypoint: int = -1
+
+        rospy.loginfo(f"Load:{len(self._waypoints)} points")
 
     def _load(self) -> List[Waypoint]:
         waypoint_list = []
 
-        with open(self._path, 'w') as f:
+        with open(self._path, 'r') as f:
             reader = csv.reader(f, quoting=csv.QUOTE_NONNUMERIC)
             for i, p in enumerate(reader):
+                rospy.loginfo(f"row:{p}")
                 pose = PoseStamped()
                 pose.header.stamp = rospy.Time.now()
                 pose.header.frame_id = "map"
@@ -74,7 +82,12 @@ class WaypointLoaderCSV(WaypointLoaderBase):
 
     def get_next_waypoint(self) -> Waypoint:
         self._current_waypoint += 1
+        if self._current_waypoint >= len(self._waypoints):
+            return None
         return self._waypoints[self._current_waypoint]
+
+    def get_all_waypoints(self) -> List[Waypoint]:
+        return self._waypoints
 
     def seek(self):
         ...
@@ -109,7 +122,9 @@ class WaypointNavigator():
         try:
             (trans, rot) = self._tf_listener.lookupTransform(
                 "map", "base_footprint", rospy.Time(0))
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
+            rospy.logerr("can't get transform")
+            rospy.logerr(e)
             return False
 
         pos = Point()
@@ -120,7 +135,7 @@ class WaypointNavigator():
         dist = self._calc_distance(
             # waypoint.pose.pose.position, trans.transform.translation)
             waypoint.pose.pose.position, pos)
-        print(f"distance {dist}[m]")
+        rospy.loginfo(f"distance {dist}[m]")
 
         if dist <= 2.0:  # todo
             return True
@@ -128,24 +143,31 @@ class WaypointNavigator():
             return False
 
     def run(self, rate: int = 5):
+        rospy.sleep(5)  # todo!
+
         sleep_rate = rospy.Rate(rate)
         while not rospy.is_shutdown():
             waypoint = self._waypoint_loader.get_next_waypoint()
+            if waypoint is None:  # todo
+                rospy.loginfo("Goal!")
+                break
 
             self._client.send_goal(self._make_goal(waypoint))
 
-            while self._is_reach_point(waypoint=waypoint):
+            while not self._is_reach_point(waypoint=waypoint):
                 # check abort
                 # recovery
                 # check emergency
 
                 sleep_rate.sleep()
+            rospy.loginfo(f"Reach point No.{waypoint.index}")
+            rospy.loginfo(f"Set next goal!")
 
 
 if __name__ == '__main__':
     rospy.init_node('horiokart_waypoint_navigation')
 
-    path = rospy.get_param("waypoint_path")
+    path = rospy.get_param("~waypoint_path")
 
     waypoint_loader = WaypointLoaderCSV(path=path)
     waypoint_navigator = WaypointNavigator(waypoint_loader=waypoint_loader)
