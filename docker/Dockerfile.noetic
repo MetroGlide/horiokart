@@ -5,12 +5,13 @@ FROM ros:noetic-ros-base
 
 ARG ROS_VERSION=noetic
 ARG ROS_PYTHON=python3
+ARG DEBIAN_FRONTEND=noninteractive
 
 
 #########################################################################################
 # Install tools
 #########################################################################################
-RUN apt-get update && apt-get install -y curl git cmake apt-utils \
+RUN apt-get update && apt-get install -y --no-install-recommends curl git cmake apt-utils \
     && apt-get autoremove --purge \
     && rm -rf /var/cache/apt/*
 
@@ -18,13 +19,13 @@ RUN apt-get update && apt-get install -y curl git cmake apt-utils \
 #########################################################################################
 # Install basic ROS tools
 #########################################################################################
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-rosdep python3-rosinstall python3-rosinstall-generator \
     python3-wstool build-essential python3-catkin-tools \
     && apt-get autoremove --purge \
     && rm -rf /var/cache/apt/*
 
-RUN apt-get update && apt-get install -y --fix-missing \
+RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
     ros-$ROS_VERSION-rviz ros-$ROS_VERSION-rqt ros-$ROS_VERSION-rqt-common-plugins \
     ros-$ROS_VERSION-robot-state-publisher ros-$ROS_VERSION-joint-state-publisher  \
     ros-$ROS_VERSION-laser-filters \
@@ -49,7 +50,7 @@ RUN /bin/bash -c "source /opt/ros/$ROS_VERSION/setup.bash; catkin build"
 #########################################################################################
 # Install python packages
 #########################################################################################
-RUN apt-get update && apt-get install -y python3-pip python-is-python3 \
+RUN apt-get update && apt-get install -y --no-install-recommends python3-pip python-is-python3 \
     && apt-get autoremove --purge \
     && rm -rf /var/cache/apt/*
 
