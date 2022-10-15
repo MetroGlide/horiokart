@@ -75,3 +75,4 @@ ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES utility,graphics
 RUN echo "source /opt/ros/noetic/setup.bash" >> ~/.bashrc
 RUN echo "source ${HOME}/catkin_ws/devel/setup.bash" >> ~/.bashrc
+RUN git config --global --add safe.directory /app/horiokart
