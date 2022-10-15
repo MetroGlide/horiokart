@@ -1,13 +1,13 @@
 # Horiokart devices
-SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyHoriokart-Odom", GROUP="dialout"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyHoriokart-odom", GROUP="dialout"
 
-SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyHoriokart-Motordriver", GROUP="dialout"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyHoriokart-motordriver", GROUP="dialout"
 
-SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyHoriokart-FrontLidar", GROUP="dialout"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyHoriokart-frontlidar", GROUP="dialout"
 
-SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyHoriokart-TopLidar", GROUP="dialout"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyHoriokart-toplidar", GROUP="dialout"
 
-SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyHoriokart-Gps", GROUP="dialout"
+SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyHoriokart-gps", GROUP="dialout"
 
 # ----------
 # path -> /etc/udev/rules.d/

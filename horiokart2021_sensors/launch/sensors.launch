@@ -8,11 +8,11 @@
     <arg name="simulation" default="false"/>
 
     <arg name="use_odom" default="true"/>
-    <arg name="odom_port" default="/dev/ttyHoriokart-Odom"/>
+    <arg name="odom_port" default="/dev/ttyHoriokart-odom"/>
 
     <arg name="use_lidar" default="true"/>
-    <arg name="front_rplidar_port" default="/dev/ttyHoriokart-FrontLidar"/>
-    <arg name="top_rplidar_port" default="/dev/ttyHoriokart-TopLidar"/>
+    <arg name="front_rplidar_port" default="/dev/ttyHoriokart-frontlidar"/>
+    <arg name="top_rplidar_port" default="/dev/ttyHoriokart-toplidar"/>
 
     <arg name="use_gps" default="true"/>
     <arg name="gps_port" default="/dev/ttyHoriokart-gps"/>
