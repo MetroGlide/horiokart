@@ -21,4 +21,7 @@ services:
       - type: bind
         source: ${HOME}/ros_data
         target: /root/ros_data
+      - type: bind
+        source: /dev
+        target: /dev
     command: "/app/horiokart/docker/docker-entrypoint.sh"

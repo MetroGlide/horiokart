@@ -9,6 +9,7 @@
 #include <fstream>
 #include <time.h>
 #include <vector>
+#include <sstream>
 
 
 using namespace std;
@@ -47,6 +48,8 @@ class SerialOdom
         uint8_t checksum = 0;
 
         const int TIME_TO_SLEEP = 2000; // usec
+
+        ostringstream ss;
 
     public:
         SerialOdom();
@@ -93,7 +96,7 @@ SerialOdom::SerialOdom()
 
 void SerialOdom::init_ros_params()
 {
-    ros::Publisher serial_pub = n.advertise<nav_msgs::Odometry>("odom", 1);
+    serial_pub = n.advertise<nav_msgs::Odometry>("odom", 1);
 
     nh_private.param<string>("device_name", device_name, "/dev/ttyACM0");
     nh_private.param<string>("odom_frame", odom_frame, "odom");
@@ -114,7 +117,8 @@ int SerialOdom::update_odom(vector<uint8_t>& retbuf)
     checksum = 0;
 
     int rec=serial.serial_write(odomBuf);
-    ROS_DEBUG("send:%#x %#x\n",odomBuf[0], odomBuf[1]);
+    ROS_DEBUG("send:%#x %#x",odomBuf[0], odomBuf[1]);
+    ROS_DEBUG("send size: %d", rec);
 
     usleep(TIME_TO_SLEEP);
     if(rec<=0){
@@ -125,26 +129,28 @@ int SerialOdom::update_odom(vector<uint8_t>& retbuf)
     // read
     retbuf = serial.serial_read();
     int recv_data = retbuf.size();
-    ROS_DEBUG("recv %d \n", recv_data);
+    ROS_DEBUG("recv %d ", recv_data);
 
     if(recv_data<=0){
         ROS_ERROR("Odom receive size error");
         return 2; // 受信データサイズ0
     }
 
-    ROS_DEBUG("recv:");
+    ss.str("");
+    ss << "recv: ";
     for( const auto& b: retbuf)
     {
-        ROS_DEBUG("%#x ", b);
+        ss << "0x" << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(b) << " ";
+
     }
-    ROS_DEBUG("\n");
+    ROS_DEBUG("%s", ss.str().c_str());
 
     if(retbuf[0] != 0x24){
-        ROS_ERROR("invalid command!\n");
+        ROS_ERROR("invalid command!");
         return 3; // 返り値変 0x24
     }
     if(retbuf[1] != 0x75){
-        ROS_ERROR("invalid command\n");
+        ROS_ERROR("invalid command");
         return 4; // 返り値変 0x75
     }
 
@@ -175,8 +181,8 @@ void SerialOdom::publish_odom()
 {
     double th = odom_th * 180 / 3.14;
     double vth = odom_vth * 180 / 3.14;
-    ROS_DEBUG("x:%lf y:%lf th:%lf \n", odom_x, odom_y, th);
-    ROS_DEBUG("vx:%lf vy:%lf vth%lf \n", odom_vx, odom_vy, vth);
+    ROS_DEBUG("x:%lf y:%lf th:%lf ", odom_x, odom_y, th);
+    ROS_DEBUG("vx:%lf vy:%lf vth%lf ", odom_vx, odom_vy, vth);
 
     geometry_msgs::Quaternion odom_quat = tf::createQuaternionMsgFromYaw(odom_th);
 

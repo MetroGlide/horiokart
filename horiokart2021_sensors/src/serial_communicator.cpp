@@ -3,8 +3,8 @@
 using namespace std;
 using namespace horiokart2021_sensors;
 
-SerialCommunicator::SerialCommunicator(string device_name)
-:device_name(device_name)
+SerialCommunicator::SerialCommunicator(string device_name, int sleep_time)
+:device_name(device_name),time_to_sleep(sleep_time)
 {
     open_serial(device_name);
 }
@@ -51,7 +51,6 @@ void SerialCommunicator::open_serial(string device_name){
 uint8_t SerialCommunicator::calc_checksum(vector<uint8_t> buf){
     uint8_t sum = 0;
     
-    //for(int i = 0; i < buf_size-1; i++)
     for(const auto& b: buf)
     {
         sum += b;
@@ -66,7 +65,7 @@ int SerialCommunicator::serial_write(vector<uint8_t> write_buf)
         if(ret < 0){
             printf("flush error");
         }
-        return write(this->fd1, write_buf.data(), sizeof(write_buf.data()) * write_buf.size());
+        return write(this->fd1, &write_buf[0], sizeof(write_buf[0]) * write_buf.size());
     }
     else{
         return -1;
@@ -75,15 +74,15 @@ int SerialCommunicator::serial_write(vector<uint8_t> write_buf)
 vector<uint8_t> SerialCommunicator::serial_read()
 {
     if(is_open_serial){
-        int ret = tcflush(this->fd1, TCIFLUSH);
-        if(ret < 0){
-            printf("flush error");
-        }
+        // int ret = tcflush(this->fd1, TCIFLUSH);
+        // if(ret < 0){
+        //     printf("flush error");
+        // }
 
         uint8_t retbuf[64]={0};
-        ret = read(this->fd1, retbuf, sizeof(retbuf));
-        // todo! size ok?
-        return vector<uint8_t>(begin(retbuf), end(retbuf));
+        int ret = read(this->fd1, retbuf, sizeof(retbuf));
+
+        return vector<uint8_t>(retbuf, retbuf + ret);
     }
     else{
         return vector<uint8_t>();
@@ -95,6 +94,7 @@ vector<uint8_t> SerialCommunicator::serial_readwrite(vector<uint8_t> write_buf)
 
     if(rec>=0)
     {
+        usleep(time_to_sleep);
         return this->serial_read();
     }
     else

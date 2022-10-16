@@ -10,6 +10,7 @@
 #include <fstream>
 #include <unistd.h>
 #include <vector>
+#include <time.h>
 
 namespace horiokart2021_sensors
 {
@@ -19,6 +20,7 @@ namespace horiokart2021_sensors
     private:
         int fd1;
         std::string device_name;
+        int time_to_sleep;
         
         void open_serial(std::string device_name);
 
@@ -26,7 +28,7 @@ namespace horiokart2021_sensors
         bool is_open_serial;
 
         SerialCommunicator(){};
-        SerialCommunicator(std::string device_name);
+        SerialCommunicator(std::string device_name, int=2000);
         ~SerialCommunicator(){};
 
 
