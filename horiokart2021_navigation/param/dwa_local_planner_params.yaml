@@ -1,47 +1,110 @@
 DWAPlannerROS:
+  ####
+  # ロボット構成パラメータ
+  ###
+  # 座標軸毎の最大加速度(m/s^2), 最大旋回加速度(rad/s^2)
+  acc_lim_x: 1.0 #(double, default: 2.5)
+  acc_lim_y: 0 #(double, default: 2.5) y軸方向に動けないロボットの場合は0にする
+  acc_lim_theta: 4.5 #(double, defautl: 3.2)
+  acc_lim_trans: 1.0 #(double, default: 1.0)
 
-# Robot Configuration Parameters
-  max_vel_x: 0.3
-  min_vel_x: -0.3
+  # 最大、最小並進速度(m/s)
+  max_vel_trans: 0.42 #(double, default: 0.55) ロボットが直線上を移動するときの最大速度?
+  min_vel_trans: 0.2 #(double, default: 0.1) 負の値を設定すると後退動作が可能になる。
 
-  max_vel_y: 0.8
-  min_vel_y: -0.8
+  # 座標軸毎の最大速度、最小速度(m/s)
+  max_vel_x: 0.42 #(double, default: 0.55) x軸方向の移動速度=max_vel_transと同値にする
+  min_vel_x: 0.0 #(double, default: 0.0) 負の値を設定すると後退動作が可能になる。
+  max_vel_y: 0 #(double, default: 0.1) y軸方向に動けないロボットの場合は0にする
+  min_vel_y: 0 #(double, default: -0.1) y軸方向に動けないロボットの場合は0にする
 
-# The velocity when robot is moving in a straight line
-  max_vel_trans:  0.26
-  min_vel_trans:  0.13
+  # 最大, 最小旋回速度(rad/s)
+  #max_vel_theta: 1.57 #(double, default: 1.0)
+  max_vel_theta: 1.57 #(double, default: 1.0)
+  min_vel_theta: 0.4 #(double, default: 0.4)
 
-  max_vel_theta: 1.82
-  min_vel_theta: 0.9
+  ####
+  # 目標許容パラメータ
+  ####
+  # 目標に到達した時のロボットのyaw回転に置けるradの許容値 = 向きの許容誤差
+  yaw_goal_tolerance: 0.3 #(double, default: 0.05)
+  # 目標に到達した時のロボットのx,y方向の距離に置けるm単位の許容誤差 = 位置の許容誤差
+  xy_goal_tolerance: 0.6 #(double, default: 0.10)
+  # ロボットが停止しているとみなされる並進速度以下の速度
+  trans_stopped_vel: 0.1 #(double, default: 0.1)
+  theta_stopped_vel: 0.1 #(double, default: 0.1)
 
-  acc_lim_x: 2.5
-  acc_lim_y: 0.0
-  acc_lim_theta: 3.2 
+  #latch_xy_goal_tolerance: false
+  latch_xy_goal_tolerance: true
 
-# Goal Tolerance Parametes
-  xy_goal_tolerance: 0.05
-  yaw_goal_tolerance: 0.17
-  latch_xy_goal_tolerance: false
+  ####
+  # フォワードシミュレーションパラメータ
+  ####
+  # 軌跡をフォワードシミュレーションする時間(s)
+  sim_time: 1.7 #(double, default: 1.7)
+  # 各軌道に沿って衝突をチェックする粒度(m)
+  sim_granularity: 0.025 #(double, default: 0.025)
+  # 角速度のシミュレーションポイント間の距離はロボットがロボットが物にぶつからない程度に小さくする必要がある。
+  angular_sim_granularity: 0.1 # (double, default:0.1)
+  # x速度空間を探索するときに使用するサンプル数
+  vx_samples: 3 #(integer, default: 3)
+  # y速度空間を探索するときに使用するサンプル数. max_vel_y=0だと無視される。
+  vy_samples: 0 #(integer, default: 10)
+  # theta速度空間を探索するときに使用するサンプル数
+  vth_samples: 20 #(integer, default: 20)
+  # このコントローラーが呼び出される周期(Hz).
+  # move_base経由でこのプランナーが使用される場合、move_baseのcontroller_frequencyが優先されるため未設定でもよい
+  #controller_frequency: 10.0 #(double, default: 20.0)
 
-# Forward Simulation Parameters
-  sim_time: 2.0
-  vx_samples: 20
-  vy_samples: 0
-  vth_samples: 40
-  controller_frequency: 10.0
+  ####
+  # 軌道スコアリングパラメータ
+  ####
+  # 各軌道のスコアリングに使用されるコスト関数の計算式
+  #cost =
+  #  path_distance_bias * (軌道の端点からパスまでの距離[m])
+  #  + goal_distance_bias * (軌道の終点からローカルゴールまでの距離[m])
+  #  + occdist_scale * (障害物コスト(0-254)の軌道に沿った最大障害物コスト)
+  #  + twirling_scale * (軌道の旋回速度の絶対値)
 
-# Trajectory Scoring Parameters
-  path_distance_bias: 32.0
-  goal_distance_bias: 20.0
-  occdist_scale: 0.02
-  forward_point_distance: 0.325
-  stop_time_buffer: 0.2
-  scaling_speed: 0.25
-  max_scaling_factor: 0.2
+  # コントローラーが与えられたパスにどれだけ近づけるかの重み
+  path_distance_bias: 0.6 #(double, default: 0.6)
+  # コントローラーがローカル目標を達成するためにどれだけの試行を行うべきかの重みづけ,また速度も制御する
+  goal_distance_bias: 0.8 #(double, default: 0.8)
+  # コントローラーがどれだけ障害物をよけようとするかの重み
+  occdist_scale: 0.01 # (double, default: 0.01)
+  # ロボットの方向の変更にペナルティを課すための重み
+  twirling_scale: 0.0 #(double, default: 0.0)
+  # ロボットの中心点から追加のスコアリングポイントを配置するまでの距離(m)
+  forward_point_distance: 0.325 #(double, default: 0.325)
+  # 軌道が有効とみなされるために、ロボットが衝突前に停止しなければならない時間を秒単位で表示する
+  stop_time_buffer: 0.2 #(double, default: 0.2)
+  # ロボットのフットプリントのスケーリングを開始する速度の絶対値(m/s)
+  scaling_speed: 0.25 #(double, default: 0.25)
+  # ロボットのフットプリントをスケーリングする最大係数
+  max_scaling_factor: 0.2 #(double, default: 0.2)
+  # プランナーが計画時に使用するコストグリッドを公開するかどうか。
+  publish_cost_grid_pc: false #(bool, default: false)
+  # 経路候補を描画するフレーム
+  global_frame_id: "odom" #(string, default: "odom")
+  # 経路候補を配信するかどうか
+  publish_traj_pc: false #(bool, default: false)
 
-# Oscillation Prevention Parameters
-  oscillation_reset_dist: 0.05
+  ####
+  #発振防止パラメータ
+  ####
+  # 発振フラグがリセットされるまでにロボットがどれくらいの距離を移動しなければならないか
+  # ロボットが振動したときにリカバリー行動する可能性があるので、どれだけ移動したら振動のカウンタをリセットするかの閾値
+  oscillation_reset_dist: 0.1 #(double, default: 0.05)
+  # 振動フラグがリセットされる前にロボットが回転しなければ行けない角度(rad)
+  oscillation_rest_angle: 0.6 #(double, default: 0.2)
+  # ロボットが経路に沿って移動する際にプランを食べつくすかどうかを指定する。
+  # trueにすると、ロボットが1m移動するとポイントがプランの端から落ちていく。
+  prune_plan: true #(bool, default: true)
 
-# Debugging
-  publish_traj_pc : true
-  publish_cost_grid_pc: true
+  ###
+  # その他
+  ###
+  # ダイナミックウィンドウアプローチを使用してサンプリング速度を小さなウィンドウに制限する
+  use_dwa: true #(bool, default: true)
+  # 元の構成に戻す
+  restore_defaults: false #(bool default: false)
