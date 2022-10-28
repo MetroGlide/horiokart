@@ -1,0 +1,14 @@
+<launch> 
+  <arg name="bags_directory" default="$(env ROSBAG_PATH)"/>
+  <arg name="is_slam" default="false"/>
+  <arg name="is_navigation" default="false"/>
+
+  <arg name="bags_topic_base" default="/rosout /tf /odom /scan_front_lrf /scan_top_lrf /gps/nmea_sentence /pc_resource/cpu /pc_resource/memory "/>
+
+  <node name="bag_record" pkg="rosbag" type="record"
+        args="record -o $(arg bags_directory)/slam  $(arg bags_topic_base)" if="$(arg is_slam)" />
+
+  <node name="bag_record" pkg="rosbag" type="record"
+        args="record -o $(arg bags_directory)/nav $(arg bags_topic_base) /cmd_vel " if="$(arg is_navigation)" />
+
+</launch>
