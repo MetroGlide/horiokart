@@ -2,6 +2,7 @@
 #include <std_msgs/String.h>
 #include <tf/transform_broadcaster.h>
 #include <geometry_msgs/Twist.h>
+#include <std_msgs/Bool.h>
 
 #include <string>
 #include <unistd.h>
@@ -78,6 +79,9 @@ int fd1;
 ofstream ofs;
 bool is_write_csv;
 
+ros::NodeHandle nh_private("~");
+ros::Publisher button_pub = nh_private.advertise<std_msgs::Bool>("emergency1", 1);
+
 const int MAX_SPEED = 4000; // mm/s
 void serial_callback(const geometry_msgs::Twist vel){
 
@@ -142,6 +146,12 @@ void serial_callback(const geometry_msgs::Twist vel){
 
         //printf("recv:");
         //buf_print(retbuf, recv_data);
+
+        bool em_button = static_cast<bool>(retbuf[2] & 0b0010);
+        std_msgs::Bool bool_msg;
+        bool_msg.data = em_button;
+
+        button_pub.publish(bool_msg);
     }
 
     if(is_write_csv){
@@ -178,7 +188,6 @@ int main(int argc, char **argv)
     ros::Time current_time;
     current_time = ros::Time::now();
 
-    ros::NodeHandle nh_private("~");
 
     string device_name;
     string twist_frame;
