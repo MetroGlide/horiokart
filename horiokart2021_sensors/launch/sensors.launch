@@ -24,6 +24,8 @@
 
     <arg name="use_ekf" default="false"/>
 
+    <arg name="use_resource_pub" default="true"/>
+
     <!-- 
         ###############################
         hardware sensor drivers
@@ -152,5 +154,7 @@
 
 
     </group>
+
+    <node name="pc_resource" pkg="horiokart2021_sensors" type="pc_resource_publisher.py" if="$(arg use_resource_pub)" />
 
 </launch>
