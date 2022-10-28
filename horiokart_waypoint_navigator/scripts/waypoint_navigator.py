@@ -12,6 +12,7 @@ import actionlib
 import tf
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from geometry_msgs.msg import PoseStamped, Point, TransformStamped
+from actionlib_msgs.msg import GoalStatus, GoalStatusArray
 from std_srvs.srv import SetBool, SetBoolRequest, SetBoolResponse
 
 
@@ -85,6 +86,10 @@ class WaypointLoaderCSV(WaypointLoaderBase):
 
         return waypoint_list
 
+    @property
+    def current_waypoint_index(self):
+        return self._current_waypoint
+
     def get_next_waypoint(self) -> Waypoint:
         self._current_waypoint += 1
         if self._current_waypoint >= len(self._waypoints):
@@ -101,13 +106,6 @@ class WaypointLoaderCSV(WaypointLoaderBase):
         self._current_waypoint = max(-1, self._current_waypoint-num)
 
 
-class RobotStateMagager():
-    # stop, restart, search, etc
-
-    def __init__(self) -> None:
-        ...
-
-
 class WaypointNavigator():
     def __init__(self, waypoint_loader: WaypointLoaderBase) -> None:
         self._waypoint_loader = waypoint_loader
@@ -116,11 +114,14 @@ class WaypointNavigator():
             'move_base', MoveBaseAction)
         self._client.wait_for_server()
 
+        self._reached = False
+        self._last_reached_point = -1
+
         #self._tf2_buffer = tf2_ros.Buffer()
         #self._tf2_listener = tf2_ros.TransformListener(self._tf2_buffer)
         self._tf_listener = tf.TransformListener()
 
-        self._is_stop = False
+        self._is_stop = True
         self._stop_srv = rospy.Service(
             "~stop",
             SetBool,
@@ -132,6 +133,7 @@ class WaypointNavigator():
         res = SetBoolResponse()
         res.success = True
         res.message = ""
+        return res
 
     def _make_goal(self, waypoint: Waypoint) -> MoveBaseGoal:
         goal = MoveBaseGoal()
@@ -141,7 +143,7 @@ class WaypointNavigator():
     def _calc_distance(self, pos1: Point, pos2: Point):
         return math.sqrt((pos1.x-pos2.x)**2 + (pos1.y-pos2.y)**2)
 
-    def _is_reach_point(self, waypoint: Waypoint) -> bool:
+    def _check_reach_point(self, waypoint: Waypoint):
         # try:
         #    trans: TransformStamped = self._tf2_buffer.lookup_transform(
         #        "base_footprint", "map", rospy.Time(0))
@@ -153,7 +155,6 @@ class WaypointNavigator():
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException) as e:
             rospy.logerr("can't get transform")
             rospy.logerr(e)
-            return False
 
         pos = Point()
         pos.x = trans[0]
@@ -163,12 +164,32 @@ class WaypointNavigator():
         dist = self._calc_distance(
             # waypoint.pose.pose.position, trans.transform.translation)
             waypoint.pose.pose.position, pos)
-        rospy.loginfo(f"distance {dist}[m]")
+        rospy.logdebug(f"distance {dist}[m]")
 
         if dist <= 2.0:  # todo
-            return True
+            self._reached = True
+
+    def _aborted_action(self):
+
+        rospy.loginfo(f"Aborted!")
+        n = self._waypoint_loader.current_waypoint_index - self._last_reached_point
+
+        # first abort
+        if n == 1:
+            # try next point by get_next_waypoint() in continued loop
+            rospy.loginfo(f"try recovery... plan No.1 skip point")
+            pass
+
+        # abort when tryed skip waypoint once
+        elif n == 2:
+            # try previous reached point
+            rospy.loginfo(f"try recovery... plan No.2 back point")
+            self._waypoint_loader.back_point(num=3)
+
         else:
-            return False
+            rospy.logerr(
+                f"Can't reach point {self._waypoint_loader.current_waypoint_index}")
+            exit(0)
 
     def run(self, rate: int = 5):
         rospy.sleep(5)  # todo!
@@ -180,22 +201,36 @@ class WaypointNavigator():
         # ----------
         while not rospy.is_shutdown():
 
+            # pre process for send goal
             if self._is_stop:
                 rospy.loginfo(f"Waiting robot start")
                 sleep_rate.sleep()
                 continue
 
+            # get next goal and send
             waypoint = self._waypoint_loader.get_next_waypoint()
             if waypoint is None:  # todo
                 rospy.loginfo("Goal!")
                 exit(0)
                 break
 
+            rospy.loginfo(f"Send goal No.{waypoint.index}")
             self._client.send_goal(self._make_goal(waypoint))
+            self._reached = False
 
-            while not self._is_reach_point(waypoint=waypoint):
-                # check abort: thredingでwait_goalする？
-                # recovery
+            # ----------
+            # moving loop
+            # ----------
+            while not self._reached:
+                state = self._client.get_state()
+
+                # action abort
+                if state == GoalStatus.ABORTED:
+                    self._aborted_action()
+                    break
+
+                # todo: recovery
+                # todo: calc abort from tf
 
                 # check emergency stop
                 if self._is_stop:
@@ -205,7 +240,11 @@ class WaypointNavigator():
 
                 sleep_rate.sleep()
 
-            if not self._is_stop:
+                self._check_reach_point(waypoint=waypoint)
+
+            # post process for point reached
+            if self._reached:
+                self._last_reached_point = waypoint.index
                 rospy.loginfo(f"Reach point No.{waypoint.index}")
                 rospy.loginfo(f"Set next goal!")
 

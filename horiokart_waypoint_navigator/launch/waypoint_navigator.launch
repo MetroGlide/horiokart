@@ -1,16 +1,19 @@
 <launch> 
   <arg name="waypoint_path" default="$(env WAYPOINT_PATH)"/>
   <arg name="simulation" default="false"/>
+  <arg name="rviz" default="false"/>
 
   <include file="$(find horiokart2021_navigation)/launch/horiokart2021_navigation.launch">
     <arg name="rviz" value="false"/>
     <arg name="simulation" value="$(arg simulation)"/>
   </include>
 
+  <node name="horiokart_navigation_state_manager" pkg="horiokart_waypoint_navigator" type="navigation_interface.py" output="screen"/>
+
   <node name="horiokart_waypoint_navigator" pkg="horiokart_waypoint_navigator" type="waypoint_navigator.py" output="screen">
     <param name="waypoint_path" value="$(arg waypoint_path)" />
   </node>
 
   <!-- rviz -->
-  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find horiokart_waypoint_navigator)/rviz/navigation.rviz"/>
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(find horiokart_waypoint_navigator)/rviz/navigation.rviz" if="$(arg rviz)"/>
 </launch>
