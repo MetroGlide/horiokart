@@ -3,8 +3,8 @@
 using namespace std;
 using namespace horiokart2021_sensors;
 
-SerialCommunicator::SerialCommunicator(string device_name, int sleep_time)
-:device_name(device_name),time_to_sleep(sleep_time)
+SerialCommunicator::SerialCommunicator(string device_name)
+:device_name(device_name)
 {
     open_serial(device_name);
 }
@@ -58,48 +58,50 @@ uint8_t SerialCommunicator::calc_checksum(vector<uint8_t> buf){
     return sum;
 }
 
-int SerialCommunicator::serial_write(vector<uint8_t> write_buf)
+uint32_t SerialCommunicator::join_bytes(std::vector<uint8_t> buf, bool big)
 {
-    if(is_open_serial){
-        int ret = tcflush(this->fd1, TCOFLUSH);
-        if(ret < 0){
-            printf("flush error");
-        }
-        return write(this->fd1, &write_buf[0], sizeof(write_buf[0]) * write_buf.size());
-    }
-    else{
-        return -1;
-    }
-}
-vector<uint8_t> SerialCommunicator::serial_read()
-{
-    if(is_open_serial){
-        // int ret = tcflush(this->fd1, TCIFLUSH);
-        // if(ret < 0){
-        //     printf("flush error");
-        // }
-
-        uint8_t retbuf[64]={0};
-        int ret = read(this->fd1, retbuf, sizeof(retbuf));
-
-        return vector<uint8_t>(retbuf, retbuf + ret);
-    }
-    else{
-        return vector<uint8_t>();
-    }
-}
-vector<uint8_t> SerialCommunicator::serial_readwrite(vector<uint8_t> write_buf)
-{
-    int rec = this->serial_write(write_buf);
-
-    if(rec>=0)
+    if(buf.size()<2)
     {
-        usleep(time_to_sleep);
-        return this->serial_read();
+        // Exception
     }
-    else
+    reverse(buf.begin(), buf.end());
+
+    uint32_t ret = static_cast<uint32_t>(buf[0]);
+    for (int i = 1; i < buf.size(); i++)
     {
-        return vector<uint8_t>();
+        ret |= static_cast<uint32_t>(buf[i] << 8 * i);
+    }
+    return ret;
+}
+
+int SerialCommunicator::serial_write(vector<uint8_t> write_buf, bool input_flush, bool output_flush)
+{
+    if(!is_open_serial) return -1;
+
+    if (output_flush)
+    {
+        if (tcflush(this->fd1, TCOFLUSH) < 0) printf("output flush error");
+    }
+    if (input_flush)
+    {
+        if (tcflush(this->fd1, TCIFLUSH) < 0) printf("input flush error");
     }
 
+    return write(this->fd1, &write_buf[0], sizeof(write_buf[0]) * write_buf.size());
+}
+vector<uint8_t> SerialCommunicator::serial_read(int sleep_usec)
+{
+    if(!is_open_serial) return vector<uint8_t>();
+
+    usleep(sleep_usec);
+
+    uint8_t retbuf[64]={0};
+    int ret = read(this->fd1, retbuf, sizeof(retbuf));
+
+    return vector<uint8_t>(retbuf, retbuf + ret);
+}
+vector<uint8_t> SerialCommunicator::serial_readwrite(vector<uint8_t> write_buf, int sleep_usec, bool input_flush, bool output_flush)
+{
+    this->serial_write(write_buf, input_flush, output_flush);
+    return this->serial_read(sleep_usec);
 }

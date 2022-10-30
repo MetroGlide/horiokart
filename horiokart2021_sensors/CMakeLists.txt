@@ -128,6 +128,9 @@ include_directories(
 add_library(serial_communicator
   src/serial_communicator.cpp
 )
+add_library(serial_odometry
+  src/serial_odometry.cpp
+)
 
 # # Add cmake target dependencies of the library
 # # as an example, code may need to be generated before libraries
@@ -139,8 +142,10 @@ add_library(serial_communicator
 # # The recommended prefix ensures that target names across packages don't collide
 # add_executable(${PROJECT_NAME}_node src/horiokart2021_slam_node.cpp)
 add_executable(serial_motordriver src/serial_motordriver.cpp)
-add_executable(serial_odom src/serial_odom.cpp)
+add_executable(serial_odometry_node src/serial_odometry_node.cpp)
 add_executable(hj_sensor_odom2tf src/odom2tf.cpp)
+
+add_executable(serial_odometry_only test/serial_odometry_only.cpp)
 
 # # Rename C++ executable without prefix
 # # The above recommended prefix causes long target names, the following renames the
@@ -153,14 +158,23 @@ add_executable(hj_sensor_odom2tf src/odom2tf.cpp)
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 # # Specify libraries to link a library or executable target against
-target_link_libraries(serial_motordriver
-  ${catkin_LIBRARIES}
-)
-target_link_libraries(serial_odom
+target_link_libraries(serial_odometry
   serial_communicator
   ${catkin_LIBRARIES}
 )
+target_link_libraries(serial_motordriver
+  ${catkin_LIBRARIES}
+)
+target_link_libraries(serial_odometry_node
+  serial_odometry
+  ${catkin_LIBRARIES}
+)
 target_link_libraries(hj_sensor_odom2tf
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(serial_odometry_only
+  serial_odometry
   ${catkin_LIBRARIES}
 )
 
