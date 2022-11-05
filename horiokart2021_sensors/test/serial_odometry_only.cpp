@@ -37,7 +37,7 @@ void init()
         printf("Odom No CSV \n");
     }
 
-    SerialOdometry odometry = SerialOdometry("/dev/ttyHoriokart-odom", TIME_TO_SLEEP);
+    odometry = SerialOdometry("/dev/ttyHoriokart-odom", TIME_TO_SLEEP);
 }
 
 
@@ -56,6 +56,28 @@ void update_odom()
     if (currentData.error != OdometryError::NoError)
     {
         cout << "ERROR code " << static_cast<int>(currentData.error) << endl;
+        switch( currentData.error){
+            case OdometryError::WriteError:
+                cout << "ERROR : WriteError" << endl;
+                break;
+            case OdometryError::ReceiveSizeError:
+                cout << "ERROR : ReceiveSizeError" << endl;
+                break;
+            case OdometryError::InvalidHeader:
+                cout << "ERROR : InvalidHeader" << endl;
+                break;
+            case OdometryError::ChecksumError:
+                cout << "ERROR : ChecksumError" << endl;
+                break;
+            case OdometryError::OtherError:
+                cout << "ERROR : OtherError" << endl;
+                break;
+        }
+
+    }
+    else
+    {
+        cout << "No Error" << endl;
     }
 }
 
