@@ -14,7 +14,9 @@
     <arg name="front_rplidar_port" default="/dev/ttyHoriokart-frontlidar"/>
     <arg name="top_rplidar_port" default="/dev/ttyHoriokart-toplidar"/>
 
-    <arg name="use_lidar_odom" default="false"/>
+    <arg name="use_lidar_odom" default="true"/>
+    
+    <arg name="use_odom_fusion" default="true"/>
 
     <arg name="use_gps" default="true"/>
     <arg name="gps_port" default="/dev/ttyHoriokart-gps"/>
@@ -39,6 +41,7 @@
         <group if="$(arg use_odom)">
 
             <node pkg="horiokart2021_sensors" type="serial_odom" name="serial_odom" output="screen">
+                <remap from="odom" to="/wheel/odom"/>
                 <param name="device_name" type="string" value="$(arg odom_port)" />
                 <param name="odom_frame" type="string" value="odom" />
                 <param name="base_frame" type="string" value="base_footprint" />
@@ -113,9 +116,19 @@
     <!--<group if="$(eval use_odom and not use_ekf)">-->
 
         <node pkg="horiokart2021_sensors" type="hj_sensor_odom2tf" name="odom2tf">
+            <param name="base_frame" type="string" value="base_footprint"/>
             <param name="odom_frame" type="string" value="odom"/>
-            <remap from="odom" to="/wheel/odom"/>
+            <remap from="odom" to="odom"/>
             <!-- <remap from="odom" to="odom_rf2o"/> -->
+        </node>
+
+    </group>
+    <group if="$(arg use_odom_fusion)">
+
+        <node pkg="horiokart2021_sensors" type="odom_fusion.py" name="odom_fusion" output="screen">
+            <param name="base_frame" type="string" value="base_footprint"/>
+            <param name="odom_frame" type="string" value="odom"/>
+            <remap from="odom" to="odom"/>
         </node>
 
     </group>
@@ -128,10 +141,11 @@
     </group>
     <group if="$(arg use_lidar_odom)">
 
-        <node pkg="rf2o_laser_odometry" type="rf2o_laser_odometry_node" name="rf2o_laser_odometry" >
-            <param name="laser_scan_topic" value="/scan_filtered/scan_top_lrf"/> # topic where the lidar scans are being published
+        <!-- <node pkg="rf2o_laser_odometry" type="rf2o_laser_odometry_node" name="rf2o_laser_odometry" output="screen"> -->
+        <node pkg="rf2o_laser_odometry" type="rf2o_laser_odometry_node" name="rf2o_laser_odometry">
+            <param name="laser_scan_topic" value="/scan_filtered/scan_top_lrf"/>        # topic where the lidar scans are being published
             <param name="odom_topic" value="odom_rf2o" /> # topic where tu publish the odometry estimations
-            <param name="publish_tf" value="true" /> # wheter or not to publish the tf::transform (base->odom)
+            <param name="publish_tf" value="false" /> # wheter or not to publish the tf::transform (base->odom)
             <param name="base_frame_id" value="base_footprint"/> # frame_id (tf) of the mobile robot base. A tf transform from the laser_frame to the base_frame is mandatory
             <param name="odom_frame_id" value="odom" /> # frame_id (tf) to publish the odometry estimations    
             <!-- <param name="init_pose_from_topic" value="/base_pose_ground_truth" /> # (Odom topic) Leave empty to start at point (0,0) -->

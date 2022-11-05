@@ -4,6 +4,7 @@
   <arg name="plannning_map_file" default="$(env PLANNING_MAP_PATH)"/>
   <arg name="rviz" default="false"/>
   <arg name="move_forward_only" default="false"/>
+  <arg name="use_multi_odom" default="true"/>
 
   <!--<arg name="simulation" default="$(eval (import sim_eval;sim_eval.get_bool_param()))"/>-->
   <arg name="simulation" default="false"/>
@@ -16,7 +17,11 @@
   <include file="$(find horiokart2021_description)/launch/horiokart_description.launch"></include>
 
   <!-- Odom, rplidar -->
-  <include file="$(find horiokart2021_sensors)/launch/sensors.launch">
+  <include file="$(find horiokart2021_sensors)/launch/sensors.launch" unless="$(arg use_multi_odom)">
+    <arg name="simulation" value="$(arg simulation)"/>
+  </include>
+
+  <include file="$(find horiokart2021_sensors)/launch/sensors_multi_odom.launch" if="$(arg use_multi_odom)">
     <arg name="simulation" value="$(arg simulation)"/>
   </include>
 
