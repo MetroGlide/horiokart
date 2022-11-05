@@ -37,7 +37,7 @@ void init()
         printf("Odom No CSV \n");
     }
 
-    SerialOdometry odometry = SerialOdometry("/dev/ttyHoriokart-odom", TIME_TO_SLEEP);
+    odometry = SerialOdometry("/dev/ttyHoriokart-odom", TIME_TO_SLEEP);
 }
 
 
