@@ -146,6 +146,7 @@ add_executable(serial_odometry_node src/serial_odometry_node.cpp)
 add_executable(hj_sensor_odom2tf src/odom2tf.cpp)
 
 add_executable(serial_odometry_only test/serial_odometry_only.cpp)
+add_executable(serial_odometry_test test/odom_test.cpp)
 
 # # Rename C++ executable without prefix
 # # The above recommended prefix causes long target names, the following renames the
@@ -174,6 +175,10 @@ target_link_libraries(hj_sensor_odom2tf
 )
 
 target_link_libraries(serial_odometry_only
+  serial_odometry
+  ${catkin_LIBRARIES}
+)
+target_link_libraries(serial_odometry_test
   serial_odometry
   ${catkin_LIBRARIES}
 )
