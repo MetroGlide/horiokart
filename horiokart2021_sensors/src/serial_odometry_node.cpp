@@ -168,13 +168,13 @@ void SerialOdometryNode::write_log_csv()
 {
     if(is_write_csv){
 
-        ofs << ros::Time::now().nsec << ",";
+        ofs << ros::Time::now().sec << "." << ros::Time::now().nsec << ",";
         ofs << currentData.x << ",";
         ofs << currentData.y << ",";
         ofs << currentData.th << ",";
-        ofs << currentData.x << ",";
-        ofs << currentData.y << ",";
-        ofs << currentData.th << ",";
+        ofs << currentData.vx << ",";
+        ofs << currentData.vy << ",";
+        ofs << currentData.vth << ",";
         ofs << ",";
         ofs << static_cast<int>(currentData.error) << ",";
         ofs << ",";
