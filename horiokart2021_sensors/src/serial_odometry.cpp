@@ -32,39 +32,43 @@ OdometryError SerialOdometry::checkError(std::vector<uint8_t> ret)
     return OdometryError::NoError;
 }
 
+// OdometryData SerialOdometry::parse(std::vector<uint8_t> ret)
+// {
+//     OdometryData odom;
+
+//     odom.x = double(((int32_t)ret[2]) << 24 | ((int32_t)ret[3]) << 16 | ((int32_t)ret[4]) << 8 | ((int32_t)ret[5])) / 1000;
+//     odom.y = double(((int32_t)ret[6]) << 24 | ((int32_t)ret[7]) << 16 | ((int32_t)ret[8]) << 8 | ret[9]) / 1000;
+//     odom.th = double(((uint16_t)ret[10]) << 8 | (uint16_t)ret[11]) / 10000;
+
+//     odom.vx = double(int16_t(((uint16_t)ret[12]) << 8 | (uint16_t)ret[13])) / 1000;
+//     odom.vy = double(int16_t(((uint16_t)ret[14]) << 8 | (uint16_t)ret[15])) / 1000;
+//     odom.vth = double(int16_t(((uint16_t)ret[16]) << 8 | (uint16_t)ret[17])) / 10000;
+
+//     return odom;
+// }
+
 OdometryData SerialOdometry::parse(std::vector<uint8_t> ret)
 {
     OdometryData odom;
+    odom.x = static_cast<double>(
+        static_cast<int32_t>(serial.join_bytes<uint32_t>(vector<uint8_t>{&ret[2], &ret[2]+4}))
+     ) / 1000;
+    odom.y = static_cast<double>(
+        static_cast<int32_t>(serial.join_bytes<uint32_t>(vector<uint8_t>{&ret[6], &ret[6]+4}))
+     ) / 1000;
+    odom.th = static_cast<double>(
+        static_cast<uint16_t>(serial.join_bytes<uint16_t>(vector<uint8_t>{&ret[10], &ret[10]+2}))
+     ) / 10000;
 
-    odom.x = double(((int32_t)ret[2]) << 24 | ((int32_t)ret[3]) << 16 | ((int32_t)ret[4]) << 8 | ((int32_t)ret[5])) / 1000;
-    odom.y = double((int32_t)ret[6]<<24 | (int32_t)ret[7]<<16 | (int32_t)ret[8]<<8 | ret[9])/1000;
-    odom.th = double((uint16_t)ret[10]<<8 | ret[11])/10000;
-
-    odom.vx = double((int16_t)ret[12]<<8 | ret[13])/1000;
-    odom.vy = double((int16_t)ret[14]<<8 | ret[15])/1000;
-    odom.vth = double((int16_t)ret[16]<<8 | ret[17])/10000;
-
-    // odom.x = static_cast<double>(
-    //     static_cast<uint32_t>(serial.join_bytes(vector<uint8_t>{&ret[2], &ret[2]+4}))
-    //  ) / 1000;
-    // odom.y = static_cast<double>(
-    //     static_cast<uint32_t>(serial.join_bytes(vector<uint8_t>{&ret[6], &ret[6]+4}))
-    //  ) / 1000;
-    // odom.th = static_cast<double>(
-    //     static_cast<uint16_t>(serial.join_bytes(vector<uint8_t>{&ret[10], &ret[10]+2}))
-    //  ) / 10000;
-
-    // odom.vx = static_cast<double>(
-    //     static_cast<uint16_t>(serial.join_bytes(vector<uint8_t>{&ret[12], &ret[12]+2}))
-    //  ) / 1000;
-    // odom.vy = static_cast<double>(
-    //     static_cast<uint16_t>(serial.join_bytes(vector<uint8_t>{&ret[14], &ret[14]+2}))
-    //  ) / 1000;
-    // odom.vth = static_cast<double>(
-    //     static_cast<uint16_t>(serial.join_bytes(vector<uint8_t>{&ret[16], &ret[16]+2}))
-    //  ) / 10000;
-
-    odom.raw = ret;
+    odom.vx = static_cast<double>(
+        static_cast<int16_t>(serial.join_bytes<uint16_t>(vector<uint8_t>{&ret[12], &ret[12]+2}))
+     ) / 1000;
+    odom.vy = static_cast<double>(
+        static_cast<int16_t>(serial.join_bytes<uint16_t>(vector<uint8_t>{&ret[14], &ret[14]+2}))
+     ) / 1000;
+    odom.vth = static_cast<double>(
+        static_cast<int16_t>(serial.join_bytes<uint16_t>(vector<uint8_t>{&ret[16], &ret[16]+2}))
+     ) / 10000;
 
     return odom;
 }
@@ -85,6 +89,7 @@ OdometryData SerialOdometry::getData()
 
     // read
     vector<uint8_t> retbuf = serial.serial_read(sleep_usec);
+    odom.raw = retbuf;
 
     e = checkError(retbuf);
     if(e != OdometryError::NoError)

@@ -58,22 +58,6 @@ uint8_t SerialCommunicator::calc_checksum(vector<uint8_t> buf){
     return sum;
 }
 
-uint32_t SerialCommunicator::join_bytes(std::vector<uint8_t> buf, bool big)
-{
-    if(buf.size()<2)
-    {
-        // Exception
-    }
-    reverse(buf.begin(), buf.end());
-
-    uint32_t ret = static_cast<uint32_t>(buf[0]);
-    for (int i = 1; i < buf.size(); i++)
-    {
-        ret |= static_cast<uint32_t>(buf[i] << 8 * i);
-    }
-    return ret;
-}
-
 int SerialCommunicator::serial_write(vector<uint8_t> write_buf, bool input_flush, bool output_flush)
 {
     if(!is_open_serial) return -1;

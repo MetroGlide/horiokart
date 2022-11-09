@@ -46,7 +46,6 @@ namespace horiokart2021_sensors
         std::vector<uint8_t> OdomBuf{0x24, 0x75};
 
         OdometryError checkError(std::vector<uint8_t> ret);
-        OdometryData parse(std::vector<uint8_t> ret);
 
     public:
         SerialOdometry(){};
@@ -54,6 +53,8 @@ namespace horiokart2021_sensors
 
         OdometryData getData();
         OdometryError sendZeroReset(int retry=1);
+        OdometryData parse(std::vector<uint8_t> ret);
+        OdometryData parse2(std::vector<uint8_t> ret);
 
         bool isAlive();
     };

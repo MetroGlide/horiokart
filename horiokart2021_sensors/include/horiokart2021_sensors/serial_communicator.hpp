@@ -37,6 +37,22 @@ namespace horiokart2021_sensors
 
         uint8_t calc_checksum(std::vector<uint8_t>);
 
-        uint32_t join_bytes(std::vector<uint8_t> buf, bool big=true);
+
+        template <typename T>
+        T join_bytes(std::vector<uint8_t> buf, bool big = true)
+        {
+            if (buf.size() < 2)
+            {
+                // Exception
+            }
+            reverse(buf.begin(), buf.end());
+
+            T ret = static_cast<T>(buf[0]);
+            for (int i = 1; i < buf.size(); i++)
+            {
+                ret |= static_cast<T>(buf[i]) << 8 * i;
+            }
+            return ret;
+        }
     };
 }
