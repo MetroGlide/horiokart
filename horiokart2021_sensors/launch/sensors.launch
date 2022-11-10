@@ -49,6 +49,8 @@
                 <param name="inv_th" type="bool" value="false" />
 
                 <param name="csv" type="bool" value="true" />
+
+                <param name="always_publish" type="bool" value="false" />
             </node>
 
         </group>
@@ -114,7 +116,7 @@
 
         <node pkg="horiokart2021_sensors" type="hj_sensor_odom2tf" name="odom2tf">
             <param name="odom_frame" type="string" value="odom"/>
-            <remap from="odom" to="/wheel/odom"/>
+            <!-- <remap from="odom" to="/wheel/odom"/> -->
             <!-- <remap from="odom" to="odom_rf2o"/> -->
         </node>
 
