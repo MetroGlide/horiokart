@@ -53,23 +53,23 @@ void update_odom()
 
     }
     cout << ss.str() << endl;
-    if (currentData.error != OdometryError::NoError)
+    if (currentData.error != SerialError::NoError)
     {
         cout << "ERROR code " << static_cast<int>(currentData.error) << endl;
         switch( currentData.error){
-            case OdometryError::WriteError:
+            case SerialError::WriteError:
                 cout << "ERROR : WriteError" << endl;
                 break;
-            case OdometryError::ReceiveSizeError:
+            case SerialError::ReceiveSizeError:
                 cout << "ERROR : ReceiveSizeError" << endl;
                 break;
-            case OdometryError::InvalidHeader:
+            case SerialError::InvalidHeader:
                 cout << "ERROR : InvalidHeader" << endl;
                 break;
-            case OdometryError::ChecksumError:
+            case SerialError::ChecksumError:
                 cout << "ERROR : ChecksumError" << endl;
                 break;
-            case OdometryError::OtherError:
+            case SerialError::OtherError:
                 cout << "ERROR : OtherError" << endl;
                 break;
         }
@@ -111,8 +111,8 @@ int main()
 
     cout << endl << "start serial odom" << endl;
 
-    OdometryError e = odometry.sendZeroReset(3);
-    if (e == OdometryError::NoError)
+    SerialError e = odometry.sendZeroReset(3);
+    if (e == SerialError::NoError)
     {
         cout << "Odom zero reset" << endl;
     }

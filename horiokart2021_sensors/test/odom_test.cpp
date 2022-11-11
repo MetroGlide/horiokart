@@ -46,7 +46,7 @@ int main()
                          0x39, 0x6C,
                          0x52, 0x08,
                          0x00};
-    OdometryData o = odometry.parse(buf1);
+    OdometryData o = odometry.decode(buf1);
     printOdomData(o);
 
     // x:-100.5m, y:-200.6m th:-1.5rad vx:-20.3m/s vy:-14.7m/s vth:-2.1rad/s
@@ -58,6 +58,6 @@ int main()
                          0xC6, 0x94,
                          0xAD, 0xF8,
                          0x00};
-    o = odometry.parse(buf2);
+    o = odometry.decode(buf2);
     printOdomData(o);
 }

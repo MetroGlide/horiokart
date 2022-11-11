@@ -119,7 +119,7 @@ void SerialOdometryNode::update_odom()
 
     }
     ROS_DEBUG("%s", ss.str().c_str());
-    if(currentData.error != OdometryError::NoError)
+    if(currentData.error != SerialError::NoError)
     {
         // todo switch
         ROS_ERROR("ERROR code %d", static_cast<int>(currentData.error));
@@ -135,7 +135,7 @@ void SerialOdometryNode::update_odom()
 
 void SerialOdometryNode::publish_odom()
 {
-    if(currentData.error != OdometryError::NoError && !alwaysPublish)
+    if(currentData.error != SerialError::NoError && !alwaysPublish)
         return;
 
     double th = recentNomalData.th * 180 / 3.14;
@@ -190,8 +190,8 @@ void SerialOdometryNode::run()
 {
     ROS_INFO("start serial odom");
 
-    OdometryError e = odometry.sendZeroReset(3);
-    if (e == OdometryError::NoError)
+    SerialError e = odometry.sendZeroReset(3);
+    if (e == SerialError::NoError)
     {
         ROS_INFO("Odom zero reset");
     }
