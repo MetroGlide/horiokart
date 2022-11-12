@@ -1,0 +1,25 @@
+<launch>
+  <!-- Arguments -->
+  <arg name="move_forward_only" default="false"/>
+  <arg name="rviz" default="false"/>
+
+
+  <!-- AMCL -->
+  <include file="$(find horiokart2021_navigation)/launch/amcl.launch">
+    <arg name="scan_topic" value="scan_filtered/scan_top_lrf" />
+  </include>
+
+  <!-- move_base -->
+  <include file="$(find horiokart2021_navigation)/launch/move_base.launch">
+    <arg name="move_forward_only" value="$(arg move_forward_only)"/>
+    <arg name="cmd_vel_topic" value="/cmd_vel"/>
+    <arg name="map_topic" value="/planning/map"/>
+    <arg name="map_metadata_topic" value="/planning/map_metadata"/>
+  </include>
+
+  <!-- rviz -->
+  <group if="$(arg rviz)"> 
+    <node pkg="rviz" type="rviz" name="rviz" required="true"
+          args="-d $(find horiokart2021_navigation)/rviz/navigation.rviz"/>
+  </group>
+</launch>
