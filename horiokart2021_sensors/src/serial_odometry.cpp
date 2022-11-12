@@ -70,6 +70,8 @@ OdometryData SerialOdometry::decode(std::vector<uint8_t> ret)
         static_cast<int16_t>(serial.decode<uint16_t>(vector<uint8_t>{&ret[16], &ret[16]+2}))
      ) / 10000;
 
+    odom.raw = ret;
+
     return odom;
 }
 

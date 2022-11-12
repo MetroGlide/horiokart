@@ -57,7 +57,7 @@ namespace horiokart2021_sensors
 
             for (int i = 0; i < s;i++)
             {
-                ret[i] = static_cast<uint8_t>(data >> 8 * (s-i-1));
+                ret[i] = static_cast<uint8_t>(data >> (8 * (s-i-1)));
             }
 
             return ret;

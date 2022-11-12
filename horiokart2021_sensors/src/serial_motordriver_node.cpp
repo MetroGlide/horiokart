@@ -65,9 +65,9 @@ SerialMotorDriverNode::SerialMotorDriverNode()
         if(csv_name == "")
         {
             char date[64];
-            time_t t = ros::Time::now().sec;
+            time_t t = ros::WallTime::now().sec;
             strftime(date, sizeof(date), "motor_%Y%m%d%a_%H%M%S.csv", localtime(&t));
-            csv_name = date;
+            csv_name = string(date);
 
             ROS_INFO("Motor create CSV %s", csv_name.c_str());
         }
@@ -86,8 +86,6 @@ SerialMotorDriverNode::SerialMotorDriverNode()
 
 void SerialMotorDriverNode::init_ros_params()
 {
-    //Subscriber
-    serial_sub = n.subscribe(twist_frame, 1, &SerialMotorDriverNode::twist_sub_cb, this); 
 
 
     nh_private.param<string>("device_name", device_name, "/dev/ttyACM0");
@@ -97,11 +95,13 @@ void SerialMotorDriverNode::init_ros_params()
     nh_private.param<bool>("r_dir", r_dir, true);
     nh_private.param<bool>("l_dir", l_dir, true);
 
-    nh_private.param<float>("wheel_pitch", 358);
+    nh_private.param<float>("wheel_pitch",wheel_pitch, 358);
 
     nh_private.param<bool>("csv", is_write_csv, true);
     nh_private.param<string>("csv_name", csv_name, "");
 
+    //Subscriber
+    serial_sub = n.subscribe(twist_frame, 1, &SerialMotorDriverNode::twist_sub_cb, this); 
 }
 
 
@@ -123,12 +123,11 @@ SetSpeedRequest SerialMotorDriverNode::createSetSpeedRequest(geometry_msgs::Twis
     float v_r = (vel_x + d * ang_z ) * 1000; // mm/s
     float v_l = (vel_x - d * ang_z ) * 1000; // mm/s
 
-
-    if(abs(v_r) > MAX_SPEED || abs(v_l) > MAX_SPEED){
-        // todo ROSERROR
-        printf("max speed");
-        //return;
-    }
+    // if(abs(v_r) > MAX_SPEED || abs(v_l) > MAX_SPEED){
+    //     // todo ROSERROR
+    //     printf("max speed");
+    //     //return;
+    // }
 
     req.rightWheelSpeed = static_cast<int16_t>(v_r);
     req.leftWheelSpeed = static_cast<int16_t>(v_l);
@@ -145,12 +144,34 @@ void SerialMotorDriverNode::twist_sub_cb(const geometry_msgs::Twist &vel)
 
     MotorDriverResponse res = motordriver.setSpeedData(req);
 
+    vector<uint8_t> sendBuf = motordriver.encode(req);
+    ss.str("");
+    ss << "send: ";
+    for( const auto& b: sendBuf)
+    {
+        ss << "0x" << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(b) << " ";
+
+    }
+    ROS_DEBUG("%s", ss.str().c_str());
+
+    ss.str("");
+    ss << "recv: ";
+    for( const auto& b: res.raw)
+    {
+        ss << "0x" << std::setw(2) << std::setfill('0') << std::hex << static_cast<int>(b) << " ";
+
+    }
+    ROS_DEBUG("%s", ss.str().c_str());
+    if(res.error != SerialError::NoError)
+    {
+        // todo switch
+        ROS_ERROR("ERROR code %d", static_cast<int>(res.error));
+    }
 
     if(is_write_csv){
 
-        vector<uint8_t> sendBuf = motordriver.encode(req);
 
-        ofs << ros::Time::now().sec << "." << ros::Time::now().nsec << ",";
+        ofs << ros::WallTime::now().sec << "." << ros::WallTime::now().nsec << ",";
 
         ofs << float(vel.linear.x) << ",";
         ofs << float(vel.linear.y) << ",";

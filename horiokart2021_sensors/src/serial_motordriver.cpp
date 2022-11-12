@@ -56,7 +56,7 @@ vector<uint8_t> SerialMotorDriver::encode(SetSpeedRequest data)
     vector<uint8_t> l = serial.encode(data.leftWheelSpeed);
     ret.insert(ret.begin()+4, l.begin(), l.end());
 
-    uint8_t checksum = serial.calc_checksum(vector<uint8_t>(ret.begin(), ret.end()-1));
+    uint8_t checksum = serial.calc_checksum(vector<uint8_t>(ret.begin(), ret.end()));
 
     ret.push_back(checksum);
 

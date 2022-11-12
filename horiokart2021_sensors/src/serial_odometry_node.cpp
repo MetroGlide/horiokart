@@ -10,6 +10,7 @@
 #include <time.h>
 #include <vector>
 #include <sstream>
+#include <math.h>
 
 
 using namespace std;
@@ -39,7 +40,7 @@ class SerialOdometryNode
         bool inv_x, inv_y, inv_th;
         bool alwaysPublish;
 
-        const int TIME_TO_SLEEP = 10000; // usec
+        const int TIME_TO_SLEEP = 100000; // usec
 
         ostringstream ss;
 
@@ -68,9 +69,10 @@ SerialOdometryNode::SerialOdometryNode()
         if(csv_name == "")
         {
             char date[64];
-            time_t t = ros::Time::now().sec;
+            time_t t = ros::WallTime::now().sec;
             strftime(date, sizeof(date), "odom_%Y%m%d%a_%H%M%S.csv", localtime(&t));
-            csv_name = date;
+            csv_name = string(date);
+            cout << date << endl;
 
             ROS_INFO("Odom create CSV %s", csv_name.c_str());
         }
@@ -119,7 +121,7 @@ void SerialOdometryNode::update_odom()
 
     }
     ROS_DEBUG("%s", ss.str().c_str());
-    if(currentData.error != SerialError::NoError)
+    if (currentData.error != SerialError::NoError)
     {
         // todo switch
         ROS_ERROR("ERROR code %d", static_cast<int>(currentData.error));
@@ -138,8 +140,10 @@ void SerialOdometryNode::publish_odom()
     if(currentData.error != SerialError::NoError && !alwaysPublish)
         return;
 
-    double th = recentNomalData.th * 180 / 3.14;
-    double vth = recentNomalData.vth * 180 / 3.14;
+    // double th = recentNomalData.th * 180 / 3.14;
+    // double vth = recentNomalData.vth * 180 / 3.14;
+    double th = recentNomalData.th ;
+    double vth = recentNomalData.vth ;
     ROS_DEBUG("x:%lf y:%lf th:%lf ", recentNomalData.x, recentNomalData.y, th);
     ROS_DEBUG("vx:%lf vy:%lf vth%lf ", recentNomalData.vx, recentNomalData.vy, vth);
 
@@ -156,9 +160,12 @@ void SerialOdometryNode::publish_odom()
     odom.pose.pose.position.z = 0.0;
     odom.pose.pose.orientation = odom_quat;
 
+    double vx = sqrt(pow(recentNomalData.vx, 2) + pow(recentNomalData.vy, 2));
     odom.child_frame_id = base_frame;
-    odom.twist.twist.linear.x = recentNomalData.vx;
-    odom.twist.twist.linear.y = recentNomalData.vy;
+    // odom.twist.twist.linear.x = recentNomalData.vx;
+    // odom.twist.twist.linear.y = recentNomalData.vy;
+    odom.twist.twist.linear.x = vx;
+    odom.twist.twist.linear.y = 0;
     odom.twist.twist.angular.z = vth;
 
     serial_pub.publish(odom);
@@ -168,7 +175,7 @@ void SerialOdometryNode::write_log_csv()
 {
     if(is_write_csv){
 
-        ofs << ros::Time::now().sec << "." << ros::Time::now().nsec << ",";
+        ofs << ros::WallTime::now().sec << "." << ros::WallTime::now().nsec << ",";
         ofs << currentData.x << ",";
         ofs << currentData.y << ",";
         ofs << currentData.th << ",";
