@@ -57,21 +57,28 @@ uint8_t SerialCommunicator::calc_checksum(vector<uint8_t> buf){
     }
     return sum;
 }
-
-uint32_t SerialCommunicator::join_bytes(std::vector<uint8_t> buf, bool big)
+SerialError SerialCommunicator::checkError(std::vector<uint8_t> ret, std::vector<uint8_t> header, int size)
 {
-    if(buf.size()<2)
-    {
-        // Exception
+    if(ret.size() != size){
+        return SerialError::ReceiveSizeError; // 受信データサイズerror
     }
-    reverse(buf.begin(), buf.end());
 
-    uint32_t ret = static_cast<uint32_t>(buf[0]);
-    for (int i = 1; i < buf.size(); i++)
+    for (int i = 0; i < header.size();i++)
     {
-        ret |= static_cast<uint32_t>(buf[i] << 8 * i);
+        if(ret[i] != header[i])
+        {
+            return SerialError::InvalidHeader; // 返り値変
+        }
     }
-    return ret;
+
+    uint8_t checksum = calc_checksum(vector<uint8_t>(ret.begin(), ret.end()-1));
+    if(checksum != ret.back())
+    {
+        return SerialError::ChecksumError; // checksum error
+    }
+
+    // finally
+    return SerialError::NoError;
 }
 
 int SerialCommunicator::serial_write(vector<uint8_t> write_buf, bool input_flush, bool output_flush)
