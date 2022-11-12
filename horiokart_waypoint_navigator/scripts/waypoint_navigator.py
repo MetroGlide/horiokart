@@ -14,6 +14,7 @@ from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
 from geometry_msgs.msg import PoseStamped, Point, TransformStamped
 from actionlib_msgs.msg import GoalStatus, GoalStatusArray
 from std_srvs.srv import SetBool, SetBoolRequest, SetBoolResponse
+from std_srvs.srv import Empty, EmptyRequest, EmptyResponse
 
 
 # @dataclass
@@ -128,6 +129,12 @@ class WaypointNavigator():
             self._stop_srv_cb
         )
 
+        self._costmap_clear_srv = rospy.ServiceProxy(
+            "/move_base/clear_costmaps",
+            Empty,
+        )
+        self._costmap_clear_srv.wait_for_service()
+
     def _stop_srv_cb(self, req: SetBoolRequest):
         self._is_stop = req.data
         res = SetBoolResponse()
@@ -199,6 +206,8 @@ class WaypointNavigator():
         # ----------
         # main loop
         # ----------
+        start_t = rospy.Time().now()
+        costmap_clear_t = 3.0
         while not rospy.is_shutdown():
 
             # pre process for send goal
@@ -237,6 +246,14 @@ class WaypointNavigator():
                     self._client.cancel_goal()
                     self._waypoint_loader.back_point()
                     break
+
+                d_t = rospy.Time().now() - start_t
+                if d_t.secs > costmap_clear_t:
+                    rospy.loginfo(f"Clear costmap")
+                    self._costmap_clear_srv(
+                        EmptyRequest()
+                    )
+                    start_t = rospy.Time().now()
 
                 sleep_rate.sleep()
 
