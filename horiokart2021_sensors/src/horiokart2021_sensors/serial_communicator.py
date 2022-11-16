@@ -38,10 +38,13 @@ class SerialCommunicator():
         self.open(device_name, baud, timeout)
 
     def open(self, device_name: str, baud: int, timeout: float) -> None:
-        self._port = serial.Serial(
-            port=device_name,
-            baudrate=baud,
-            timeout=timeout)
+        try:
+            self._port = serial.Serial(
+                port=device_name,
+                baudrate=baud,
+                timeout=timeout)
+        except Exception as e:
+            print(f"Serial port can't open {e}")
 
     def write(self, buf: bytes, flush: bool = False) -> int:
         self._port.write(buf)
@@ -75,16 +78,16 @@ class SerialCommunicator():
     def encode(self, buf: bytes):
         ...
 
-    def decode(self, buf: bytes, byte_size: int, signed: bool, big: bool = True):
+    def decode(self, buf: bytes, bit_size: int, signed: bool, big: bool = True):
 
-        if len(buf) < byte_size:
+        if len(buf) < bit_size/8:
             raise ValueError("decode buffer error")
 
         dec = int.from_bytes(buf, byteorder="big" if big else "little")
         if not signed:
             return dec
 
-        bit = byte_size * 8
+        bit = bit_size
         if dec >> bit:
             raise ValueError("decode buffer error")
 
