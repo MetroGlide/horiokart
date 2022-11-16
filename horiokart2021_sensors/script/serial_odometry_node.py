@@ -5,6 +5,10 @@ from tf.transformations import quaternion_from_euler
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Quaternion
 import math
+import datetime
+import csv
+import os
+import time
 
 # from horiokart2021_sensors.serial_odometry import SerialOdometry
 from horiokart2021_sensors.src.horiokart2021_sensors.serial_odometry import SerialOdometry, SerialCommand, OdometryData
@@ -25,9 +29,20 @@ class SerialOdometryNode():
         self._always_publish = rospy.get_param("~always_publis", True)
 
         self._is_write_csv = rospy.get_param("~csv", True)
+        self._csv_path = rospy.get_param("~csv_path", "/root/ros_data/log_csv")
         self._csv_name = rospy.get_param("~csv_name", "")
 
-        # todo: prepare csv file
+        if self._is_write_csv:
+            if self._csv_name == "":
+                dt_now = datetime.datetime.now()
+                self._csv_name = dt_now.strftime("odom_%Y%m%d%a_%H%M%S.csv")
+
+            with open(os.path.join(self._csv_path,self._csv_name), "w") as _:
+                rospy.loginfo(f"Odom create CSV {os.path.join(self._csv_path,self._csv_name)}")
+            
+        else:
+            rospy.loginfo(f"Odom No CSV")
+
 
         device_name = rospy.get_param("~device_name", "ttyHoriokart-odom")
         baud = rospy.get_param("~baud", 56700)
@@ -49,14 +64,15 @@ class SerialOdometryNode():
         self._current_data: OdometryData = None
         self._recent_valid_data: OdometryData = None
 
+
     def update_odom(self):
         self._current_data = self._odom.get_odom()
 
-        # todo: print ros log
+        rospy.logdebug(f"read:{''.join([f'0x{x:02x} ' for x in self._current_data.raw])}")
 
         if self._current_data.error != SerialError.NoError:
-            # todo: print ros log
-            ...
+            rospy.logerr(f"ERROR code {self._current_data.error}")
+
         else:
             if self._inv_x:
                 self._current_data.x *= -1
@@ -75,7 +91,8 @@ class SerialOdometryNode():
         ):
             return
 
-        # todo: print ros debug log
+        rospy.logdebug(f"x: {self._recent_valid_data.x:.3f} y: {self._recent_valid_data.y:.3f} th: {self._recent_valid_data.th:.3f}")
+        rospy.logdebug(f"vx: {self._recent_valid_data.vx:.3f} vy: {self._recent_valid_data.vy:.3f} vth: {self._recent_valid_data.vth:.3f}")
 
         odom_msg = Odometry()
 
@@ -99,7 +116,26 @@ class SerialOdometryNode():
         self._odom_pub.publish(odom_msg)
 
     def write_log_csv(self):
-        ...
+        if self._is_write_csv:
+            with open(os.path.join(self._csv_path, self._csv_name)) as f:
+                writer = csv.writer(f)
+
+                writer.writerow(
+                    [
+                        time.time(), # epoch milli sec
+                        self._current_data.x,
+                        self._current_data.y,
+                        self._current_data.th,
+                        self._current_data.vx,
+                        self._current_data.vy,
+                        self._current_data.vth,
+                        "",
+                        self._current_data.error,
+                        "",
+                        *[f'0x{x:02x}' for x in self._current_data.raw]
+                    ]
+                )
+
 
     def run(self):
         rospy.loginfo("start serial odom node")

@@ -4,7 +4,7 @@
   <arg name="plannning_map_file" default="$(env PLANNING_MAP_PATH)"/>
   <arg name="rviz" default="false"/>
   <arg name="move_forward_only" default="false"/>
-  <arg name="use_multi_odom" default="true"/>
+  <arg name="use_multi_odom" default="false"/>
 
   <!--<arg name="simulation" default="$(eval (import sim_eval;sim_eval.get_bool_param()))"/>-->
   <arg name="simulation" default="false"/>
