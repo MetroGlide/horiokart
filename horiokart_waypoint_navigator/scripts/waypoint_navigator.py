@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-#from dataclasses import dataclass
+from dataclasses import dataclass
 from typing import List
 from abc import ABCMeta, abstractmethod
 import csv
@@ -15,18 +15,21 @@ from geometry_msgs.msg import PoseStamped, Point, TransformStamped
 from actionlib_msgs.msg import GoalStatus, GoalStatusArray
 from std_srvs.srv import SetBool, SetBoolRequest, SetBoolResponse
 from std_srvs.srv import Empty, EmptyRequest, EmptyResponse
+from horiokart_waypoint_msgs.srv import ForceSetWaypointNo, ForseSetWaypointNoRequest, ForseSetWaypointNoResponse
 
 
-# @dataclass
-# class Waypoint():
-#    index: int
-#    pose: PoseStamped
-#    flag: int
+@dataclass
 class Waypoint():
-    def __init__(self, index: int, pose: PoseStamped, flag: int) -> None:
-        self.index = index
-        self.pose = pose
-        self.flag = flag
+    index: int
+    pose: PoseStamped
+    flag: int
+    reach_threshold: float
+    is_stop: bool
+# class Waypoint():
+#     def __init__(self, index: int, pose: PoseStamped, flag: int) -> None:
+#         self.index = index
+#         self.pose = pose
+#         self.flag = flag
 
 
 # todo?:ジェネレータにする？
@@ -79,10 +82,17 @@ class WaypointLoaderCSV(WaypointLoaderBase):
                 pose.pose.orientation.z = p[5]
                 pose.pose.orientation.w = p[6]
 
+                reach_threshold = p[7]
+
+                is_stop = True if p[8] == 1 else False
+
                 waypoint_list.append(Waypoint(
                     index=i,
                     pose=pose,
-                    flag=0
+                    flag=0,
+                    reach_threshold=reach_threshold,
+                    is_stop=is_stop
+
                 ))
 
         return waypoint_list
@@ -105,6 +115,11 @@ class WaypointLoaderCSV(WaypointLoaderBase):
 
     def back_point(self, num: int = 1) -> None:
         self._current_waypoint = max(-1, self._current_waypoint-num)
+
+    # Force set next point => current point is (num:int - 1)
+    def set_next_point(self, num: int):
+        rospy.logwarn(f"Force set next point No.{num} !!")
+        self._current_waypoint = max(-1, num)
 
 
 class WaypointNavigator():
@@ -135,11 +150,36 @@ class WaypointNavigator():
         )
         self._costmap_clear_srv.wait_for_service()
 
+        self._set_next_waypoint_srv = rospy.Service(
+            "~force_set_next_waypoint",
+            ForceSetWaypointNo,
+            self._force_set_waypoint_srv_cb
+        )
+
+        # self._waypoints_array_pub = rospy.Publisher(
+
+        # )
+
     def _stop_srv_cb(self, req: SetBoolRequest):
+        rospy.loginfo(f"Change stop status to {req.data}")
+
         self._is_stop = req.data
+
         res = SetBoolResponse()
         res.success = True
         res.message = ""
+        return res
+
+    def _force_set_waypoint_srv_cb(self, req: ForseSetWaypointNoRequest):
+        res = ForseSetWaypointNoResponse
+
+        if self._is_stop:
+            self._waypoint_loader.set_next_point(num=req.waypoint_num)
+            res.success = True
+        else:
+            rospy.logerr(f"force set waypoint can ONLY STOPPING")
+            res.success = False
+
         return res
 
     def _make_goal(self, waypoint: Waypoint) -> MoveBaseGoal:
@@ -173,7 +213,7 @@ class WaypointNavigator():
             waypoint.pose.pose.position, pos)
         rospy.logdebug(f"distance {dist}[m]")
 
-        if dist <= 2.0:  # todo
+        if dist <= waypoint.reach_threshold:
             self._reached = True
 
     def _aborted_action(self):
@@ -237,11 +277,12 @@ class WaypointNavigator():
                 if state == GoalStatus.ABORTED:
                     self._aborted_action()
                     break
+                # todo: check move base action succeed
 
                 # todo: recovery
                 # todo: calc abort from tf
 
-                # check emergency stop
+                # check manual stop
                 if self._is_stop:
                     self._client.cancel_goal()
                     self._waypoint_loader.back_point()
@@ -264,6 +305,9 @@ class WaypointNavigator():
                 self._last_reached_point = waypoint.index
                 rospy.loginfo(f"Reach point No.{waypoint.index}")
                 rospy.loginfo(f"Set next goal!")
+
+                if waypoint.is_stop:
+                    self._is_stop = True
 
 
 if __name__ == '__main__':
