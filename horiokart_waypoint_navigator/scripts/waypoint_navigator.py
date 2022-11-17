@@ -11,11 +11,11 @@ import actionlib
 #import tf2_ros
 import tf
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
-from geometry_msgs.msg import PoseStamped, Point, TransformStamped
+from geometry_msgs.msg import PoseStamped, Point, TransformStamped, Pose
 from actionlib_msgs.msg import GoalStatus, GoalStatusArray
 from std_srvs.srv import SetBool, SetBoolRequest, SetBoolResponse
 from std_srvs.srv import Empty, EmptyRequest, EmptyResponse
-from horiokart_waypoint_msgs.srv import ForceSetWaypointNo, ForseSetWaypointNoRequest, ForseSetWaypointNoResponse
+from horiokart_waypoint_msgs.srv import ForceSetWaypointNo, ForceSetWaypointNoRequest, ForceSetWaypointNoResponse
 
 
 @dataclass
@@ -170,8 +170,8 @@ class WaypointNavigator():
         res.message = ""
         return res
 
-    def _force_set_waypoint_srv_cb(self, req: ForseSetWaypointNoRequest):
-        res = ForseSetWaypointNoResponse
+    def _force_set_waypoint_srv_cb(self, req: ForceSetWaypointNoRequest):
+        res = ForceSetWaypointNoResponse
 
         if self._is_stop:
             self._waypoint_loader.set_next_point(num=req.waypoint_num)
