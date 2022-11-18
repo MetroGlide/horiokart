@@ -139,6 +139,7 @@ class WaypointMaker():
         int_marker.header.frame_id = "map"
         int_marker.pose = pose_stamped.pose
         int_marker.name = str(index)
+        int_marker.description = str(index)
 
         box_marker = Marker()
         box_marker.type = Marker.CUBE
