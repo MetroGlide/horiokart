@@ -259,7 +259,9 @@ class WaypointNavigator():
             # get next goal and send
             waypoint = self._waypoint_loader.get_next_waypoint()
             if waypoint is None:  # todo
-                rospy.loginfo("Goal!")
+                rospy.loginfo("------")
+                rospy.loginfo("Goal !!!")
+                rospy.loginfo("------")
                 exit(0)
                 break
 
@@ -277,7 +279,11 @@ class WaypointNavigator():
                 if state == GoalStatus.ABORTED:
                     self._aborted_action()
                     break
-                # todo: check move base action succeed
+
+                # check move base action succeed
+                if state == GoalStatus.SUCCEEDED:
+                    self._reached = True
+                    break
 
                 # todo: recovery
                 # todo: calc abort from tf
