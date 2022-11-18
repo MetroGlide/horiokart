@@ -16,6 +16,7 @@ from actionlib_msgs.msg import GoalStatus, GoalStatusArray
 from std_srvs.srv import SetBool, SetBoolRequest, SetBoolResponse
 from std_srvs.srv import Empty, EmptyRequest, EmptyResponse
 from horiokart_waypoint_msgs.srv import ForceSetWaypointNo, ForceSetWaypointNoRequest, ForceSetWaypointNoResponse
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 @dataclass
@@ -156,9 +157,14 @@ class WaypointNavigator():
             self._force_set_waypoint_srv_cb
         )
 
-        # self._waypoints_array_pub = rospy.Publisher(
-
-        # )
+        self._waypoints_array_pub = rospy.Publisher(
+            "~waypoints",
+            MarkerArray,
+            queue_size=1
+        )
+        self._waypoints_array_pub.publish(
+            self._waypoint_pub()
+        )
 
     def _stop_srv_cb(self, req: SetBoolRequest):
         rospy.loginfo(f"Change stop status to {req.data}")
@@ -181,6 +187,33 @@ class WaypointNavigator():
             res.success = False
 
         return res
+
+    def _waypoint_pub(self):
+        waypoint_marker_list = []
+        for w in self._waypoint_loader.get_all_waypoints():
+            marker = Marker()
+            marker.header.frame_id = "map"
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = "waypoint"
+            marker.id = w.index
+            marker.lifetime = rospy.Duration()
+            marker.action = Marker.ADD
+            marker.pose = w.pose.pose
+
+            marker.scale.x = 5
+            marker.scale.y = 1
+            marker.scale.z = 1
+
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+
+            marker.type = Marker.ARROW
+
+            waypoint_marker_list.append(marker)
+
+        return waypoint_marker_list
 
     def _make_goal(self, waypoint: Waypoint) -> MoveBaseGoal:
         goal = MoveBaseGoal()
