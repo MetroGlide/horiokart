@@ -5,7 +5,8 @@ DWAPlannerROS:
   # 座標軸毎の最大加速度(m/s^2), 最大旋回加速度(rad/s^2)
   acc_lim_x: 1.0 #(double, default: 2.5)
   acc_lim_y: 0 #(double, default: 2.5) y軸方向に動けないロボットの場合は0にする
-  acc_lim_theta: 4.5 #(double, defautl: 3.2)
+  # acc_lim_theta: 4.5 #(double, defautl: 3.2)
+  acc_lim_theta: 3.0 #(double, defautl: 3.2)
   acc_lim_trans: 1.0 #(double, default: 1.0)
 
   # 最大、最小並進速度(m/s)

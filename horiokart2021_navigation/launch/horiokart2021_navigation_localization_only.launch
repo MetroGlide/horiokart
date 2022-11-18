@@ -2,7 +2,25 @@
   <!-- Arguments -->
   <arg name="move_forward_only" default="false"/>
   <arg name="rviz" default="false"/>
+  <arg name="map_file" default="$(env LOCALIZATION_MAP_PATH)"/>
+  <arg name="plannning_map_file" default="$(env PLANNING_MAP_PATH)"/>
 
+  <!-- Map server for localization -->
+  <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)">
+    <!-- Topic Name -->
+    <remap from="map" to="/map" />
+    <remap from="map_metadata" to="/map_metadata" />
+    <!-- Frame Name -->
+    <param name="frame_id" value="map" />
+  </node>
+  <!-- Map server for planning-->
+  <node pkg="map_server" name="planning_map_server" type="map_server" args="$(arg plannning_map_file)">
+    <!-- Topic Name -->
+    <remap from="map" to="/planning/map" />
+    <remap from="map_metadata" to="/planning/map_metadata" />
+    <!-- Frame Name -->
+    <param name="frame_id" value="map" />
+  </node>
 
   <!-- AMCL -->
   <include file="$(find horiokart2021_navigation)/launch/amcl.launch">

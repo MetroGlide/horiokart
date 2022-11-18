@@ -24,7 +24,7 @@ void SerialCommunicator::open_serial(string device_name){
     tcgetattr(fd1,&conf_tio);
 
     //set baudrate
-    speed_t BAUDRATE = B115200;
+    speed_t BAUDRATE = B57600;
     cfsetispeed(&conf_tio, BAUDRATE);
     cfsetospeed(&conf_tio, BAUDRATE);
 

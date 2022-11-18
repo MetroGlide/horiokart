@@ -4,7 +4,7 @@ local_costmap:
 
   update_frequency: 5.0
   publish_frequency: 2.0
-  transform_tolerance: 2.0
+  transform_tolerance: 4.0
 
   static_map: false
   rolling_window: true
