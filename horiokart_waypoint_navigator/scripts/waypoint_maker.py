@@ -3,10 +3,10 @@
 import rospy
 from visualization_msgs.msg import Marker, MarkerArray, InteractiveMarkerControl
 from interactive_markers.interactive_marker_server import InteractiveMarker, InteractiveMarkerServer, InteractiveMarkerFeedback
-from geometry_msgs.msg import Pose, PoseStamped
+from geometry_msgs.msg import PoseStamped
 from horiokart_waypoint_msgs.srv import SaveWaypoint, SaveWaypointRequest, SaveWaypointResponse
 
-from waypoint_navigator import Waypoint
+from waypoint_navigator import Waypoint, WaypointLoaderCSV, WaypointLoaderBase
 
 import os
 import csv
@@ -21,7 +21,7 @@ class WaypointManager():
     def get_next_index(self) -> int:
         return self._get_max_index() + 1
 
-    def update_pose(self, index: int, pose: Pose):
+    def update_pose(self, index: int, pose: PoseStamped):
         self._waypoint_dict[index].pose = pose
 
     def append_waypoint(self, waypoint: Waypoint):
@@ -38,12 +38,9 @@ class WaypointManager():
     def get_all_waypoints(self) -> List[Waypoint]:
         return self._waypoint_dict.values()
 
-    def load(self, path: str):
-        ...
-
 
 class WaypointMaker():
-    def __init__(self, path: str, file: str = None) -> None:
+    def __init__(self, path: str, waypoint_loader: WaypointLoaderCSV = None) -> None:
         self._path = path
         # self._marker_list: List[Marker] = []
 
@@ -62,15 +59,31 @@ class WaypointMaker():
 
         self._server = InteractiveMarkerServer("waypoint_server")
 
-        if file is not None:
-            # todo! load
-            ...
+        if waypoint_loader is not None:
+            self._load(waypoint_loader=waypoint_loader)
+            self._server.applyChanges()
+
+    def _load(self, waypoint_loader: WaypointLoaderCSV):
+        rospy.loginfo(f"Load waypoint")
+        for w in waypoint_loader.get_all_waypoints():
+            self._waypoint_manager.append_waypoint(waypoint=w)
+            self._make_marker(w.index, w.pose)
 
     def _pose_sub_cb(self, data: PoseStamped):
-        pos = data.pose
         # self._marker_list.append(self._make_marker(pos))
-        self._make_marker(pos)
+        index = self._waypoint_manager.get_next_index()
+        self._make_marker(index, data)
+        self._waypoint_manager.append_waypoint(
+            Waypoint(
+                index=index,
+                pose=data,
+                flag=0,
+                reach_threshold=2.0,  # todo
+                is_stop=False
+            )
+        )
 
+        pos = data.pose
         print(
             f"{pos.position.x},{pos.position.y},0.0,0.0,0.0,{pos.orientation.z},{pos.orientation.w},")
 
@@ -78,9 +91,11 @@ class WaypointMaker():
         if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
             rospy.loginfo(f"update index {feedback.marker_name}")
 
+            pose_stamped = PoseStamped()
+            pose_stamped.pose = feedback.pose
             self._waypoint_manager.update_pose(
                 index=int(feedback.marker_name),
-                pose=feedback.pose
+                pose=pose_stamped
             )
             self._server.applyChanges()
 
@@ -95,12 +110,12 @@ class WaypointMaker():
             #     [pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, rot.w]
             # )
             for waypoint in self._waypoint_manager.get_all_waypoints():
-                pos = waypoint.pose.position
-                rot = waypoint.pose.orientation
+                pos = waypoint.pose.pose.position
+                rot = waypoint.pose.pose.orientation
                 writer.writerow(
                     [pos.x, pos.y, pos.z, rot.x, rot.y, rot.z, rot.w,  # 0~6
                      waypoint.reach_threshold,  # 7
-                     waypoint.is_stop  # 8
+                     int(waypoint.is_stop)  # 8
                      ]
                 )
         res = SaveWaypointResponse()
@@ -108,13 +123,21 @@ class WaypointMaker():
         res.path = path
         return res
 
-    def _make_marker(self, pos: Pose):
-        index = self._waypoint_manager.get_next_index()
+    def normalizeQuaternion(self, quaternion_msg):
+        norm = quaternion_msg.x**2 + quaternion_msg.y**2 + \
+            quaternion_msg.z**2 + quaternion_msg.w**2
+        s = norm**(-0.5)
+        quaternion_msg.x *= s
+        quaternion_msg.y *= s
+        quaternion_msg.z *= s
+        quaternion_msg.w *= s
 
-        pos.position.z += 1
+    def _make_marker(self, index: int, pose_stamped: PoseStamped):
+
+        pose_stamped.pose.position.z += 1
         int_marker = InteractiveMarker()
         int_marker.header.frame_id = "map"
-        int_marker.pose = pos
+        int_marker.pose = pose_stamped.pose
         int_marker.name = str(index)
 
         box_marker = Marker()
@@ -133,13 +156,23 @@ class WaypointMaker():
 
         int_marker.controls.append(box_control)
 
-        rotate_control = InteractiveMarkerControl()
-        rotate_control.name = "move_x"
-        rotate_control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
+        control = InteractiveMarkerControl()
+        control.orientation.w = 1
+        control.orientation.x = 1
+        control.orientation.y = 0
+        control.orientation.z = 0
+        self.normalizeQuaternion(control.orientation)
+        control.name = "move_x"
+        control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
 
-        int_marker.controls.append(rotate_control)
+        int_marker.controls.append(control)
 
         control = InteractiveMarkerControl()
+        control.orientation.w = 1
+        control.orientation.x = 0
+        control.orientation.y = 0
+        control.orientation.z = 1
+        self.normalizeQuaternion(control.orientation)
         control.name = "move_y"
         control.interaction_mode = InteractiveMarkerControl.MOVE_AXIS
 
@@ -156,15 +189,6 @@ class WaypointMaker():
         int_marker.controls.append(control)
 
         self._server.insert(int_marker, self._interactive_feedback_cb)
-        self._waypoint_manager.append_waypoint(
-            Waypoint(
-                index=index,
-                pose=pos,
-                flag=0,
-                reach_threshold=2.0,  # todo
-                is_stop=False
-            )
-        )
 
         self._server.applyChanges()
 
@@ -204,6 +228,11 @@ if __name__ == "__main__":
     rospy.init_node("horiokart_waypoint_marker")
 
     path = rospy.get_param("~save_path")
+    file = rospy.get_param("~exist_file_path", None)
 
-    maker = WaypointMaker(path=path)
+    waypoint_loader = None
+    if file is not None and file != "":
+        waypoint_loader = WaypointLoaderCSV(path=file)
+
+    maker = WaypointMaker(path=path, waypoint_loader=waypoint_loader)
     maker.run()
