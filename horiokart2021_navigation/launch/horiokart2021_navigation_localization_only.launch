@@ -6,7 +6,7 @@
   <arg name="plannning_map_file" default="$(env PLANNING_MAP_PATH)"/>
 
   <!-- Odom, rplidar -->
-  <include file="$(find horiokart2021_sensors)/launch/sensors.launch" >
+  <include file="$(find horiokart2021_sensors)/launch/sensors_for_master_pc.launch" >
     <arg name="simulation" value="false"/>
   </include>
 
