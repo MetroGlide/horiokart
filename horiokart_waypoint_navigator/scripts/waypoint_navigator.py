@@ -160,7 +160,8 @@ class WaypointNavigator():
         self._waypoints_array_pub = rospy.Publisher(
             "~waypoints",
             MarkerArray,
-            queue_size=1
+            queue_size=1,
+            latch=True
         )
         self._waypoints_array_pub.publish(
             self._waypoint_pub()
@@ -177,7 +178,7 @@ class WaypointNavigator():
         return res
 
     def _force_set_waypoint_srv_cb(self, req: ForceSetWaypointNoRequest):
-        res = ForceSetWaypointNoResponse
+        res = ForceSetWaypointNoResponse()
 
         if self._is_stop:
             self._waypoint_loader.set_next_point(num=req.waypoint_num)
@@ -328,7 +329,7 @@ class WaypointNavigator():
                     break
 
                 d_t = rospy.Time().now() - start_t
-                if d_t.secs > costmap_clear_t:
+                if d_t.secs > costmap_clear_t and False:
                     rospy.loginfo(f"Clear costmap")
                     self._costmap_clear_srv(
                         EmptyRequest()
