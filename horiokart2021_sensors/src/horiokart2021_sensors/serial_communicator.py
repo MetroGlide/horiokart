@@ -47,7 +47,7 @@ class SerialCommunicator():
             print(f"Serial port can't open {e}")
 
     def write(self, buf: bytes, flush: bool = False) -> int:
-        self._port.write(buf)
+        return self._port.write(buf)
 
     def read(self, wait_sec: int, size: int = 0) -> bytes:
         time.sleep(wait_sec)

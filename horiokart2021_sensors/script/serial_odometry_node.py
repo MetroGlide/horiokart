@@ -11,8 +11,8 @@ import os
 import time
 
 # from horiokart2021_sensors.serial_odometry import SerialOdometry
-from horiokart2021_sensors.src.horiokart2021_sensors.serial_odometry import SerialOdometry, SerialCommand, OdometryData
-from horiokart2021_sensors.src.horiokart2021_sensors.serial_communicator import SerialCommand, SerialCommunicator, SerialError
+from horiokart2021_sensors.serial_odometry import SerialOdometry, SerialCommand, OdometryData
+from horiokart2021_sensors.serial_communicator import SerialCommand, SerialCommunicator, SerialError
 
 
 class SerialOdometryNode():
@@ -32,7 +32,7 @@ class SerialOdometryNode():
         self._csv_path = rospy.get_param("~csv_path", "/root/ros_data/log_csv")
         self._csv_name = rospy.get_param("~csv_name", "")
 
-        if self._is_write_csv:
+        if self._is_write_csv and False:
             if self._csv_name == "":
                 dt_now = datetime.datetime.now()
                 self._csv_name = dt_now.strftime("odom_%Y%m%d%a_%H%M%S.csv")
@@ -45,8 +45,8 @@ class SerialOdometryNode():
             rospy.loginfo(f"Odom No CSV")
 
         device_name = rospy.get_param("~device_name", "ttyHoriokart-odom")
-        baud = rospy.get_param("~baud", 56700)
-        timeout = rospy.get_param("~timeout", 0.5)
+        baud = rospy.get_param("~baud", 57600)
+        timeout = rospy.get_param("~timeout", 0.1)
 
         self._serial = SerialCommunicator(
             device_name=device_name,
@@ -71,7 +71,7 @@ class SerialOdometryNode():
             f"read:{''.join([f'0x{x:02x} ' for x in self._current_data.raw])}")
 
         if self._current_data.error != SerialError.NoError:
-            rospy.logerr(f"ERROR code {self._current_data.error}")
+            rospy.loginfo(f"ERROR code {self._current_data.error}")
 
         else:
             if self._inv_x:
@@ -104,10 +104,11 @@ class SerialOdometryNode():
 
         odom_msg.pose.pose.position.x = self._recent_valid_data.x
         odom_msg.pose.pose.position.y = self._recent_valid_data.y
-        odom_msg.pose.pose.position.z = self._recent_valid_data.z
+        # odom_msg.pose.pose.position.z = 0
 
         odom_quat = quaternion_from_euler(0, 0, self._recent_valid_data.th)
-        odom_msg.pose.pose.orientation = odom_quat
+        # odom_msg.pose.pose.orientation = odom_quat
+        odom_msg.pose.pose.orientation = Quaternion(x=odom_quat[0], y=odom_quat[1], z=odom_quat[2], w=odom_quat[3])
 
         odom_msg.twist.twist.linear.x = math.sqrt(
             self._recent_valid_data.vx**2 + self._recent_valid_data.vy**2
@@ -119,7 +120,7 @@ class SerialOdometryNode():
 
     def write_log_csv(self):
         if self._is_write_csv:
-            with open(os.path.join(self._csv_path, self._csv_name)) as f:
+            with open(os.path.join(self._csv_path, self._csv_name), "w") as f:
                 writer = csv.writer(f)
 
                 writer.writerow(
@@ -152,13 +153,14 @@ class SerialOdometryNode():
             self.update_odom()
             self.publish()
 
-            self.write_log_csv()
+            # self.write_log_csv()
 
             rate.sleep()
 
 
 if __name__ == "__main__":
     rospy.init_node("serial_odometry_node")
+    rospy.loginfo("Start odometry node")
 
     node = SerialOdometryNode()
     node.run()

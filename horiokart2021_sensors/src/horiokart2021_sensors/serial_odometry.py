@@ -1,4 +1,4 @@
-from serial_communicator import SerialCommunicator, SerialError, SerialCommand
+from horiokart2021_sensors.serial_communicator import SerialCommunicator, SerialError, SerialCommand
 from dataclasses import dataclass
 from typing import List, Any
 
@@ -57,8 +57,7 @@ class SerialOdometry:
         # check error
         e = self._comm.check_error(
             buf=ret_buf,
-            header=OdomCommand.get_odom.command_header,
-            size=OdomCommand.get_odom.return_size
+            command=OdomCommand.get_odom
         )
         if e != SerialError.NoError:
             odom = OdometryData()
