@@ -1,0 +1,35 @@
+<launch>
+  <!-- Arguments -->
+  <arg name="map_file" default="$(env LOCALIZATION_MAP_PATH)"/>
+  <arg name="plannning_map_file" default="$(env PLANNING_MAP_PATH)"/>
+  <arg name="rviz" default="false"/>
+  <arg name="move_forward_only" default="false"/>
+
+  <!--<arg name="simulation" default="$(eval (import sim_eval;sim_eval.get_bool_param()))"/>-->
+  <arg name="simulation" default="false"/>
+
+  <group if="$(arg simulation)">
+      <param name="use_sim_time" value="true"/>
+  </group>
+
+  <!-- robot -->
+  <include file="$(find horiokart2021_description)/launch/horiokart_description.launch"></include>
+
+  <!-- Odom, rplidar -->
+  <include file="$(find horiokart2021_sensors)/launch/sensors.launch">
+    <arg name="simulation" value="$(arg simulation)"/>
+  </include>
+
+  <group unless="$(arg simulation)"> 
+    <!-- motordriver -->
+    <include file="$(find horiokart2021_sensors)/launch/motordriver.launch"></include>
+  </group>
+
+
+
+  <!-- rviz -->
+  <group if="$(arg rviz)"> 
+    <node pkg="rviz" type="rviz" name="rviz" required="true"
+          args="-d $(find horiokart2021_navigation)/rviz/navigation.rviz"/>
+  </group>
+</launch>
