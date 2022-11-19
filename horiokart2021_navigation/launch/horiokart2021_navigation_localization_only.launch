@@ -5,6 +5,11 @@
   <arg name="map_file" default="$(env LOCALIZATION_MAP_PATH)"/>
   <arg name="plannning_map_file" default="$(env PLANNING_MAP_PATH)"/>
 
+  <!-- Odom, rplidar -->
+  <include file="$(find horiokart2021_sensors)/launch/sensors.launch" >
+    <arg name="simulation" value="false"/>
+  </include>
+
   <!-- Map server for localization -->
   <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)">
     <!-- Topic Name -->

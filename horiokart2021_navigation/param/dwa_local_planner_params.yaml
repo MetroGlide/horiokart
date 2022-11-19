@@ -10,18 +10,19 @@ DWAPlannerROS:
   acc_lim_trans: 1.0 #(double, default: 1.0)
 
   # 最大、最小並進速度(m/s)
-  max_vel_trans: 0.42 #(double, default: 0.55) ロボットが直線上を移動するときの最大速度?
+  #max_vel_trans: 0.32 #(double, default: 0.55) ロボットが直線上を移動するときの最大速度?
+  max_vel_trans: 0.38 #(double, default: 0.55) ロボットが直線上を移動するときの最大速度?
   min_vel_trans: 0.2 #(double, default: 0.1) 負の値を設定すると後退動作が可能になる。
 
   # 座標軸毎の最大速度、最小速度(m/s)
-  max_vel_x: 0.42 #(double, default: 0.55) x軸方向の移動速度=max_vel_transと同値にする
+  max_vel_x: 0.38 #(double, default: 0.55) x軸方向の移動速度=max_vel_transと同値にする
   min_vel_x: 0.0 #(double, default: 0.0) 負の値を設定すると後退動作が可能になる。
   max_vel_y: 0 #(double, default: 0.1) y軸方向に動けないロボットの場合は0にする
   min_vel_y: 0 #(double, default: -0.1) y軸方向に動けないロボットの場合は0にする
 
   # 最大, 最小旋回速度(rad/s)
   #max_vel_theta: 1.57 #(double, default: 1.0)
-  max_vel_theta: 1.57 #(double, default: 1.0)
+  max_vel_theta: 1.5 #(double, default: 1.0)
   min_vel_theta: 0.4 #(double, default: 0.4)
 
   ####
