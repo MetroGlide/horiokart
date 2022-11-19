@@ -4,10 +4,11 @@
   <arg name="rviz" default="false"/>
   <arg name="map_file" default="$(env LOCALIZATION_MAP_PATH)"/>
   <arg name="plannning_map_file" default="$(env PLANNING_MAP_PATH)"/>
+  <arg name="simulation" default="false"/>
 
   <!-- Odom, rplidar -->
   <include file="$(find horiokart2021_sensors)/launch/sensors_for_master_pc.launch" >
-    <arg name="simulation" value="false"/>
+    <arg name="simulation" value="$(arg simulation)"/>
   </include>
 
   <!-- Map server for localization -->
