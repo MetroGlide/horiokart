@@ -1,34 +1,9 @@
 <launch>
   <!-- Arguments -->
+  <arg name="move_forward_only" default="false"/>
+  <arg name="rviz" default="false"/>
   <arg name="map_file" default="$(env LOCALIZATION_MAP_PATH)"/>
   <arg name="plannning_map_file" default="$(env PLANNING_MAP_PATH)"/>
-  <arg name="rviz" default="false"/>
-  <arg name="move_forward_only" default="false"/>
-  <arg name="use_multi_odom" default="false"/>
-
-  <!--<arg name="simulation" default="$(eval (import sim_eval;sim_eval.get_bool_param()))"/>-->
-  <arg name="simulation" default="false"/>
-
-  <group if="$(arg simulation)">
-      <param name="use_sim_time" value="true"/>
-  </group>
-
-  <!-- robot -->
-  <include file="$(find horiokart2021_description)/launch/horiokart_description.launch"></include>
-
-  <!-- Odom, rplidar -->
-  <include file="$(find horiokart2021_sensors)/launch/sensors.launch" unless="$(arg use_multi_odom)">
-    <arg name="simulation" value="$(arg simulation)"/>
-  </include>
-
-  <include file="$(find horiokart2021_sensors)/launch/sensors_multi_odom.launch" if="$(arg use_multi_odom)">
-    <arg name="simulation" value="$(arg simulation)"/>
-  </include>
-
-  <group unless="$(arg simulation)"> 
-    <!-- motordriver -->
-    <include file="$(find horiokart2021_sensors)/launch/motordriver.launch"></include>
-  </group>
 
   <!-- Map server for localization -->
   <node pkg="map_server" name="map_server" type="map_server" args="$(arg map_file)">
@@ -39,10 +14,10 @@
     <param name="frame_id" value="map" />
   </node>
   <!-- Map server for planning-->
-  <node pkg="map_server" name="plannning_map_server" type="map_server" args="$(arg plannning_map_file)">
+  <node pkg="map_server" name="planning_map_server" type="map_server" args="$(arg plannning_map_file)">
     <!-- Topic Name -->
     <remap from="map" to="/planning/map" />
-    <remap from="map_metadata" to="/plannning/map_metadata" />
+    <remap from="map_metadata" to="/planning/map_metadata" />
     <!-- Frame Name -->
     <param name="frame_id" value="map" />
   </node>

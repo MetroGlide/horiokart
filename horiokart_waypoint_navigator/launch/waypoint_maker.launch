@@ -1,6 +1,7 @@
 <launch> 
   <arg name="map_file" default="$(env PLANNING_MAP_PATH)"/>
   <arg name="waypoint_save_path" default="$(env HOME)/ros_data/"/>
+  <arg name="exist_file_path" default=""/>
 
   <!-- map -->
   <node pkg="map_server" type="map_server" name="map_server" args="$(arg map_file)" output="screen">
@@ -13,6 +14,7 @@
 
   <node name="horiokart_waypoint_maker" pkg="horiokart_waypoint_navigator" type="waypoint_maker.py" output="screen">
     <param name="save_path" value="$(arg waypoint_save_path)" />
+    <param name="exist_file_path" value="$(arg exist_file_path)"/>
   </node>
 
   <!-- rviz -->

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-#from dataclasses import dataclass
+from dataclasses import dataclass
 from typing import List
 from abc import ABCMeta, abstractmethod
 import csv
@@ -11,21 +11,26 @@ import actionlib
 #import tf2_ros
 import tf
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
-from geometry_msgs.msg import PoseStamped, Point, TransformStamped
+from geometry_msgs.msg import PoseStamped, Point, TransformStamped, Pose
 from actionlib_msgs.msg import GoalStatus, GoalStatusArray
 from std_srvs.srv import SetBool, SetBoolRequest, SetBoolResponse
+from std_srvs.srv import Empty, EmptyRequest, EmptyResponse
+from horiokart_waypoint_msgs.srv import ForceSetWaypointNo, ForceSetWaypointNoRequest, ForceSetWaypointNoResponse
+from visualization_msgs.msg import Marker, MarkerArray
 
 
-# @dataclass
-# class Waypoint():
-#    index: int
-#    pose: PoseStamped
-#    flag: int
+@dataclass
 class Waypoint():
-    def __init__(self, index: int, pose: PoseStamped, flag: int) -> None:
-        self.index = index
-        self.pose = pose
-        self.flag = flag
+    index: int
+    pose: PoseStamped
+    flag: int
+    reach_threshold: float
+    is_stop: bool
+# class Waypoint():
+#     def __init__(self, index: int, pose: PoseStamped, flag: int) -> None:
+#         self.index = index
+#         self.pose = pose
+#         self.flag = flag
 
 
 # todo?:ジェネレータにする？
@@ -78,10 +83,17 @@ class WaypointLoaderCSV(WaypointLoaderBase):
                 pose.pose.orientation.z = p[5]
                 pose.pose.orientation.w = p[6]
 
+                reach_threshold = p[7]
+
+                is_stop = True if p[8] == 1 else False
+
                 waypoint_list.append(Waypoint(
                     index=i,
                     pose=pose,
-                    flag=0
+                    flag=0,
+                    reach_threshold=reach_threshold,
+                    is_stop=is_stop
+
                 ))
 
         return waypoint_list
@@ -104,6 +116,11 @@ class WaypointLoaderCSV(WaypointLoaderBase):
 
     def back_point(self, num: int = 1) -> None:
         self._current_waypoint = max(-1, self._current_waypoint-num)
+
+    # Force set next point => current point is (num:int - 1)
+    def set_next_point(self, num: int):
+        rospy.logwarn(f"Force set next point No.{num} !!")
+        self._current_waypoint = max(-1, num)
 
 
 class WaypointNavigator():
@@ -128,12 +145,75 @@ class WaypointNavigator():
             self._stop_srv_cb
         )
 
+        self._costmap_clear_srv = rospy.ServiceProxy(
+            "/move_base/clear_costmaps",
+            Empty,
+        )
+        self._costmap_clear_srv.wait_for_service()
+
+        self._set_next_waypoint_srv = rospy.Service(
+            "~force_set_next_waypoint",
+            ForceSetWaypointNo,
+            self._force_set_waypoint_srv_cb
+        )
+
+        self._waypoints_array_pub = rospy.Publisher(
+            "~waypoints",
+            MarkerArray,
+            queue_size=1
+        )
+        self._waypoints_array_pub.publish(
+            self._waypoint_pub()
+        )
+
     def _stop_srv_cb(self, req: SetBoolRequest):
+        rospy.loginfo(f"Change stop status to {req.data}")
+
         self._is_stop = req.data
+
         res = SetBoolResponse()
         res.success = True
         res.message = ""
         return res
+
+    def _force_set_waypoint_srv_cb(self, req: ForceSetWaypointNoRequest):
+        res = ForceSetWaypointNoResponse
+
+        if self._is_stop:
+            self._waypoint_loader.set_next_point(num=req.waypoint_num)
+            res.success = True
+        else:
+            rospy.logerr(f"force set waypoint can ONLY STOPPING")
+            res.success = False
+
+        return res
+
+    def _waypoint_pub(self):
+        waypoint_marker_list = []
+        for w in self._waypoint_loader.get_all_waypoints():
+            marker = Marker()
+            marker.header.frame_id = "map"
+            marker.header.stamp = rospy.Time.now()
+            marker.ns = "waypoint"
+            marker.id = w.index
+            marker.lifetime = rospy.Duration()
+            marker.action = Marker.ADD
+            marker.pose = w.pose.pose
+
+            marker.scale.x = 5
+            marker.scale.y = 1
+            marker.scale.z = 1
+
+            marker.color.r = 1.0
+            marker.color.g = 0.0
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+
+            marker.type = Marker.ARROW
+
+            waypoint_marker_list.append(marker)
+
+        return waypoint_marker_list
 
     def _make_goal(self, waypoint: Waypoint) -> MoveBaseGoal:
         goal = MoveBaseGoal()
@@ -166,7 +246,7 @@ class WaypointNavigator():
             waypoint.pose.pose.position, pos)
         rospy.logdebug(f"distance {dist}[m]")
 
-        if dist <= 2.0:  # todo
+        if dist <= waypoint.reach_threshold:
             self._reached = True
 
     def _aborted_action(self):
@@ -199,6 +279,8 @@ class WaypointNavigator():
         # ----------
         # main loop
         # ----------
+        start_t = rospy.Time().now()
+        costmap_clear_t = 3.0
         while not rospy.is_shutdown():
 
             # pre process for send goal
@@ -210,7 +292,9 @@ class WaypointNavigator():
             # get next goal and send
             waypoint = self._waypoint_loader.get_next_waypoint()
             if waypoint is None:  # todo
-                rospy.loginfo("Goal!")
+                rospy.loginfo("------")
+                rospy.loginfo("Goal !!!")
+                rospy.loginfo("------")
                 exit(0)
                 break
 
@@ -229,14 +313,27 @@ class WaypointNavigator():
                     self._aborted_action()
                     break
 
+                # check move base action succeed
+                if state == GoalStatus.SUCCEEDED:
+                    self._reached = True
+                    break
+
                 # todo: recovery
                 # todo: calc abort from tf
 
-                # check emergency stop
+                # check manual stop
                 if self._is_stop:
                     self._client.cancel_goal()
                     self._waypoint_loader.back_point()
                     break
+
+                d_t = rospy.Time().now() - start_t
+                if d_t.secs > costmap_clear_t:
+                    rospy.loginfo(f"Clear costmap")
+                    self._costmap_clear_srv(
+                        EmptyRequest()
+                    )
+                    start_t = rospy.Time().now()
 
                 sleep_rate.sleep()
 
@@ -247,6 +344,9 @@ class WaypointNavigator():
                 self._last_reached_point = waypoint.index
                 rospy.loginfo(f"Reach point No.{waypoint.index}")
                 rospy.loginfo(f"Set next goal!")
+
+                if waypoint.is_stop:
+                    self._is_stop = True
 
 
 if __name__ == '__main__':

@@ -39,7 +39,7 @@
         <!--<group if="$(arg use_odom)">-->
         <group if="false">
 
-            <node pkg="horiokart2021_sensors" type="serial_odometry_node" name="serial_odometry_node" output="screen">
+            <node pkg="horiokart2021_sensors" type="serial_odometry_node.py" name="serial_odometry_node" output="screen">
                 <param name="device_name" type="string" value="$(arg odom_port)" />
                 <param name="odom_frame" type="string" value="odom" />
                 <param name="base_frame" type="string" value="base_footprint" />

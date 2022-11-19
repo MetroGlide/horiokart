@@ -12,41 +12,6 @@ SerialOdometry::SerialOdometry(string device_name, int read_sleep_usec)
     }
 }
 
-// OdometryError SerialOdometry::checkError(std::vector<uint8_t> ret)
-// {
-//     if(ret.size() != GET_ODOM_RET_SIZE){
-//         return OdometryError::ReceiveSizeError; // 受信データサイズerror
-//     }
-
-//     if(ret[0] != 0x24 || ret[1] != 0x75){
-//         return OdometryError::InvalidHeader; // 返り値変
-//     }
-
-//     uint8_t checksum = serial.calc_checksum(vector<uint8_t>(ret.begin(), ret.end()-1));
-//     if(checksum != ret.back())
-//     {
-//         return OdometryError::ChecksumError; // checksum error
-//     }
-
-//     // finally
-//     return OdometryError::NoError;
-// }
-
-// OdometryData SerialOdometry::parse(std::vector<uint8_t> ret)
-// {
-//     OdometryData odom;
-
-//     odom.x = double(((int32_t)ret[2]) << 24 | ((int32_t)ret[3]) << 16 | ((int32_t)ret[4]) << 8 | ((int32_t)ret[5])) / 1000;
-//     odom.y = double(((int32_t)ret[6]) << 24 | ((int32_t)ret[7]) << 16 | ((int32_t)ret[8]) << 8 | ret[9]) / 1000;
-//     odom.th = double(((uint16_t)ret[10]) << 8 | (uint16_t)ret[11]) / 10000;
-
-//     odom.vx = double(int16_t(((uint16_t)ret[12]) << 8 | (uint16_t)ret[13])) / 1000;
-//     odom.vy = double(int16_t(((uint16_t)ret[14]) << 8 | (uint16_t)ret[15])) / 1000;
-//     odom.vth = double(int16_t(((uint16_t)ret[16]) << 8 | (uint16_t)ret[17])) / 10000;
-
-//     return odom;
-// }
-
 OdometryData SerialOdometry::decode(std::vector<uint8_t> ret)
 {
     OdometryData odom;

@@ -11,16 +11,6 @@
 
 namespace horiokart2021_sensors
 {
-    // enum class OdometryError
-    // {
-    //     NoError,
-    //     WriteError,
-    //     ReceiveSizeError,
-    //     InvalidHeader,
-    //     ChecksumError,
-    //     OtherError
-    // };
-
     struct OdometryData{
         double x, y, th;
         double vx, vy, vth;
@@ -45,15 +35,12 @@ namespace horiokart2021_sensors
         std::vector<uint8_t> ZeroBuf{0x24, 0x73};
         std::vector<uint8_t> OdomBuf{0x24, 0x75};
 
-        // OdometryError checkError(std::vector<uint8_t> ret);
-
     public:
         SerialOdometry(){};
         SerialOdometry(std::string device_name, int read_sleep_usec);
 
         OdometryData getData();
         SerialError sendZeroReset(int retry=1);
-        // OdometryData parse(std::vector<uint8_t> ret);
         OdometryData decode(std::vector<uint8_t> ret);
 
         bool isAlive();
