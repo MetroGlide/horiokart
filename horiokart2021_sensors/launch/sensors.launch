@@ -16,7 +16,7 @@
 
     <arg name="use_lidar_odom" default="false"/>
 
-    <arg name="use_gps" default="true"/>
+    <arg name="use_gps" default="false"/>
     <arg name="gps_port" default="/dev/ttyHoriokart-gps"/>
 
     <arg name="use_rs_d435i" default="false"/>
@@ -36,7 +36,8 @@
     <group unless="$(arg simulation)">
 
         <!-- Odometry -->
-        <group if="$(arg use_odom)">
+        <!--<group if="$(arg use_odom)">-->
+        <group if="false">
 
             <node pkg="horiokart2021_sensors" type="serial_odometry_node" name="serial_odometry_node" output="screen">
                 <param name="device_name" type="string" value="$(arg odom_port)" />
