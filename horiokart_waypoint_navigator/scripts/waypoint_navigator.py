@@ -281,7 +281,7 @@ class WaypointNavigator():
         # main loop
         # ----------
         start_t = rospy.Time().now()
-        costmap_clear_t = 3.0
+        costmap_clear_t = 10.0
         while not rospy.is_shutdown():
 
             # pre process for send goal
@@ -329,7 +329,7 @@ class WaypointNavigator():
                     break
 
                 d_t = rospy.Time().now() - start_t
-                if d_t.secs > costmap_clear_t and False:
+                if d_t.secs > costmap_clear_t:
                     rospy.loginfo(f"Clear costmap")
                     self._costmap_clear_srv(
                         EmptyRequest()
