@@ -22,7 +22,7 @@ DWAPlannerROS:
 
   # 最大, 最小旋回速度(rad/s)
   #max_vel_theta: 1.57 #(double, default: 1.0)
-  max_vel_theta: 1.5 #(double, default: 1.0)
+  max_vel_theta: 1.0 #(double, default: 1.0)
   min_vel_theta: 0.4 #(double, default: 0.4)
 
   ####
