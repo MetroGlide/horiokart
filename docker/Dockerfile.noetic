@@ -28,14 +28,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
     ros-$ROS_VERSION-rviz ros-$ROS_VERSION-rqt ros-$ROS_VERSION-rqt-common-plugins \
     ros-$ROS_VERSION-robot-state-publisher ros-$ROS_VERSION-joint-state-publisher  \
-    ros-$ROS_VERSION-laser-filters \
-    ros-$ROS_VERSION-slam-gmapping \
     && apt-get autoremove --purge \
     && rm -rf /var/cache/apt/*
 
 #########################################################################################
 # Build ROS external packages
 #########################################################################################
+
+RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
+    ros-$ROS_VERSION-rqt-tf-tree ros-$ROS_VERSION-rqt-robot-steering \
+    ros-$ROS_VERSION-laser-filters \
+    ros-$ROS_VERSION-slam-gmapping \
+    && apt-get autoremove --purge \
+    && rm -rf /var/cache/apt/*
 
 WORKDIR /root/catkin_ws/src
 RUN git clone https://github.com/Unity-Technologies/ROS-TCP-Endpoint.git \
@@ -61,6 +66,9 @@ RUN pip3 install -r /app/docker/requirements.txt
 #########################################################################################
 # Build ROS custom packages
 #########################################################################################
+WORKDIR /app
+COPY . /app/horiokart
+
 WORKDIR /root/catkin_ws/src
 RUN /bin/bash -c "ln -s /app/horiokart/ ./"
 
