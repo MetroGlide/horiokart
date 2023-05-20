@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   nav_msgs
   rospy
+  pcl_ros
 )
 
 # # System dependencies are found with CMake's conventions
@@ -108,7 +109,7 @@ catkin_package(
 
   INCLUDE_DIRS include
   LIBRARIES horiokart2021_sensors
-  CATKIN_DEPENDS roscpp tf sensor_msgs std_msgs nav_msgs rospy
+  CATKIN_DEPENDS roscpp tf sensor_msgs std_msgs nav_msgs rospy pcl_ros
 
   # DEPENDS system_lib
 )
@@ -154,6 +155,8 @@ add_executable(hj_sensor_odom2tf src/odom2tf.cpp)
 # add_executable(serial_odometry_test test/odom_test.cpp)
 add_executable(serial_motordriver_test test/motor_test.cpp)
 
+# add_executable(pointcloud2_to_pcl src/pointcloud2_to_pcl.cpp)
+
 # # Rename C++ executable without prefix
 # # The above recommended prefix causes long target names, the following renames the
 # # target back to the shorter version for ease of user use
@@ -198,6 +201,10 @@ target_link_libraries(serial_motordriver_test
   serial_motordriver
   ${catkin_LIBRARIES}
 )
+
+# target_link_libraries(pointcloud2_to_pcl
+#   ${catkin_LIBRARIES}
+# )
 
 # ############
 # # Install ##
