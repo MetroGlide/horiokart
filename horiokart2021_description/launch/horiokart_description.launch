@@ -3,9 +3,11 @@
     <arg name="open_rviz" default="false"/>
 
     <!-- robot -->
-    <arg name="urdf_model" default="$(find horiokart2021_description)/urdf/robot_description.urdf" />
+    <!-- <arg name="urdf_model" default="$(find horiokart2021_description)/urdf/robot_description.urdf" /> -->
+    <arg name="urdf_model" default="$(find horiokart2021_description)/urdf/horiokart_description.urdf.xacro" />
 
-    <param name="robot_description" textfile="$(arg urdf_model)" />
+    <!-- <param name="robot_description" textfile="$(arg urdf_model)" /> -->
+    <param name="robot_description" command="xacro '$(arg urdf_model)' " />
 
     <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher" />
     <node name="robot_state_publisher" pkg=

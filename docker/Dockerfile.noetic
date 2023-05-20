@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
     ros-$ROS_VERSION-rviz ros-$ROS_VERSION-rqt ros-$ROS_VERSION-rqt-common-plugins \
     ros-$ROS_VERSION-robot-state-publisher ros-$ROS_VERSION-joint-state-publisher  \
+    ros-$ROS_VERSION-xacro \
     && apt-get autoremove --purge \
     && rm -rf /var/cache/apt/*
 
@@ -36,7 +37,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
 #########################################################################################
 
 RUN apt-get update && apt-get install -y --no-install-recommends --fix-missing \
+    liburdfdom-tools\
     ros-$ROS_VERSION-rqt-tf-tree ros-$ROS_VERSION-rqt-robot-steering \
+    # ros-$ROS_VERSION-pcl-ros \
+    ros-$ROS_VERSION-imu-tools ros-$ROS_VERSION-teleop-twist-keyboard \
     ros-$ROS_VERSION-laser-filters \
     ros-$ROS_VERSION-slam-gmapping \
     && apt-get autoremove --purge \
@@ -49,8 +53,8 @@ RUN git clone https://github.com/Unity-Technologies/ROS-TCP-Endpoint.git \
     && git clone -b hj-ros1-devel https://github.com/HORIOJAPAN-OB/nmea_navsat_driver.git
 
 RUN rosdep update && rosdep install -iyr --from-paths .
-WORKDIR /root/catkin_ws
-RUN /bin/bash -c "source /opt/ros/$ROS_VERSION/setup.bash; catkin build"
+# WORKDIR /root/catkin_ws
+# RUN /bin/bash -c "source /opt/ros/$ROS_VERSION/setup.bash; catkin build"
 
 #########################################################################################
 # Install python packages
@@ -73,6 +77,7 @@ WORKDIR /root/catkin_ws/src
 RUN /bin/bash -c "ln -s /app/horiokart/ ./"
 
 WORKDIR /root/catkin_ws
+RUN rosdep update && rosdep install -iyr --from-paths ./src
 RUN /bin/bash -c "source /opt/ros/noetic/setup.bash; catkin build"
 
 

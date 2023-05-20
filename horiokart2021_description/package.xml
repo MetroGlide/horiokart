@@ -52,6 +52,7 @@
 
   <depend>robot_state_publisher</depend>
   <depend>joint_state_publisher</depend>
+  <depend>xacro</depend>
 
 
   <!-- The export tag contains other, unspecified, tags -->

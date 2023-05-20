@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="horiokart">
+
+  <xacro:include filename="$(find horiokart2021_description)/urdf/robot_base.urdf.xacro" />
+  <xacro:include filename="$(find horiokart2021_description)/urdf/sensors.xacro"/>
+
+  <xacro:horiokart_base/>
+
+  <xacro:lidar_2d prefix="front_" attach_to="base_link" xyz="0.31 0 0.15"  rpy="0 0 0"/>
+  <!-- <xacro:2d_lidar prefix="front_" attach_to="base_link" xyz="0.31 0 0.15" rpy="0 0 ${pi}"/> -->
+  <xacro:gps prefix="" attach_to="base_link" xyz="0.15 0 0.33" rpy="0 0 0"/>
+
+  <!-- top frame for sensors -->
+  <joint name="top_frame_link_joint" type="fixed">
+    <origin xyz="0.31 0 0.3" rpy="0 0 0"/>
+    <parent link="base_link"/>
+    <child link="top_frame_link"/>
+  </joint>
+  <link name="top_frame_link">
+    <visual>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <box size="0.03 0.3 0.03"/>
+      </geometry>
+    </visual>
+  </link>
+
+  <xacro:lidar_2d prefix="top_" attach_to="top_frame_link" xyz="0 0 0.03" rpy="0 0 ${pi}"/>
+  <xacro:lidar_3d prefix="livox_" attach_to="top_frame_link" xyz="0 0 0.06" rpy="0 0 0"/>
+
+  <xacro:realsense_d435i prefix="" attach_to="top_frame_link" xyz="0.01 0 -0.01" rpy="0 0 0"/>
+  <xacro:realsense_d435 prefix="" attach_to="top_frame_link" xyz="0.01 0 -0.02" rpy="0 0.35 0"/>
+
+
+</robot>
