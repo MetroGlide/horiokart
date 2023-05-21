@@ -1,0 +1,42 @@
+ARG ROS_DISTRO
+FROM ros:${ROS_DISTRO}
+
+# Install ROS2
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+     curl gnupg2 lsb-release python3-pip vim wget build-essential ca-certificates git
+
+
+### Install Packages
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+      python3-argcomplete python3-colcon-common-extensions python3-rosdep 
+
+### Install custom packages
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+      ros-${ROS_DISTRO}-gazebo-* ros-${ROS_DISTRO}-turtlebot3 ros-${ROS_DISTRO}-turtlebot3-msgs
+
+
+### For visualize tools bug fix 
+RUN apt-get update \
+  && apt-get install -y software-properties-common \
+  && add-apt-repository ppa:kisak/kisak-mesa \
+  && apt-get upgrade -y \
+  && apt-get autoremove --purge \
+  && rm -rf /var/cache/apt/*
+
+WORKDIR /app
+COPY . /app
+
+WORKDIR /root/ros2_ws/src
+RUN /bin/bash -c "ln -s /app/ ./"
+
+WORKDIR /root/ros2_ws
+RUN rosdep update \
+  && rosdep install -yir --from-paths src --rosdistro $ROS_DISTRO
+
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && colcon build --symlink-install
+
+RUN echo "source /opt/ros/$ROS_DISTRO/setup.bash" >> ~/.bashrc
+RUN echo "source /root/ros2_ws/install/setup.bash" >> ~/.bashrc

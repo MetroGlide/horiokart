@@ -1,25 +1,36 @@
 version: "3.4"
 
 services:
-  #ros-master:
-  #  image: tiryoh/ros-desktop-vnc:melodic
-  #  hostname: ros-host
-  #  command: stdbuf -o L roscore
-  #  network_mode: "host"
-
-  horiokart:
-    image: horiokart
+  develop:
+    image: horiokart_dev
     build:
-      context: "./"
-      dockerfile: "docker/Dockerfile"
+      context: .
+      dockerfile: "docker/Dockerfile.base"
+      args:
+        ROS_DISTRO: humble
+
+    tty: true
     network_mode: "host"
     privileged: true
     environment:
-      DISPLAY: ${DISPLAY}
-      PYTHONUNBUFFERED: 1
-    tty: true
+      - DISPLAY=${DISPLAY}
+      - PYTHONUNBUFFERED=1
+
+    env_file:
+      - .env
     volumes:
-      - type: bind
-        source: ./
-        target: /app/horiokart/
-    command: "/app/org/docker/docker-entrypoint.sh"
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - $HOME/.Xauthority/:/root/.Xauthority
+      - ./:/app/
+      - /dev:/dev
+      - ${HOME}/ros_data:/root/ros_data
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    command: "/app/docker/docker-entrypoint.sh"
