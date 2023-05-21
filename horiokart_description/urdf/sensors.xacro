@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="horiokart_v2">
+
+  <xacro:macro name="lidar_2d" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' length='0.05' radius='0.05' ">
+
+    <xacro:unless value="${attach_to == ''}">
+      <joint name="${prefix}lrf_link_joint" type="fixed">
+        <parent link="${attach_to}"/>
+        <child link="${prefix}lrf_link"/>
+        <origin xyz="${xyz}" rpy="${rpy}"/>
+      </joint>
+    </xacro:unless>
+
+    <link name="${prefix}lrf_link">
+      <visual>
+        <geometry>
+          <cylinder length="${length}" radius="${radius}"/>
+        </geometry>
+      </visual>
+    </link>
+
+  </xacro:macro>
+
+  <xacro:macro name="lidar_3d" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' length='0.05' radius='0.05' ">
+
+    <xacro:unless value="${attach_to == ''}">
+      <joint name="${prefix}lidar_link_joint" type="fixed">
+        <parent link="${attach_to}"/>
+        <child link="${prefix}lidar_link"/>
+        <origin xyz="${xyz}" rpy="${rpy}"/>
+      </joint>
+    </xacro:unless>
+
+    <link name="${prefix}lidar_link">
+      <visual>
+        <geometry>
+          <cylinder length="${length}" radius="${radius}"/>
+        </geometry>
+      </visual>
+    </link>
+
+  </xacro:macro>
+
+  <xacro:macro name="gps" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' length='0.05' radius='0.05' ">
+
+    <xacro:unless value="${attach_to == ''}">
+      <joint name="${prefix}gps_link_joint" type="fixed">
+        <parent link="${attach_to}"/>
+        <child link="${prefix}gps_link"/>
+        <origin xyz="${xyz}" rpy="${rpy}"/>
+      </joint>
+    </xacro:unless>
+
+    <link name="${prefix}gps_link">
+      <visual>
+        <geometry>
+          <cylinder length="${length}" radius="${radius}"/>
+        </geometry>
+      </visual>
+    </link>
+
+  </xacro:macro>
+
+  <xacro:macro name="realsense_d435" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' size='0.02 0.05 0.02' ">
+
+    <xacro:unless value="${attach_to == ''}">
+      <joint name="${prefix}rs_d435_link_joint" type="fixed">
+        <parent link="${attach_to}"/>
+        <child link="${prefix}rs_d435_link"/>
+        <origin xyz="${xyz}" rpy="${rpy}"/>
+      </joint>
+    </xacro:unless>
+
+    <link name="${prefix}rs_d435_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${size}"/>
+        </geometry>
+      </visual>
+    </link>
+
+  </xacro:macro>
+
+  <xacro:macro name="realsense_d435i" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' size='0.02 0.05 0.02' ">
+
+    <xacro:unless value="${attach_to == ''}">
+      <joint name="${prefix}rs_d435i_link_joint" type="fixed">
+        <parent link="${attach_to}"/>
+        <child link="${prefix}rs_d435i_link"/>
+        <origin xyz="${xyz}" rpy="${rpy}"/>
+      </joint>
+    </xacro:unless>
+
+    <link name="${prefix}rs_d435i_link">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="${size}"/>
+        </geometry>
+      </visual>
+    </link>
+
+  </xacro:macro>
+
+</robot>
