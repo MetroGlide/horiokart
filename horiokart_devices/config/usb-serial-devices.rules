@@ -1,0 +1,25 @@
+# devices
+SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyRobot-odom", GROUP="dialout"
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyRobot-motordriver", GROUP="dialout"
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyRobot-frontlidar", GROUP="dialout"
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyRobot-toplidar", GROUP="dialout"
+
+SUBSYSTEM=="tty", ATTRS{idVendor}=="", ATTRS{idProduct}=="", ATTRS{serial}=="", SYMLINK+="ttyRobot-gnss", GROUP="dialout"
+
+# ----------
+# path -> /etc/udev/rules.d/
+## info check command
+# udevadm info -q property -n /dev/ttyUSB0 | grep -E "ID_SERIAL_SHORT=|ID_VENDOR_ID=|ID_MODEL_ID="
+# dmesg
+# sudo lsusb -d 0403:6001 -v | grep iSerial
+## sample
+# FT232R
+# SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{serial}=="XXXXXXXX", SYMLINK+="ttyUSB-FT232R", GROUP="dialout"
+# CP2102N
+# SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", ATTRS{serial}=="XXXXXXXX", SYMLINK+="ttyUSB-CP2102N", GROUP="dialout"
+# port base
+# SUBSYSTEM=="tty", ATTRS{busnum}=="1", ATTRS{devpath}=="11.2", SYMLINK+="usb-rear-hub1-port2"
+# SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", SYMLINK+="ttyUSB-usb-$attr{busnum}-$attr{devpath}", GROUP="dialout"

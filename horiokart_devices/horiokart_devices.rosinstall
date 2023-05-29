@@ -1,0 +1,12 @@
+- git:
+    local-name: nmea_navsat_drive
+    uri: https://github.com/ros-drivers/nmea_navsat_driver.git
+    version: ros2
+- git:
+    local-name: rplidar_ros
+    uri: https://github.com/Slamtec/rplidar_ros.git
+    version: ros2
+- git:
+    local-name: rviz_satellite
+    uri: https://github.com/nobleo/rviz_satellite.git
+    version: ros2

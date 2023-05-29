@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>horiokart_devices</name>
+  <version>0.0.0</version>
+  <description>
+    Horiokart devices package
+  </description>
+  <maintainer email="chuson@todo.todo">chuson</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>nmea_navsat_driver</depend>
+  <depend>rplidar_ros</depend>
+  <!--<depend>rviz_satellite</depend>-->
+  <depend>laser_filters</depend>
+  <depend>pcl_ros</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
