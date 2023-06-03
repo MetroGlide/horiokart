@@ -129,7 +129,7 @@ string SerialCommunicator::format_hex(vector<uint8_t> buf)
     ss << std::hex << std::setfill('0');
     for (const auto &b : buf)
     {
-        ss << std::setw(2) << static_cast<int>(b) << " ";
+        ss << "0x" << std::setw(2) << static_cast<int>(b) << " ";
     }
     return ss.str();
 }
