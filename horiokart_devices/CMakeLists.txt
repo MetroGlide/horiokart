@@ -39,11 +39,11 @@ include_directories(
 add_library(${PROJECT_NAME}_lib
   "src/base/serial_communicator.cpp"
 
-  # "src/devices/motor_driver.cpp"
+  "src/devices/motor_driver.cpp"
   "src/sensors/wheel_odometry.cpp"
 
+  "src/motor_driver_node.cpp"
   "src/wheel_odometry_node.cpp"
-  # "src/motor_driver_node.cpp"
 )
 
 set(DEPENDENCIES
@@ -65,11 +65,14 @@ target_link_libraries(${PROJECT_NAME}_lib)
 ament_target_dependencies(${PROJECT_NAME}_lib ${DEPENDENCIES})
 
 set(WHEEL_ODOMETRY_EXECUTABLE_NAME "wheel_odometry_node")
-
 add_executable(${WHEEL_ODOMETRY_EXECUTABLE_NAME} src/wheel_odometry_node.cpp)
 target_link_libraries(${WHEEL_ODOMETRY_EXECUTABLE_NAME} ${PROJECT_NAME}_lib)
 ament_target_dependencies(${WHEEL_ODOMETRY_EXECUTABLE_NAME} ${DEPENDENCIES})
 
+set(MOTOR_DRIVER_EXECUTABLE_NAME "motor_driver_node")
+add_executable(${MOTOR_DRIVER_EXECUTABLE_NAME} src/motor_driver_node.cpp)
+target_link_libraries(${MOTOR_DRIVER_EXECUTABLE_NAME} ${PROJECT_NAME}_lib)
+ament_target_dependencies(${MOTOR_DRIVER_EXECUTABLE_NAME} ${DEPENDENCIES})
 
 ################################################################################
 # Install
@@ -79,6 +82,10 @@ install(DIRECTORY launch
 )
 
 install(TARGETS ${WHEEL_ODOMETRY_EXECUTABLE_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS ${MOTOR_DRIVER_EXECUTABLE_NAME}
   DESTINATION lib/${PROJECT_NAME}
 )
 
