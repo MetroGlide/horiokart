@@ -1,6 +1,6 @@
-#include "horiokart_devices/motor_driver_node.hpp"
+#include "horiokart_drivers/motor_driver_node.hpp"
 
-using horiokart_devices::MotorDriverNode;
+using horiokart_drivers::MotorDriverNode;
 
 MotorDriverNode::MotorDriverNode(
     rclcpp::NodeOptions options)
@@ -9,7 +9,7 @@ MotorDriverNode::MotorDriverNode(
     init_ros_params();
     prepare_ros_communications();
 
-    motor_driver_ = std::make_shared<horiokart_devices::MotorDriver>(device_name_);
+    motor_driver_ = std::make_shared<horiokart_drivers::MotorDriver>(device_name_);
 }
 
 void MotorDriverNode::init_ros_params()
@@ -57,7 +57,7 @@ void MotorDriverNode::prepare_ros_communications()
         std::bind(&MotorDriverNode::twist_sub_cb, this, std::placeholders::_1));
 }
 
-horiokart_devices::SpeedParameter MotorDriverNode::create_speed_parameter(
+horiokart_drivers::SpeedParameter MotorDriverNode::create_speed_parameter(
     const geometry_msgs::msg::Twist::SharedPtr msg)
 {
     SpeedParameter req;

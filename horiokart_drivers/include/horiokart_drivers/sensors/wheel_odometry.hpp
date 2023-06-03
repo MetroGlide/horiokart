@@ -1,6 +1,6 @@
 #pragma once
 
-#include "horiokart_devices/base/serial_communicator.hpp"
+#include "horiokart_drivers/base/serial_communicator.hpp"
 
 #include <string>
 
@@ -9,7 +9,7 @@
 #include <vector>
 #include <time.h>
 
-namespace horiokart_devices
+namespace horiokart_drivers
 {
     struct OdometryData
     {

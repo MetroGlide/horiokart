@@ -1,7 +1,7 @@
-#include "horiokart_devices/devices/motor_driver.hpp"
+#include "horiokart_drivers/devices/motor_driver.hpp"
 
 using namespace std;
-using namespace horiokart_devices;
+using namespace horiokart_drivers;
 
 MotorDriver::MotorDriver(string device_name)
     : device_name_(device_name),

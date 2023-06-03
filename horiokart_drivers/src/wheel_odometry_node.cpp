@@ -1,6 +1,6 @@
-#include "horiokart_devices/wheel_odometry_node.hpp"
+#include "horiokart_drivers/wheel_odometry_node.hpp"
 
-using horiokart_devices::WheelOdometryNode;
+using horiokart_drivers::WheelOdometryNode;
 
 WheelOdometryNode::WheelOdometryNode(
     rclcpp::NodeOptions options) : Node("wheel_odometry_node", options)
@@ -10,7 +10,7 @@ WheelOdometryNode::WheelOdometryNode(
     init_ros_params();
 
     // Create wheel odometry object
-    wheel_odometry_ = std::make_shared<horiokart_devices::WheelOdometry>(device_name_);
+    wheel_odometry_ = std::make_shared<horiokart_drivers::WheelOdometry>(device_name_);
     zero_reset();
 
     prepare_ros_communications();
@@ -126,7 +126,7 @@ void WheelOdometryNode::update_odometry()
                  current_data_.vy,
                  current_data_.vth);
 
-    if (current_data_.error == horiokart_devices::SerialError::NO_ERROR)
+    if (current_data_.error == horiokart_drivers::SerialError::NO_ERROR)
     {
         if (inv_x_)
             current_data_.x *= -1;
@@ -141,13 +141,13 @@ void WheelOdometryNode::update_odometry()
     {
         RCLCPP_ERROR(this->get_logger(),
                      "Serial error: %s",
-                     horiokart_devices::SerialErrorStrings[static_cast<int>(current_data_.error)].c_str());
+                     horiokart_drivers::SerialErrorStrings[static_cast<int>(current_data_.error)].c_str());
     }
 }
 
 void WheelOdometryNode::publish_odometry()
 {
-    if (current_data_.error == horiokart_devices::SerialError::NO_ERROR ||
+    if (current_data_.error == horiokart_drivers::SerialError::NO_ERROR ||
         always_publish_)
     {
 
@@ -179,7 +179,7 @@ void WheelOdometryNode::publish_odometry()
 
 void WheelOdometryNode::publish_tf()
 {
-    if (current_data_.error == horiokart_devices::SerialError::NO_ERROR ||
+    if (current_data_.error == horiokart_drivers::SerialError::NO_ERROR ||
         always_publish_)
     {
         geometry_msgs::msg::TransformStamped odom_tf;

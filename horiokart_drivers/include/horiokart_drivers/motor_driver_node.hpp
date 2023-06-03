@@ -19,9 +19,9 @@
 #include <cmath>
 
 // horiokart
-#include "horiokart_devices/devices/motor_driver.hpp"
+#include "horiokart_drivers/devices/motor_driver.hpp"
 
-namespace horiokart_devices
+namespace horiokart_drivers
 {
     class MotorDriverNode : public rclcpp::Node
     {
@@ -37,7 +37,7 @@ namespace horiokart_devices
         void twist_sub_cb(
             const geometry_msgs::msg::Twist::SharedPtr msg);
 
-        std::shared_ptr<horiokart_devices::MotorDriver> motor_driver_;
+        std::shared_ptr<horiokart_drivers::MotorDriver> motor_driver_;
 
         rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr twist_sub_;
 

@@ -13,7 +13,7 @@
 #include <algorithm>
 #include <time.h>
 
-namespace horiokart_devices
+namespace horiokart_drivers
 {
     enum class SerialError
     {

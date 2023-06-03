@@ -1,7 +1,7 @@
-#include "horiokart_devices/base/serial_communicator.hpp"
+#include "horiokart_drivers/base/serial_communicator.hpp"
 
 using namespace std;
-using namespace horiokart_devices;
+using namespace horiokart_drivers;
 
 SerialCommunicator::SerialCommunicator(string device_name)
     : device_name_(device_name)

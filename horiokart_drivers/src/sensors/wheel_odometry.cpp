@@ -1,7 +1,7 @@
-#include "horiokart_devices/sensors/wheel_odometry.hpp"
+#include "horiokart_drivers/sensors/wheel_odometry.hpp"
 
 using namespace std;
-using namespace horiokart_devices;
+using namespace horiokart_drivers;
 
 
 WheelOdometry::WheelOdometry(string device_name)

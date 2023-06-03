@@ -19,9 +19,9 @@
 #include <cmath>
 
 // horiokart
-#include "horiokart_devices/sensors/wheel_odometry.hpp"
+#include "horiokart_drivers/sensors/wheel_odometry.hpp"
 
-namespace horiokart_devices
+namespace horiokart_drivers
 {
     class WheelOdometryNode : public rclcpp::Node
     {
@@ -46,7 +46,7 @@ namespace horiokart_devices
             const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
             std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
-        std::shared_ptr<horiokart_devices::WheelOdometry> wheel_odometry_;
+        std::shared_ptr<horiokart_drivers::WheelOdometry> wheel_odometry_;
 
         rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
         std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
