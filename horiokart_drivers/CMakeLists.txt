@@ -16,8 +16,11 @@ endif()
 # Find ament packages and libraries for ament and system dependencies
 ################################################################################
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 
 find_package(rclcpp REQUIRED)
+find_package(rclpy REQUIRED)
+
 find_package(rcutils REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
@@ -86,6 +89,16 @@ install(TARGETS ${WHEEL_ODOMETRY_EXECUTABLE_NAME}
 )
 
 install(TARGETS ${MOTOR_DRIVER_EXECUTABLE_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+################################################################################
+# for python nodes
+################################################################################
+ament_python_install_package(${PROJECT_NAME})
+
+install(PROGRAMS
+  scripts/odometry_tf_broadcaster_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
