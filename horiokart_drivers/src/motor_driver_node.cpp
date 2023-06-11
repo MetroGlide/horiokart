@@ -16,8 +16,6 @@ void MotorDriverNode::init_ros_params()
 {
     // Declare parameters
     this->declare_parameter<std::string>("motor_driver.device_name");
-    this->declare_parameter<std::string>("motor_driver.twist_frame_id");
-    this->declare_parameter<std::string>("motor_driver.base_frame_id");
     this->declare_parameter<double>("motor_driver.wheel_pitch");
     this->declare_parameter<double>("motor_driver.max_speed");
 
@@ -26,16 +24,6 @@ void MotorDriverNode::init_ros_params()
         "motor_driver.device_name",
         device_name_,
         std::string("/dev/ttyUSB0"));
-
-    this->get_parameter_or<std::string>(
-        "motor_driver.twist_frame_id",
-        twist_frame_id_,
-        std::string("cmd_vel"));
-
-    this->get_parameter_or<std::string>(
-        "motor_driver.base_frame_id",
-        base_frame_id_,
-        std::string("base_footprint"));
 
     this->get_parameter_or<double>(
         "motor_driver.wheel_pitch",
@@ -52,7 +40,7 @@ void MotorDriverNode::prepare_ros_communications()
 {
     // Create subscriber
     this->twist_sub_ = this->create_subscription<geometry_msgs::msg::Twist>(
-        twist_frame_id_,
+        "cmd_vel",
         rclcpp::QoS(1),
         std::bind(&MotorDriverNode::twist_sub_cb, this, std::placeholders::_1));
 }
