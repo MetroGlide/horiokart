@@ -27,7 +27,8 @@
 				"oderwat.indent-rainbow",
 				"ms-vscode.cpptools-extension-pack",
 				"ms-toolsai.jupyter",
-				"VisualStudioExptTeam.vscodeintellicode"
+				"VisualStudioExptTeam.vscodeintellicode",
+				"ms-python.autopep8"
 			]
 		}
 	}

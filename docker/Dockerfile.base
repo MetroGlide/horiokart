@@ -30,10 +30,10 @@ WORKDIR /app
 COPY . /app
 
 WORKDIR /root/ros2_ws/src
-RUN /bin/bash -c "ln -s /app/ ./"
+RUN /bin/bash -c "ln -s /app ./horiokart"
 
 WORKDIR /root/ros2_ws
-RUN python3 /app/docker/vcs_import.py -s src/app -r -o src
+RUN python3 /app/docker/vcs_import.py -s src/horiokart -r -o src
 RUN rosdep update \
   && rosdep install -yir --from-paths src --rosdistro $ROS_DISTRO
 
