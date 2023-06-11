@@ -80,7 +80,7 @@ ament_target_dependencies(${MOTOR_DRIVER_EXECUTABLE_NAME} ${DEPENDENCIES})
 ################################################################################
 # Install
 ################################################################################
-install(DIRECTORY launch 
+install(DIRECTORY launch param
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -99,6 +99,10 @@ ament_python_install_package(${PROJECT_NAME})
 
 install(PROGRAMS
   scripts/odometry_tf_broadcaster_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(PROGRAMS
+  scripts/pc_resource_publisher_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

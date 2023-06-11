@@ -20,6 +20,7 @@
   <!--<depend>rviz_satellite</depend>-->
   <depend>laser_filters</depend>
   <depend>pcl_ros</depend>
+  <depend>realsense2_camera</depend>
 
   <export>
     <build_type>ament_cmake</build_type>
