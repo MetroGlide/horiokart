@@ -15,7 +15,9 @@ RUN apt-get update \
 ### Install custom packages
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-      ros-${ROS_DISTRO}-gazebo-* ros-${ROS_DISTRO}-turtlebot3 ros-${ROS_DISTRO}-turtlebot3-msgs
+      ros-${ROS_DISTRO}-rqt ros-${ROS_DISTRO}-rqt-* ros-${ROS_DISTRO}-rviz2 \
+      ros-${ROS_DISTRO}-ros2bag ros-${ROS_DISTRO}-ros2bag-* \
+      ros-${ROS_DISTRO}-teleop-twist-keyboard
 
 
 ### For visualize tools bug fix 
