@@ -80,7 +80,7 @@ ament_target_dependencies(${MOTOR_DRIVER_EXECUTABLE_NAME} ${DEPENDENCIES})
 ################################################################################
 # Install
 ################################################################################
-install(DIRECTORY launch param
+install(DIRECTORY launch params
   DESTINATION share/${PROJECT_NAME}
 )
 
