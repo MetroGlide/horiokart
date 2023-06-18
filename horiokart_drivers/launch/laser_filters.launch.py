@@ -17,6 +17,8 @@ def generate_launch_description():
     launch_argument_creator = LaunchArgumentCreator()
 
     # Launch arguments
+    simulation_arg = launch_argument_creator.create(
+        "simulation", default="false")
     front_laser_filter_yaml = launch_argument_creator.create(
         "front_laser_filter_yaml", default="front_laser_filter.yaml")
     top_laser_filter_yaml = launch_argument_creator.create(
@@ -24,7 +26,7 @@ def generate_launch_description():
 
     pkg_name = "horiokart_drivers"
     pkg_share = get_package_share_directory(pkg_name)
-    param_dir = "param"
+    param_dir = "params"
 
     front_laser_filter_yaml_path = PathJoinSubstitution([
         pkg_share, param_dir, front_laser_filter_yaml.launch_config])
@@ -33,7 +35,10 @@ def generate_launch_description():
         executable="scan_to_scan_filter_chain",
         name="front_laser_filter",
         output="screen",
-        parameters=[front_laser_filter_yaml_path],
+        parameters=[
+            {"use_sim_time": simulation_arg.launch_config},
+            front_laser_filter_yaml_path,
+        ],
         remappings=[
             ("scan", "/scan_front_lidar"),
             ("scan_filtered", "/scan_filtered/scan_front_lidar"),
@@ -47,7 +52,10 @@ def generate_launch_description():
         executable="scan_to_scan_filter_chain",
         name="top_laser_filter",
         output="screen",
-        parameters=[top_laser_filter_yaml_path],
+        parameters=[
+            {"use_sim_time": simulation_arg.launch_config},
+            top_laser_filter_yaml_path,
+        ],
         remappings=[
             ("scan", "/scan_top_lidar"),
             ("scan_filtered", "/scan_filtered/scan_top_lidar"),

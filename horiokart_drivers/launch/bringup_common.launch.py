@@ -15,6 +15,8 @@ def generate_launch_description():
     launch_argument_creator = LaunchArgumentCreator()
 
     # Launch arguments
+    simulation_arg = launch_argument_creator.create(
+        "simulation", default="false")
     use_resource_pub_arg = launch_argument_creator.create(
         "use_resource_pub", default="true")
 
@@ -35,6 +37,7 @@ def generate_launch_description():
                 parameters=[{
                     "publish_rate": 1.0,
                     "cpu_interval": 0.5,
+                    "use_sim_time": simulation_arg.launch_config,
                 }],
                 condition=launch.conditions.IfCondition(
                     use_resource_pub_arg.launch_config),

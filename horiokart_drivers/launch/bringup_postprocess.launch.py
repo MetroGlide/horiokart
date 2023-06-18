@@ -16,6 +16,8 @@ def generate_launch_description():
     launch_argument_creator = LaunchArgumentCreator()
 
     # Launch arguments
+    simulation_arg = launch_argument_creator.create(
+        "simulation", default="false")
     use_odom_arg = launch_argument_creator.create(
         "use_odom", default="true")
     use_lidar_arg = launch_argument_creator.create(
@@ -39,6 +41,7 @@ def generate_launch_description():
                 parameters=[{
                     "odom_frame_id": "odom",
                     "child_frame_id": "base_footprint",
+                    "use_sim_time": simulation_arg.launch_config,
                 }],
                 remappings=[("odom", "odom")],
                 condition=launch.conditions.IfCondition(
@@ -60,6 +63,7 @@ def generate_launch_description():
                 output="screen",
                 parameters=[{
                     "time_ref_source": "gps",
+                    "use_sim_time": simulation_arg.launch_config,
                 }],
                 remappings=[
                     ("nmea_sentence", "gps/nmea_sentence"),
@@ -79,6 +83,7 @@ def generate_launch_description():
                 name="ekf_localization_node",
                 output="screen",
                 parameters=[
+                    {"use_sim_time": simulation_arg.launch_config},
                     pkg_share + "/config/ekf_odom_params.yaml",
                 ],
                 remappings=[
@@ -92,6 +97,7 @@ def generate_launch_description():
                 name="navsat_transform_node",
                 output="screen",
                 parameters=[
+                    {"use_sim_time": simulation_arg.launch_config},
                     pkg_share + "/config/ekf_gps_params.yaml",
                 ],
                 remappings=[

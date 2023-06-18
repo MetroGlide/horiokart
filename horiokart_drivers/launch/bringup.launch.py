@@ -34,12 +34,18 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             pkg_share + "/launch/bringup_postprocess.launch.py"
         ),
+        launch_arguments={
+            "simulation": simulation_arg.launch_config,
+        }.items(),
     )
 
     launch_common = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             pkg_share + "/launch/bringup_common.launch.py"
         ),
+        launch_arguments={
+            "simulation": simulation_arg.launch_config,
+        }.items(),
     )
 
     launch_drive = IncludeLaunchDescription(
