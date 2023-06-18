@@ -23,7 +23,7 @@ services:
       - $HOME/.Xauthority/:/root/.Xauthority
       - ./:/app/
       - /dev:/dev
-      - ${HOME}/ros_data:/root/ros_data
+      - ${HOME}/ros2_data:/root/ros2_data
 
     deploy:
       resources:
