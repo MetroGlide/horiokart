@@ -19,20 +19,12 @@ def generate_launch_description():
     # Launch arguments
     launch_argument_creator = LaunchArgumentCreator()
 
-    # use_sim_time_arg = launch_argument_creator.create(
-    #     "/use_sim_time", default="true")
-
-    # set rosparam
-    # rosparam_simulator = ExecuteProcess(
-    #     cmd=["ros2", "param", "set", "use_sim_time", "true"],
-    #     output="screen",
-    # )
-
     simulator_group = launch.actions.GroupAction(
         [
             launch.actions.IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    get_package_share_directory("ros_tcp_endpoint") + "/launch/endpoint.py"
+                    get_package_share_directory(
+                        "ros_tcp_endpoint") + "/launch/endpoint.py"
                 ),
             ),
         ]
