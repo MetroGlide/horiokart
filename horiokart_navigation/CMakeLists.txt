@@ -18,6 +18,8 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_python REQUIRED)
 
+find_package(rclpy REQUIRED)
+
 ################################################################################
 # Install
 ################################################################################
@@ -29,6 +31,11 @@ install(DIRECTORY launch params rviz
 # for python nodes
 ################################################################################
 ament_python_install_package(${PROJECT_NAME})
+
+install(PROGRAMS
+  scripts/waypoint_editor_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ################################################################################
 # Macro for ament package
