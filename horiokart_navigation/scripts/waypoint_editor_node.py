@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import os
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
@@ -29,15 +31,15 @@ class Waypoint:
             'index': self.index,
             'pose': {
                 'position': {
-                    'x': self.pose.position.x,
-                    'y': self.pose.position.y,
-                    'z': self.pose.position.z
+                    'x': self.pose.pose.position.x,
+                    'y': self.pose.pose.position.y,
+                    'z': self.pose.pose.position.z
                 },
                 'orientation': {
-                    'x': self.pose.orientation.x,
-                    'y': self.pose.orientation.y,
-                    'z': self.pose.orientation.z,
-                    'w': self.pose.orientation.w
+                    'x': self.pose.pose.orientation.x,
+                    'y': self.pose.pose.orientation.y,
+                    'z': self.pose.pose.orientation.z,
+                    'w': self.pose.pose.orientation.w
                 }
             }
         }
@@ -86,11 +88,13 @@ class WaypointEditorNode(Node):
         super().__init__('waypoint_editor_node')
 
         self.waypoints = WaypointList()
+        self._interactive_marker_server = InteractiveMarkerServer(
+            self, 'waypoint_editor')
 
-        # self._load_file_path = self.declare_parameter('load_file_path', '/root/ros2_data/waypoints.yaml').value
-        _load_file_path = self.declare_parameter('load_file_path', '').value
-        if _load_file_path != '':
-            self.load_waypoints_from_file(_load_file_path)
+        self._save_path = self.declare_parameter('save_path').value
+        load_path = self.declare_parameter('load_path').value
+        if load_path != '':
+            self.load_waypoints_from_file(load_path)
 
         self._pose_subscription = self.create_subscription(
             PoseStamped,
@@ -98,8 +102,14 @@ class WaypointEditorNode(Node):
             self._pose_callback,
             1)
 
-        self._interactive_marker_server = InteractiveMarkerServer(
-            self, 'waypoint_editor')
+        self._save_service = self.create_service(
+            Trigger,
+            'save_waypoints',
+            self._save_waypoints_callback)
+        self._force_save_service = self.create_service(
+            Trigger,
+            'force_save_waypoints',
+            self._force_save_waypoints_callback)
 
     def _normalize_quaternion(self, quaternion_msg):
         norm = quaternion_msg.x**2 + quaternion_msg.y**2 + \
@@ -200,11 +210,32 @@ class WaypointEditorNode(Node):
 
             self._interactive_marker_server.applyChanges()
 
-    def save_waypoints_callback(self, request, response):
-        file_path = '/app/waypoints.yaml'  # Specify the YAML file path here
+    def _save_waypoints_callback(self, request, response):
+        file_path = self._save_path
+
+        if os.path.exists(file_path):
+            response.success = False
+            response.message = f"File {file_path} already exists."
+            self.get_logger().error(response.message)
+            return response
+
         self.save_waypoints_to_file(file_path)
+
         response.success = True
         response.message = 'Waypoints saved to {}'.format(file_path)
+
+        self.get_logger().info(response.message)
+        return response
+
+    def _force_save_waypoints_callback(self, request, response):
+        file_path = self._save_path
+
+        self.save_waypoints_to_file(file_path)
+
+        response.success = True
+        response.message = f'Waypoints force saved to {file_path}'
+
+        self.get_logger().info(response.message)
         return response
 
     def save_waypoints_to_file(self, file_path):
@@ -217,19 +248,25 @@ class WaypointEditorNode(Node):
 
     def load_waypoints_from_file(self, file_path):
         with open(file_path, 'r') as file:
-            waypoints = yaml.load(file, Loader=yaml.FullLoader)
+            waypoints = yaml.safe_load(file)
 
         for waypoint in waypoints:
+            self.get_logger().info(f"{waypoint}")
             pose = PoseStamped()
             pose.header.frame_id = 'map'
-            pose.pose.position = Point(*waypoint['position'])
-            pose.pose.orientation = Quaternion(*waypoint['orientation'])
-            self.waypoints.add(pose)
+            pose.pose.position = Point(**waypoint['pose']['position'])
+            pose.pose.orientation = Quaternion(
+                **waypoint['pose']['orientation'])
 
-    def _pose_callback(self, msg):
+            self._add_waypoint(pose)
+
+    def _add_waypoint(self, pose_stamped: PoseStamped):
         self._create_interactive_marker(
-            self.waypoints.get_next_index(), msg)
-        self.waypoints.add(msg)
+            self.waypoints.get_next_index(), pose_stamped)
+        self.waypoints.add(pose_stamped)
+
+    def _pose_callback(self, msg: PoseStamped):
+        self._add_waypoint(msg)
 
 
 def main(args=None):

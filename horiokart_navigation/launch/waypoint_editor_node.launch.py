@@ -34,9 +34,9 @@ def generate_launch_description():
         'map', default=os.path.join(pkg_dir, 'map', 'map.yaml'))
 
     load_waypoints_yaml_path = launch_argument_creator.create(
-        'load_path', default=os.path.join(pkg_dir, 'waypoints', 'waypoints.yaml'))
+        'load_path', default="")
     save_waypoints_yaml_path = launch_argument_creator.create(
-        'save_path', default=os.path.join(pkg_dir, 'waypoints', 'waypoints.yaml'))
+        'save_path', default="/root/ros2_data/new_waypoints.yaml")
 
     map_server_node = LifecycleNode(
         package='nav2_map_server',
@@ -50,17 +50,7 @@ def generate_launch_description():
         namespace='',
     )
 
-    return LaunchDescription([
-        *launch_argument_creator.get_created_declare_launch_args(),
-
-        Node(
-            package=pkg_name,
-            executable='waypoint_editor_node.py',
-            # arguments=[],
-            parameters=[{'use_sim_time': simulation_arg.launch_config}],
-            output='screen',
-        ),
-
+    map_server_group = launch.actions.GroupAction([
         map_server_node,
         EmitEvent(
             event=launch_ros.events.lifecycle.ChangeState(
@@ -85,6 +75,22 @@ def generate_launch_description():
                         )),
                 ],
             )
+        ),
+    ])
+
+    return LaunchDescription([
+        *launch_argument_creator.get_created_declare_launch_args(),
+        map_server_group,
+
+        Node(
+            package=pkg_name,
+            executable='waypoint_editor_node.py',
+            parameters=[{
+                'use_sim_time': simulation_arg.launch_config,
+                'load_path': load_waypoints_yaml_path.launch_config,
+                'save_path': save_waypoints_yaml_path.launch_config,
+            }],
+            output='screen',
         ),
 
         Node(
