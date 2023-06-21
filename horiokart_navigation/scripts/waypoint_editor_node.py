@@ -123,10 +123,9 @@ class WaypointEditorNode(Node):
         interactive_marker.pose = pose_stamped.pose
 
         marker = Marker()
-        # marker.header.frame_id = 'map'
-        marker.type = Marker.CUBE
-        # marker.action = Marker.ADD
-        marker.scale.x = 0.45
+        marker.type = Marker.ARROW
+        marker.action = Marker.ADD
+        marker.scale.x = 1.0
         marker.scale.y = 0.45
         marker.scale.z = 0.45
         marker.color.a = 1.0
