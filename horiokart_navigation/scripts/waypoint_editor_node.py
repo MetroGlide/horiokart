@@ -3,84 +3,15 @@ import os
 
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile
-from rclpy.qos import qos_profile_sensor_data
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
 from visualization_msgs.msg import Marker
-from nav_msgs.msg import Path
 from std_srvs.srv import Trigger
-import yaml
 
 from visualization_msgs.msg import InteractiveMarker, InteractiveMarkerControl
 from visualization_msgs.msg import InteractiveMarkerFeedback
-from visualization_msgs.msg import InteractiveMarkerPose
-from visualization_msgs.msg import InteractiveMarkerUpdate
-from visualization_msgs.srv import GetInteractiveMarkers
 from interactive_markers.interactive_marker_server import InteractiveMarkerServer
 
-from dataclasses import dataclass
-
-
-@dataclass
-class Waypoint:
-    index: int
-    pose: PoseStamped
-
-    def to_dict(self):
-        return {
-            'index': self.index,
-            'pose': {
-                'position': {
-                    'x': self.pose.pose.position.x,
-                    'y': self.pose.pose.position.y,
-                    'z': self.pose.pose.position.z
-                },
-                'orientation': {
-                    'x': self.pose.pose.orientation.x,
-                    'y': self.pose.pose.orientation.y,
-                    'z': self.pose.pose.orientation.z,
-                    'w': self.pose.pose.orientation.w
-                }
-            }
-        }
-
-
-class WaypointList:
-    def __init__(self):
-        self.waypoints = []
-
-    def add(self, waypoint: PoseStamped):
-        self.waypoints.append(
-            Waypoint(
-                index=self.get_next_index(),
-                pose=waypoint
-            )
-        )
-
-    def remove(self, index: int):
-        self.waypoints.pop(index)
-
-    def update(self, index: int, pose: PoseStamped):
-        self.waypoints[index].pose = pose
-
-    def get(self, index: int) -> Waypoint:
-        return self.waypoints[index]
-
-    def get_all(self) -> list:
-        return self.waypoints
-
-    def get_size(self) -> int:
-        return len(self.waypoints)
-
-    def clear(self):
-        self.waypoints = []
-
-    def get_next_index(self) -> int:
-        return self.get_size()
-
-
-def get_index_from_waypoint_name(waypoint_name):
-    return int(waypoint_name.split('_')[1])
+from horiokart_navigation.waypoint import WaypointList, Waypoint, get_index_from_waypoint_name, WaypointsLoader, WaypointsSaver
 
 
 class WaypointEditorNode(Node):
@@ -205,7 +136,7 @@ class WaypointEditorNode(Node):
             pose_stamped.header.frame_id = 'map'
             pose_stamped.pose = feedback.pose
 
-            self.waypoints.update(get_index_from_waypoint_name(
+            self.waypoints.update_pose(get_index_from_waypoint_name(
                 feedback.marker_name), pose_stamped)
 
             self._interactive_marker_server.applyChanges()
@@ -239,34 +170,26 @@ class WaypointEditorNode(Node):
         return response
 
     def save_waypoints_to_file(self, file_path):
-        waypoints = []
-        for waypoint in self.waypoints.get_all():
-            waypoints.append(waypoint.to_dict())
-
-        with open(file_path, 'w') as file:
-            yaml.dump(waypoints, file)
+        saver = WaypointsSaver(file_path)
+        saver.save(self.waypoints)
 
     def load_waypoints_from_file(self, file_path):
-        with open(file_path, 'r') as file:
-            waypoints = yaml.safe_load(file)
+        loader = WaypointsLoader(file_path)
+        self.waypoints = loader.load()
 
-        for waypoint in waypoints:
-            self.get_logger().info(f"{waypoint}")
-            pose = PoseStamped()
-            pose.header.frame_id = 'map'
-            pose.pose.position = Point(**waypoint['pose']['position'])
-            pose.pose.orientation = Quaternion(
-                **waypoint['pose']['orientation'])
-
-            self._add_waypoint(pose)
-
-    def _add_waypoint(self, pose_stamped: PoseStamped):
-        self._create_interactive_marker(
-            self.waypoints.get_next_index(), pose_stamped)
-        self.waypoints.add(pose_stamped)
+        for waypoint in self.waypoints.get_all():
+            self._create_interactive_marker(
+                self.waypoints.get_next_index(), waypoint.pose_stamped)
 
     def _pose_callback(self, msg: PoseStamped):
-        self._add_waypoint(msg)
+        self.waypoints.add(
+            Waypoint(
+                index=self.waypoints.get_next_index(),
+                pose=msg,
+                reach_tolerance=0.5,
+                on_reached_action=[]
+            )
+        )
 
 
 def main(args=None):
