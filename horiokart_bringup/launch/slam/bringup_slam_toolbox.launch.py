@@ -3,7 +3,7 @@
 import launch
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 
@@ -21,11 +21,13 @@ def generate_launch_description():
     launch_argument_creator = launch_argument.LaunchArgumentCreator()
 
     simulation_arg = launch_argument_creator.create(
-        "simulation", default="false")
+        "simulation", default=EnvironmentVariable("SIMULATION")
+    )
     drive_arg = launch_argument_creator.create(
         "drive", default="false")
     rviz_arg = launch_argument_creator.create(
-        "rviz", default="false")
+        "rviz", default=EnvironmentVariable("USE_RVIZ")
+    )
 
     launch_common = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(

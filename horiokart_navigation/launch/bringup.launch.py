@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from launch.conditions import IfCondition
 from launch_ros.actions import Node
 
@@ -19,16 +19,17 @@ def generate_launch_description():
     nav2_launch_file_dir = os.path.join(nav2_bringup_dir, 'launch')
 
     rviz_config_dir = os.path.join(
-        # pkg_dir, 'rviz', 'rviz.rviz')
-        nav2_bringup_dir, 'rviz', 'nav2_default_view.rviz')
+        pkg_dir, 'rviz', 'rviz.rviz')
+        # nav2_bringup_dir, 'rviz', 'nav2_default_view.rviz')
 
     # Launch arguments
     launch_argument_creator = LaunchArgumentCreator()
 
     simulation_arg = launch_argument_creator.create(
-        'simulation', default='false')
+        'simulation', default=EnvironmentVariable('SIMULATION'))
     rviz_arg = launch_argument_creator.create(
-        'rviz', default='false')
+        'rviz', default=EnvironmentVariable("USE_RVIZ")
+    )
     map_dir_arg = launch_argument_creator.create(
         'map', default=os.path.join(pkg_dir, 'map', 'map.yaml'))
     param_dir = LaunchConfiguration(

@@ -6,7 +6,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, EnvironmentVariable
 from launch_ros.actions import Node
 from nav2_common.launch import HasNodeParams, RewrittenYaml
 
@@ -29,12 +29,12 @@ def generate_launch_description():
         default=os.path.join(pkg_dir, 'params', 'slam_toolbox.yaml'),
     )
     simulation_arg = launch_argument_creator.create(
-        'simulation', default='false')
+        'simulation', default=EnvironmentVariable('SIMULATION'))
     log_level_arg = launch_argument_creator.create(
         'log_level', default='info')
 
     launch_rviz_arg = launch_argument_creator.create(
-        'rviz', default='false')
+        'rviz', default=EnvironmentVariable("USE_RVIZ"))
     rviz_param_arg = launch_argument_creator.create(
         'rviz_param', default='rviz.rviz')
 

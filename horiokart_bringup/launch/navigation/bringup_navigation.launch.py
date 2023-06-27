@@ -3,7 +3,7 @@
 import launch
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, EnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 
@@ -21,11 +21,14 @@ def generate_launch_description():
     launch_argument_creator = launch_argument.LaunchArgumentCreator()
 
     map_path_arg = launch_argument_creator.create(
-        "map_path", default="map")
+        "map_path", default=EnvironmentVariable("LOCALIZATION_MAP_PATH")
+    )
     simulation_arg = launch_argument_creator.create(
-        "simulation", default="false")
+        "simulation", default=EnvironmentVariable("SIMULATION")
+    )
     rviz_arg = launch_argument_creator.create(
-        "rviz", default="false")
+        "rviz", default=EnvironmentVariable("USE_RVIZ")
+    )
 
     launch_common = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -37,8 +40,9 @@ def generate_launch_description():
         }.items(),
     )
 
-    map_path = PathJoinSubstitution(
-        ["/root/ros2_data", map_path_arg.launch_config, "map.yaml"])
+    # map_path = PathJoinSubstitution(
+    #     ["/root/ros2_data", map_path_arg.launch_config, "map.yaml"])
+    map_path = map_path_arg.launch_config
     launch_navigation = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             navigation_pkg_share + "/launch/bringup.launch.py"
