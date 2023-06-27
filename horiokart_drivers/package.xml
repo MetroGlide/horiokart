@@ -19,7 +19,7 @@
   <depend>rplidar_ros</depend>
   <!--<depend>rviz_satellite</depend>-->
   <depend>laser_filters</depend>
-  <depend>pcl_ros</depend>
+  <!-- <depend>pcl_ros</depend> -->
   <depend>realsense2_camera</depend>
 
   <export>
