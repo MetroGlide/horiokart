@@ -23,6 +23,9 @@ def generate_launch_description():
     map_path_arg = launch_argument_creator.create(
         "map_path", default=EnvironmentVariable("LOCALIZATION_MAP_PATH")
     )
+    planning_map_path_arg = launch_argument_creator.create(
+        "planning_map_path", default=EnvironmentVariable("PLANNING_MAP_PATH")
+    )
     simulation_arg = launch_argument_creator.create(
         "simulation", default=EnvironmentVariable("SIMULATION")
     )
@@ -50,6 +53,7 @@ def generate_launch_description():
         launch_arguments={
             "simulation": simulation_arg.launch_config,
             "map": map_path,
+            "planning_map": planning_map_path_arg.launch_config,
             "rviz": rviz_arg.launch_config,
         }.items(),
     )

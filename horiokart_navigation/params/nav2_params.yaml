@@ -131,7 +131,7 @@ controller_server:
       # y軸方向の最小速度を指定します。
       min_vel_y: 0.0
       # x軸方向の最大速度を指定します。
-      max_vel_x: 0.22
+      max_vel_x: 0.5
       # y軸方向の最大速度を指定します。
       max_vel_y: 0.0
       # 角速度の最大値を指定します。
@@ -139,7 +139,7 @@ controller_server:
       # xy平面上の最小速度を指定します。
       min_speed_xy: 0.0
       # xy平面上の最大速度を指定します。
-      max_speed_xy: 0.22
+      max_speed_xy: 0.5
       # 角速度の最小値を指定します。
       min_speed_theta: 0.0 # 0.0
       # x軸方向の加速度の最大値を指定します。
@@ -260,6 +260,7 @@ local_costmap:
 global_costmap:
   global_costmap:
     ros__parameters:
+      map_topic: /planning_map
       update_frequency: 1.0
       publish_frequency: 1.0
       global_frame: map
@@ -319,6 +320,11 @@ global_costmap:
       use_sim_time: False
 
 map_server:
+  ros__parameters:
+    use_sim_time: False
+    yaml_filename: "map.yaml"
+
+planning_map_server:
   ros__parameters:
     use_sim_time: False
     yaml_filename: "map.yaml"

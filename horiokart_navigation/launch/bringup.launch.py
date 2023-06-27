@@ -1,13 +1,18 @@
 import os
 
+import launch
+import launch_ros
+
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, EmitEvent
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from launch.conditions import IfCondition
-from launch_ros.actions import Node
+from launch_ros.actions import Node, LifecycleNode
+
+import lifecycle_msgs.msg
 
 from horiokart_navigation.launch_argument import LaunchArgumentCreator
 
@@ -20,7 +25,7 @@ def generate_launch_description():
 
     rviz_config_dir = os.path.join(
         pkg_dir, 'rviz', 'rviz.rviz')
-        # nav2_bringup_dir, 'rviz', 'nav2_default_view.rviz')
+    # nav2_bringup_dir, 'rviz', 'nav2_default_view.rviz')
 
     # Launch arguments
     launch_argument_creator = LaunchArgumentCreator()
@@ -32,11 +37,59 @@ def generate_launch_description():
     )
     map_dir_arg = launch_argument_creator.create(
         'map', default=os.path.join(pkg_dir, 'map', 'map.yaml'))
+    planning_map_dir_arg = launch_argument_creator.create(
+        'planning_map', default=os.path.join(pkg_dir, 'map', 'map.yaml'))
+
     param_dir = LaunchConfiguration(
         'params_file',
         default=os.path.join(
             pkg_dir, 'params', 'nav2_params.yaml'))
 
+    remappings = [('/tf', 'tf'),
+                  ('/tf_static', 'tf_static')]
+
+    map_server_node = LifecycleNode(
+        package='nav2_map_server',
+        executable='map_server',
+        name='planning_map_server',
+        namespace='',
+        output='screen',
+        parameters=[
+            {
+                'use_sim_time': simulation_arg.launch_config,
+                'yaml_filename': planning_map_dir_arg.launch_config,
+                # 'topic_name': 'planning_map',
+            },
+        ],
+        remappings=[('/map', '/planning_map')]
+    )
+    map_server_group = launch.actions.GroupAction([
+        map_server_node,
+        EmitEvent(
+            event=launch_ros.events.lifecycle.ChangeState(
+                lifecycle_node_matcher=launch.events.matches_action(
+                    map_server_node),
+                transition_id=lifecycle_msgs.msg.Transition.TRANSITION_CONFIGURE,
+
+            )),
+
+        launch.actions.RegisterEventHandler(  # イベントハンドラの登録
+            launch_ros.event_handlers.OnStateTransition(  # lifecycle_nodeが状態遷移したときのイベント
+                target_lifecycle_node=map_server_node,  # ターゲットノード
+                start_state="configuring", goal_state="inactive",  # どの状態からどの状態へ遷移したかを書く
+                entities=[
+                    launch.actions.LogInfo(
+                        msg="transition start : map_server :activating"),
+                    launch.actions.EmitEvent(
+                        event=launch_ros.events.lifecycle.ChangeState(
+                            lifecycle_node_matcher=launch.events.matches_action(
+                                map_server_node),
+                            transition_id=lifecycle_msgs.msg.Transition.TRANSITION_ACTIVATE,
+                        )),
+                ],
+            )
+        ),
+    ])
     return LaunchDescription([
         *launch_argument_creator.get_created_declare_launch_args(),
 
@@ -48,6 +101,7 @@ def generate_launch_description():
                 'use_sim_time': simulation_arg.launch_config,
                 'params_file': param_dir}.items(),
         ),
+        map_server_group,
 
         Node(
             package='rviz2',
