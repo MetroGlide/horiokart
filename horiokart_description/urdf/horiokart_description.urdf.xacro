@@ -13,7 +13,7 @@
 
   <!-- top frame for sensors -->
   <joint name="top_frame_link_joint" type="fixed">
-    <origin xyz="0.31 0 0.3" rpy="0 0 0"/>
+    <origin xyz="0.23 0 0.3" rpy="0 0 0"/>
     <parent link="base_link"/>
     <child link="top_frame_link"/>
   </joint>
