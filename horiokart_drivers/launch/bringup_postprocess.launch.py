@@ -66,7 +66,7 @@ def generate_launch_description():
                     "use_sim_time": simulation_arg.launch_config,
                 }],
                 remappings=[
-                    ("nmea_sentence", "gps/nmea_sentence"),
+                    ("nmea_sentence", "nmea_sentence"),
                     ("fix", "gps/fix"),
                 ],
                 condition=launch.conditions.IfCondition(
