@@ -71,22 +71,22 @@ def generate_launch_description():
             ),
 
             # RPLidar front
-            Node(
-                package="rplidar_ros",
-                executable="rplidar_node",
-                name="front_rplidar_node",
-                output="screen",
-                parameters=[{
-                    "serial_port": front_rplidar_port_arg.launch_config,
-                    "serial_baudrate": 115200,
-                    "frame_id": "front_lidar_link",
-                    "inverted": False,
-                    "angle_compensate": True,
-                }],
-                remappings=[("scan", "scan_front_lidar")],
-                condition=launch.conditions.IfCondition(
-                    use_lidar_arg.launch_config),
-            ),
+            # Node(
+            #     package="rplidar_ros",
+            #     executable="rplidar_node",
+            #     name="front_rplidar_node",
+            #     output="screen",
+            #     parameters=[{
+            #         "serial_port": front_rplidar_port_arg.launch_config,
+            #         "serial_baudrate": 115200,
+            #         "frame_id": "front_lidar_link",
+            #         "inverted": False,
+            #         "angle_compensate": True,
+            #     }],
+            #     remappings=[("scan", "scan_front_lidar")],
+            #     condition=launch.conditions.IfCondition(
+            #         use_lidar_arg.launch_config),
+            # ),
 
             # RPLidar top
             Node(
@@ -97,7 +97,8 @@ def generate_launch_description():
                 parameters=[{
                     "serial_port": top_rplidar_port_arg.launch_config,
                     "serial_baudrate": 1000000,
-                    "frame_id": "top_lidar_link",
+                    # "frame_id": "top_lidar_link",
+                    "frame_id": "top_lrf_link",
                     "inverted": False,
                     "angle_compensate": True,
                 }],
