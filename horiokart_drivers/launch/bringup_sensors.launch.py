@@ -57,7 +57,7 @@ def generate_launch_description():
 
                     "odometry.frame_id": "odom",
                     "odometry.child_frame_id": "base_footprint",
-                    "odometry.publish_rate": 10,
+                    "odometry.publish_rate": 20,
                     "odometry.publish_tf": False,
 
                     "odometry.inv_x": True,

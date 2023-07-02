@@ -27,7 +27,7 @@ namespace horiokart_drivers
 
         SerialCommunicator serial_;
 
-        const int sleep_usec_ = 1000; // usec
+        const int sleep_usec_ = 40000; // usec
 
         int get_odom_ret_size_ = 19;
         std::vector<uint8_t> zero_buf_{0x24, 0x73};
