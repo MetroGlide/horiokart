@@ -8,7 +8,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, EmitEvent
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from launch.conditions import IfCondition
 from launch_ros.actions import Node, LifecycleNode
 
@@ -31,12 +31,15 @@ def generate_launch_description():
     simulation_arg = launch_argument_creator.create(
         'simulation', default='false')
     map_dir_arg = launch_argument_creator.create(
-        'map', default=os.path.join(pkg_dir, 'map', 'map.yaml'))
+        'map', default=EnvironmentVariable("PLANNING_MAP_PATH")
+    )
 
     load_waypoints_yaml_path = launch_argument_creator.create(
-        'load_path', default="")
+        'load_path', default=""
+    )
     save_waypoints_yaml_path = launch_argument_creator.create(
-        'save_path', default="/root/ros2_data/new_waypoints.yaml")
+        'save_path', default=EnvironmentVariable("WAYPOINT_PATH")
+    )
 
     map_server_node = LifecycleNode(
         package='nav2_map_server',

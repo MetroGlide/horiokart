@@ -177,11 +177,13 @@ class WaypointEditorNode(Node):
         loader = WaypointsLoader(file_path)
         self.waypoints = loader.load()
 
-        for waypoint in self.waypoints.get_all():
+        for i, waypoint in enumerate(self.waypoints.get_all()):
             self._create_interactive_marker(
-                self.waypoints.get_next_index(), waypoint.pose_stamped)
+                i, waypoint.pose)
 
     def _pose_callback(self, msg: PoseStamped):
+        self._create_interactive_marker(
+            self.waypoints.get_next_index(), msg)
         self.waypoints.add(
             Waypoint(
                 index=self.waypoints.get_next_index(),
