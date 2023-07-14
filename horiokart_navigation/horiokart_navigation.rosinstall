@@ -1,0 +1,4 @@
+- git:
+    local-name: navigation2
+    uri: https://github.com/ros-planning/navigation2.git
+    version: humble
