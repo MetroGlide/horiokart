@@ -22,6 +22,7 @@ services:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - $HOME/.Xauthority/:/root/.Xauthority
       - ./:/app/
+      - ./log/ros:/root/.ros/log
       - /dev:/dev
       - ${HOME}/ros2_data:/root/ros2_data
 
