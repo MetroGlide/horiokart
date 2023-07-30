@@ -31,7 +31,7 @@ def generate_launch_description():
     )
 
     use_gps_arg = launch_argument_creator.create(
-        "use_gps", default="false")
+        "use_gps", default="true")
     gps_port_arg = launch_argument_creator.create(
         "gps_port", default="/dev/ttyHoriokart-gps")
 
@@ -71,22 +71,22 @@ def generate_launch_description():
             ),
 
             # RPLidar front
-            # Node(
-            #     package="rplidar_ros",
-            #     executable="rplidar_node",
-            #     name="front_rplidar_node",
-            #     output="screen",
-            #     parameters=[{
-            #         "serial_port": front_rplidar_port_arg.launch_config,
-            #         "serial_baudrate": 115200,
-            #         "frame_id": "front_lidar_link",
-            #         "inverted": False,
-            #         "angle_compensate": True,
-            #     }],
-            #     remappings=[("scan", "scan_front_lidar")],
-            #     condition=launch.conditions.IfCondition(
-            #         use_lidar_arg.launch_config),
-            # ),
+            Node(
+                package="rplidar_ros",
+                executable="rplidar_node",
+                name="front_rplidar_node",
+                output="screen",
+                parameters=[{
+                    "serial_port": front_rplidar_port_arg.launch_config,
+                    "serial_baudrate": 115200,
+                    "frame_id": "front_lidar_link",
+                    "inverted": False,
+                    "angle_compensate": True,
+                }],
+                remappings=[("scan", "scan_front_lidar")],
+                condition=launch.conditions.IfCondition(
+                    use_lidar_arg.launch_config),
+            ),
 
             # RPLidar top
             Node(

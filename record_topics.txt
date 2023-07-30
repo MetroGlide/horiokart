@@ -1,2 +1,4 @@
 /odom
 /scan_top_lidar
+/scan_front_lidar
+/nmea_sentence
