@@ -23,7 +23,7 @@ def generate_launch_description():
     use_lidar_arg = launch_argument_creator.create(
         "use_lidar", default="true")
     use_gps_arg = launch_argument_creator.create(
-        "use_gps", default="false")
+        "use_gps", default="true")
     use_ekf_arg = launch_argument_creator.create(
         "use_ekf", default="false")
 
