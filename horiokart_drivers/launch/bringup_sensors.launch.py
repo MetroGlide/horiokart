@@ -79,7 +79,7 @@ def generate_launch_description():
                 parameters=[{
                     "serial_port": front_rplidar_port_arg.launch_config,
                     "serial_baudrate": 115200,
-                    "frame_id": "front_lidar_link",
+                    "frame_id": "front_lrf_link",
                     "inverted": False,
                     "angle_compensate": True,
                 }],
