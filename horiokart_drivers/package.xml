@@ -21,6 +21,7 @@
   <depend>laser_filters</depend>
   <!-- <depend>pcl_ros</depend> -->
   <depend>realsense2_camera</depend>
+  <depend>robot_localization</depend>
 
   <export>
     <build_type>ament_cmake</build_type>
