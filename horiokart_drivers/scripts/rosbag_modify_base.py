@@ -2,11 +2,13 @@
 
 import os
 import argparse
+import shutil
 
 from rclpy.serialization import deserialize_message, serialize_message
 from rosidl_runtime_py.utilities import get_message
 import rosbag2_py
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import LaserScan
 
 
 def add_covariance_to_odom(msg: Odometry):
@@ -14,24 +16,29 @@ def add_covariance_to_odom(msg: Odometry):
     msg.pose.covariance = [
         1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 1000000.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1000000.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 1000000.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.4,
     ]
     msg.twist.covariance = [
         0.5, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.5, 0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 1000000.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1000000.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 1000000.0, 0.0,
-        0.0, 0.0, 0.0, 0.0, 0.0, 0.5,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.78,
     ]
+    return msg
+
+def change_frame_id_in_laser_scan(msg: LaserScan):
+    msg.header.frame_id = "front_lrf_link"
     return msg
 
 
 MODIFY_FUNC_DICT = {
     "/odom": [add_covariance_to_odom],
+    "/scan_front_lidar": [change_frame_id_in_laser_scan]
 }
 
 
@@ -82,6 +89,12 @@ def main():
         help="output bag file path",
         default="",
     )
+    parser.add_argument(
+        "-F",
+        "--force",
+        action="store_true",
+        help="force overwrite output file",
+    )
 
     args = parser.parse_args()
     if args.input == "":
@@ -89,18 +102,25 @@ def main():
     if not os.path.exists(args.input):
         raise FileNotFoundError(f"input file {args.input} not found")
 
+    print(f"input file: {args.input}")
+
     if args.output == "":
         input_path = os.path.dirname(args.input) + "/.."
         input_path = os.path.abspath(input_path)
 
         input_file_name = os.path.basename(args.input)
         input_file_name = os.path.splitext(input_file_name)[0]
-        input_file_ext = os.path.splitext(input_file_name)[1]
 
-        args.output = input_path + "/" + input_file_name + "_modified" + input_file_ext
+        args.output = input_path + "/" + input_file_name + "_modified"
+        print(f"output file is not specified. use {args.output}")
 
     if os.path.exists(args.output):
-        raise FileExistsError(f"output file {args.output} already exists")
+        print(f"output file {args.output} already exists")
+        if args.force:
+            print(f"remove output directory {args.output}")
+            shutil.rmtree(args.output)
+        else:
+            raise FileExistsError(f"output file {args.output} already exists")
 
     reader = get_reader(args.input)
     topic_meta_list = reader.get_all_topics_and_types()
