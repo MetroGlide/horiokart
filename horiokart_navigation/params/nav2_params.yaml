@@ -8,7 +8,7 @@ amcl:
     scan_topic: /scan_top_lidar
     laser_max_range: -1.0 # Maximum scan range to be considered, -1.0 will cause the laser’s reported maximum range to be used.
     laser_min_range: -1.0 # Minimum scan range to be considered, -1.0 will cause the laser’s reported minimum range to be used.
-    max_beams: 60 # How many evenly-spaced beams in each scan to be used when updating the filter.
+    max_beams: 100 # How many evenly-spaced beams in each scan to be used when updating the filter.
     max_particles: 2000
     min_particles: 500
 
@@ -29,10 +29,13 @@ amcl:
 
     laser_model_type: "likelihood_field" # Which model to use, either beam, likelihood_field, or likelihood_field_prob. Same as likelihood_field but incorporates the beamskip feature, if enabled.
 
-    laser_likelihood_max_dist: 2.0 # Maximum distance to do obstacle inflation on map, for use in likelihood_field model.
+    # model params are the same for all laser models
     sigma_hit: 0.2 # Standard deviation for Gaussian model used in z_hit part of the model.
     z_hit: 0.5 # Mixture weight for z_hit part of model, sum of all used z weight must be 1. Beam uses all 4, likelihood model uses z_hit and z_rand..
     z_rand: 0.5 # Mixture weight for z_rand part of model, sum of all used z weight must be 1. Beam uses all 4, likelihood model uses z_hit and z_rand..
+
+    # only for likelihood_field model
+    laser_likelihood_max_dist: 2.0 # Maximum distance to do obstacle inflation on map, for use in likelihood_field model.
 
     # only for beam model
     z_max: 0.05 # Mixture weight for z_max part of model, sum of all used z weight must be 1. Beam uses all 4, likelihood model uses z_hit and z_rand.
@@ -50,7 +53,9 @@ amcl:
     resample_interval: 1 # Number of filter updates required before resampling.
     save_pose_rate: 0.5 # Maximum rate (Hz) at which to store the last estimated pose and covariance to the parameter server, in the variables ~initial_pose_* and ~initial_cov_*. This saved pose will be used on subsequent runs to initialize the filter (-1.0 to disable).
 
-    tf_broadcast: true # if use ekf, set false
+    #################
+    tf_broadcast: false # if use ekf, set false
+    #################
     transform_tolerance: 1.0
     set_initial_pose: true # Causes AMCL to set initial pose from the initial_pose* parameters instead of waiting for the initial_pose message.
     initial_pose: {x: 0.0, y: 0.0, z: 0.0, yaw: 0.0} # X, Y, Z, and yaw coordinates of initial pose (meters and radians) of robot base frame in global frame.
