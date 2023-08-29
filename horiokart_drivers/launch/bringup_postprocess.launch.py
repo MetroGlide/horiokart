@@ -24,8 +24,6 @@ def generate_launch_description():
         "use_lidar", default="true")
     use_gps_arg = launch_argument_creator.create(
         "use_gps", default="true")
-    use_ekf_arg = launch_argument_creator.create(
-        "use_ekf", default="false")
 
     pkg_name = "horiokart_drivers"
     pkg_share = get_package_share_directory(pkg_name)
@@ -64,6 +62,7 @@ def generate_launch_description():
                 parameters=[{
                     "time_ref_source": "gps",
                     "use_sim_time": simulation_arg.launch_config,
+                    "epe_quality2": 1.0,
                 }],
                 remappings=[
                     ("nmea_sentence", "nmea_sentence"),
@@ -72,48 +71,25 @@ def generate_launch_description():
                 condition=launch.conditions.IfCondition(
                     use_gps_arg.launch_config),
             ),
+
+            # Node(
+            #     package=pkg_name,
+            #     executable="gps_transform_node.py",
+            #     name="gps_transform_node",
+            #     output="screen",
+            #     parameters=[{
+            #         "use_sim_time": simulation_arg.launch_config,
+            #     }],
+            #     condition=launch.conditions.IfCondition(
+            #         use_gps_arg.launch_config),
+            # ),
         ]
     )
 
-    ekf_group = launch.actions.GroupAction(
-        [
-            Node(
-                package="robot_localization",
-                executable="ekf_localization_node",
-                name="ekf_localization_node",
-                output="screen",
-                parameters=[
-                    {"use_sim_time": simulation_arg.launch_config},
-                    pkg_share + "/config/ekf_odom_params.yaml",
-                ],
-                remappings=[
-                    ("odometry/filtered", "ekf_odom"),
-                ],
-            ),
-
-            Node(
-                package="robot_localization",
-                executable="navsat_transform_node",
-                name="navsat_transform_node",
-                output="screen",
-                parameters=[
-                    {"use_sim_time": simulation_arg.launch_config},
-                    pkg_share + "/config/ekf_gps_params.yaml",
-                ],
-                remappings=[
-                    ("odometry/filtered", "ekf_odom"),
-                    ("gps/fix", "gps/fix"),
-                ],
-            )
-        ],
-        condition=launch.conditions.IfCondition(
-            use_ekf_arg.launch_config),
-    )
 
     return LaunchDescription(
         [
             *launch_argument_creator.get_created_declare_launch_args(),
             sensors_processing_group,
-            ekf_group,
         ]
     )

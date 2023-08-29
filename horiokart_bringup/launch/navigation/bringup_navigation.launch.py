@@ -3,6 +3,7 @@
 import launch
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
+from launch_ros.actions import Node
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, EnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
@@ -13,6 +14,9 @@ from horiokart_drivers import launch_argument
 def generate_launch_description():
     pkg_name = "horiokart_bringup"
     pkg_share = get_package_share_directory(pkg_name)
+
+    drivers_pkg_name = "horiokart_drivers"
+    drivers_pkg_share = get_package_share_directory(drivers_pkg_name)
 
     navigation_pkg_name = "horiokart_navigation"
     navigation_pkg_share = get_package_share_directory(navigation_pkg_name)
@@ -33,6 +37,13 @@ def generate_launch_description():
         "rviz", default=EnvironmentVariable("USE_RVIZ")
     )
 
+    use_ekf_arg = launch_argument_creator.create(
+        "use_ekf", default="true")
+    ekf_params_file_arg = launch_argument_creator.create(
+        "ekf_params_file", default="ekf_global.yaml")
+    ekf_odom_topic_arg = launch_argument_creator.create(
+        "ekf_odom_topic", default="ekf_global_odom")
+
     launch_common = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             pkg_share + "/launch/common/bringup_common.launch.py"
@@ -42,6 +53,32 @@ def generate_launch_description():
             "drive": "false",
         }.items(),
     )
+
+    ekf_group = launch.actions.GroupAction(
+        [
+            Node(
+                package="robot_localization",
+                executable="ekf_node",
+                name="ekf_global_node",
+                output="screen",
+                parameters=[
+                    {"use_sim_time": simulation_arg.launch_config},
+                    PathJoinSubstitution(   
+                        [drivers_pkg_share, "params", ekf_params_file_arg.launch_config]
+                    ),
+
+
+                ],
+                remappings=[
+                    ("odometry/filtered", ekf_odom_topic_arg.launch_config),
+                ],
+            ),
+
+        ],
+        condition=launch.conditions.IfCondition(
+            use_ekf_arg.launch_config),
+    )
+
 
     # map_path = PathJoinSubstitution(
     #     ["/root/ros2_data", map_path_arg.launch_config, "map.yaml"])
@@ -63,6 +100,7 @@ def generate_launch_description():
             *launch_argument_creator.get_created_declare_launch_args(),
 
             launch_common,
+            ekf_group,
             launch_navigation,
         ]
     )
