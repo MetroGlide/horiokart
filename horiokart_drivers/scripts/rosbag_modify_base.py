@@ -14,8 +14,8 @@ from sensor_msgs.msg import LaserScan
 def add_covariance_to_odom(msg: Odometry):
     # (x, y, z, rotation about X axis, rotation about Y axis, rotation about Z axis)
     msg.pose.covariance = [
-        1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+        6.5, 0.0, 0.0, 0.0, 0.0, 0.0,
+        0.0, 6.5, 0.0, 0.0, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
         0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -30,6 +30,7 @@ def add_covariance_to_odom(msg: Odometry):
         0.0, 0.0, 0.0, 0.0, 0.0, 0.78,
     ]
     return msg
+
 
 def change_frame_id_in_laser_scan(msg: LaserScan):
     msg.header.frame_id = "front_lrf_link"
@@ -72,9 +73,17 @@ def get_topic_type(topic: str, topic_meta_list: list):
             return topic_meta.type
     raise ValueError(f"topic {topic} not found in topic_meta_list")
 
+def rename_to_backup(path: str):
+    output_path = path + "_bak"
+    if os.path.exists(output_path):
+        rename_to_backup(output_path)
+    shutil.move(path, output_path)
+    return output_path
+
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    # input file require format: /path/to/dir/file_name_dir/file_name.mcap
     parser.add_argument(
         "-i",
         "--input",
@@ -101,24 +110,35 @@ def main():
         raise ValueError("input file is not specified")
     if not os.path.exists(args.input):
         raise FileNotFoundError(f"input file {args.input} not found")
+    if not os.path.isfile(args.input):
+        raise ValueError(f"input file {args.input} is not file")
 
     print(f"input file: {args.input}")
 
     if args.output == "":
-        input_path = os.path.dirname(args.input) + "/.."
-        input_path = os.path.abspath(input_path)
+        if args.force:
+            # print("output file is not specified. use input file name")
+            # input_path = os.path.dirname(args.input) # /path/to/dir/file_name_dir
+            # args.output = input_path
+            pass
 
-        input_file_name = os.path.basename(args.input)
-        input_file_name = os.path.splitext(input_file_name)[0]
+        else:
+            input_path = os.path.dirname(args.input) + "/.." # /path/to/dir/file_name_dir/..
+            input_path = os.path.abspath(input_path) # /path/to/dir
 
-        args.output = input_path + "/" + input_file_name + "_modified"
-        print(f"output file is not specified. use {args.output}")
+            input_file_name = os.path.basename(args.input)
+            input_file_name = os.path.splitext(input_file_name)[0]
+
+            args.output = input_path + "/" + input_file_name + "_modified" # /path/to/dir/file_name_modified
+            print(f"output file is not specified. use {args.output}")
 
     if os.path.exists(args.output):
         print(f"output file {args.output} already exists")
         if args.force:
-            print(f"remove output directory {args.output}")
-            shutil.rmtree(args.output)
+            # print(f"remove output directory {args.output}")
+            # shutil.rmtree(args.output)
+            p = rename_to_backup(args.output)
+            print(f"backup output file {args.output} -> {p}")
         else:
             raise FileExistsError(f"output file {args.output} already exists")
 
