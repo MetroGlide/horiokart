@@ -72,17 +72,17 @@ def generate_launch_description():
                     use_gps_arg.launch_config),
             ),
 
-            # Node(
-            #     package=pkg_name,
-            #     executable="gps_transform_node.py",
-            #     name="gps_transform_node",
-            #     output="screen",
-            #     parameters=[{
-            #         "use_sim_time": simulation_arg.launch_config,
-            #     }],
-            #     condition=launch.conditions.IfCondition(
-            #         use_gps_arg.launch_config),
-            # ),
+            Node(
+                package=pkg_name,
+                executable="gps_transform_node.py",
+                name="gps_transform_node",
+                output="screen",
+                parameters=[{
+                    "use_sim_time": simulation_arg.launch_config,
+                }],
+                condition=launch.conditions.IfCondition(
+                    use_gps_arg.launch_config),
+            ),
         ]
     )
 
