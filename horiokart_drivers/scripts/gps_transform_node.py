@@ -19,6 +19,24 @@ from gps_transform import GpsTransform
 from gps_transform import Pose as GpsPose
 
 
+class HDOP2Covariance:
+    def __init__(self):
+        self.a = 19.23076923
+        self.b = -4.230769231
+
+        self.mean_num = 10
+        self.covariance_history = []
+
+    def get_covariance(self, hdop: float) -> float:
+        cov = (hdop * self.a + self.b) ** 2
+        self.covariance_history.append(cov)
+
+        if len(self.covariance_history) > self.mean_num:
+            self.covariance_history.pop(0)
+
+        return sum(self.covariance_history) / len(self.covariance_history)
+
+
 class GpsTransformNode(Node):
     def __init__(self):
         super().__init__('gps_transform_node')
@@ -27,6 +45,8 @@ class GpsTransformNode(Node):
         self.init_parameters()
         self.prepare_tf()
         self.init_ros_communication()
+
+        self._hdop_to_covariance = HDOP2Covariance()
 
     def init_parameters(self):
         self.resistration = self.declare_parameter(
@@ -112,14 +132,17 @@ class GpsTransformNode(Node):
             self._base_link_to_gps_transform)
 
     def hdop_to_covariance(self, hdop: float) -> float:
-        a = 60/7
-        b = 3/7
-        return (hdop * a + b) ** 2 # temporary
+        a = 19.23076923
+        b = -4.230769231
+        return (hdop * a + b) ** 2  # temporary
         # return a * math.exp(-b * hdop)
 
     def gps_callback(self, msg):
         map_position = self._gps_transform.transform_to_map(
             msg.latitude, msg.longitude)
+
+        covariance = self._hdop_to_covariance.get_covariance(
+            msg.position_covariance[0])
 
         if self.resistration:
             # listen tf from map to base_link
@@ -157,7 +180,7 @@ class GpsTransformNode(Node):
 
             self._gps_transform.feedback_pose(map_frame_pose)
             # TODO!: for debug
-            if self._gps_transform.add_utm_to_map_refpoint(self._gps_transform.last_utm, map_frame_pose):
+            if self._gps_transform.add_utm_to_map_refpoint(self._gps_transform.last_utm, map_frame_pose, covariance):
                 self.get_logger().info('##########################')
                 self.get_logger().info('added refpoint')
                 self.get_logger().info(
@@ -198,10 +221,8 @@ class GpsTransformNode(Node):
                 x=q[0], y=q[1], z=q[2], w=q[3])
 
             # set covariance
-            self.odom_msg.pose.covariance[0] = self.hdop_to_covariance(
-                msg.position_covariance[0])
-            self.odom_msg.pose.covariance[7] = self.hdop_to_covariance(
-                msg.position_covariance[4])
+            self.odom_msg.pose.covariance[0] = covariance
+            self.odom_msg.pose.covariance[7] = covariance
             self.odom_msg.pose.covariance[14] = 0.0
             self.odom_msg.pose.covariance[21] = 0.0
             self.odom_msg.pose.covariance[28] = 0.0

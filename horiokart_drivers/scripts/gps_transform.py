@@ -45,18 +45,21 @@ class Pose:
 class UTMtoMAP_RefPoint:
     utm: Pose  # utm_position. unit: m
     map: Pose  # map_position. unit: m
+    variance: float = 0.0  # unit: m
 
     def to_dict(self):
         return {
             'utm': self.utm.to_dict(),
-            'map': self.map.to_dict()
+            'map': self.map.to_dict(),
+            'variance': self.variance
         }
 
     @classmethod
     def from_dict(cls, dict):
         return cls(
             Pose.from_dict(dict['utm']),
-            Pose.from_dict(dict['map'])
+            Pose.from_dict(dict['map']),
+            dict['variance']
         )
 
 
@@ -205,16 +208,21 @@ class MultiRefConverter(ConverterBase):
         return Pose(estimated_x, estimated_y, yaw)
 
     def estimate_point(self, known_points, distances, initial_guess):
-        def distance_error(point, known_points, distances):
+        def inverse_distance_weight(distance, power):
+            return 1.0 / np.power(distance, power)
+
+        def distance_error(point, known_points, distances, power):
             errors = []
             for i in range(len(known_points)):
                 error = np.linalg.norm(known_points[i] - point) - distances[i]
+                error *= inverse_distance_weight(distances[i], power)
                 errors.append(error)
             return errors
 
+        power = 3.0
         result = minimize(
             lambda p: np.sum(
-                np.square(distance_error(p, known_points, distances))),
+                np.square(distance_error(p, known_points, distances, power))),
             initial_guess
         )
         estimated_point = result.x
@@ -223,12 +231,18 @@ class MultiRefConverter(ConverterBase):
     def visualize_utm_to_map_offset(self, ref_point_list: list, distance_list: list, point: Pose):
         # clear
         plt.clf()
-        plt.gca().set_aspect('equal', adjustable='box')
 
         # visualize ref points and point
         plt.scatter([ref_point.x for ref_point in ref_point_list], [
                     ref_point.y for ref_point in ref_point_list], c='red')
         plt.scatter(point.x, point.y, c='blue')
+
+        limit_min = min(min([ref_point.x for ref_point in ref_point_list]),
+                        min([ref_point.y for ref_point in ref_point_list]))
+        limit_max = max(max([ref_point.x for ref_point in ref_point_list]),
+                        max([ref_point.y for ref_point in ref_point_list]))
+        plt.xlim(limit_min - 5, limit_max + 5)
+        plt.ylim(limit_min - 5, limit_max + 5)
 
         # visualize distance as circle centering on ref points
         for i in range(len(ref_point_list)):
@@ -241,6 +255,7 @@ class MultiRefConverter(ConverterBase):
 
 class UTMtoMAPConverter:
     UTM2MAP_APPEND_THRESHOLD = 20  # unit: m
+    UTM_VARIANCE_THRESHOLD = 5.5  # unit: m
 
     class ConverterType(enum.IntEnum):
         SINGLE = enum.auto()
@@ -267,18 +282,26 @@ class UTMtoMAPConverter:
                     utm, self._utm_to_map_list)
                 return self._multi_ref_converter.calc_map_pose(
                     utm, [*self._utm_to_map_list,
-                          UTMtoMAP_RefPoint(utm, single_estimated_map_pose)]
+                          UTMtoMAP_RefPoint(utm, single_estimated_map_pose, UTMtoMAPConverter.UTM_VARIANCE_THRESHOLD)]
                 )
             else:
                 return self._single_ref_converter.calc_map_pose(
                     utm, self._utm_to_map_list)
 
-    def add_utm_to_map_refpoint(self, utm: Pose, map: Pose) -> bool:
+        else:
+            raise NotImplementedError()
+
+    def add_utm_to_map_refpoint(self, utm: Pose, map: Pose, utm_variance: float) -> bool:
         if len(self._utm_to_map_list) == 0:
-            self._utm_to_map_list.append(UTMtoMAP_RefPoint(utm, map))
+            self._utm_to_map_list.append(
+                UTMtoMAP_RefPoint(utm, map, utm_variance))
             return True
-        elif (utm.x - self._utm_to_map_list[-1].utm.x)**2 + (utm.y - self._utm_to_map_list[-1].utm.y)**2 > self.UTM2MAP_APPEND_THRESHOLD ** 2:
-            self._utm_to_map_list.append(UTMtoMAP_RefPoint(utm, map))
+
+        distance = (utm.x - self._utm_to_map_list[-1].utm.x)**2 + (
+            utm.y - self._utm_to_map_list[-1].utm.y)**2
+        if distance > self.UTM2MAP_APPEND_THRESHOLD ** 2 and utm_variance < UTMtoMAPConverter.UTM_VARIANCE_THRESHOLD:
+            self._utm_to_map_list.append(
+                UTMtoMAP_RefPoint(utm, map, utm_variance))
             return True
 
         return False
@@ -307,8 +330,8 @@ class GpsTransform:
         self.init_parameters()
 
         self._utm_to_map_converter = UTMtoMAPConverter(
-            [], UTMtoMAPConverter.ConverterType.SINGLE)
-            # [], UTMtoMAPConverter.ConverterType.HYBRID)
+            # [], UTMtoMAPConverter.ConverterType.SINGLE)
+            [], UTMtoMAPConverter.ConverterType.HYBRID)
 
     def init_parameters(self):
         self.proj = None
@@ -318,8 +341,8 @@ class GpsTransform:
     def last_utm(self):
         return self._last_utm.copy() if self._last_utm is not None else Pose(0, 0, 0)
 
-    def add_utm_to_map_refpoint(self, utm: Pose, map: Pose) -> bool:
-        return self._utm_to_map_converter.add_utm_to_map_refpoint(utm, map)
+    def add_utm_to_map_refpoint(self, utm: Pose, map: Pose, utm_variance: float) -> bool:
+        return self._utm_to_map_converter.add_utm_to_map_refpoint(utm, map, utm_variance)
 
     def feedback_pose(self, map_pose: Pose):
         self._utm_to_map_converter.feedback_map_pose(map_pose)
