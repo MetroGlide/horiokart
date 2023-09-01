@@ -29,7 +29,7 @@ RUN apt-get update \
   && apt-get install -y software-properties-common \
   && add-apt-repository ppa:kisak/kisak-mesa \
   && apt-get upgrade -y \
-  && apt-get autoremove --purge \
+  && apt-get autoremove --purge -y \
   && rm -rf /var/cache/apt/*
 
 ### RealSense SDK
