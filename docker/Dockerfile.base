@@ -17,10 +17,12 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends \
       ros-${ROS_DISTRO}-rqt ros-${ROS_DISTRO}-rqt-* ros-${ROS_DISTRO}-rviz2 \
       ros-${ROS_DISTRO}-ros2bag ros-${ROS_DISTRO}-ros2bag-* \
+      ros-${ROS_DISTRO}-rosbag2-storage-mcap \
       ros-${ROS_DISTRO}-teleop-twist-keyboard \
       ros-${ROS_DISTRO}-imu-tools \
       ros-${ROS_DISTRO}-rmw-cyclonedds-cpp
 
+RUN pip3 install -U transforms3d
 
 ### For visualize tools bug fix 
 RUN apt-get update \
