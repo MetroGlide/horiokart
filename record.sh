@@ -46,7 +46,7 @@ while IFS= read -r line; do
 done < "$topics_file"
 
 # rosbag2のrecordコマンドのビルド
-record_cmd="ros2 bag record"
+record_cmd="ros2 bag record -s mcap"
 if [ "$use_sim_time" = true ]; then
     record_cmd+=" --use-sim-time"
 fi
