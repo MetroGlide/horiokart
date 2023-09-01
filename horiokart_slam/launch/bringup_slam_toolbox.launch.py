@@ -86,6 +86,12 @@ def generate_launch_description():
                           'log_level': log_level_arg.launch_config}.items(),
     )
 
+    actual_path_publisher_node = Node(
+        package='horiokart_slam',
+        executable='actual_path_publisher.py',
+        output='screen',
+    )
+
     # Launch rviz2
     rviz_config_file = PathJoinSubstitution(
         [pkg_dir, 'rviz', rviz_param_arg.launch_config])
@@ -107,6 +113,9 @@ def generate_launch_description():
 
             # Running SLAM Toolbox (Only one of them will be run)
             start_slam_toolbox_cmd_with_params,
+
+            # Running actual_path_publisher.py for debug
+            actual_path_publisher_node,
 
             # Running rviz2
             start_rviz_cmd,
