@@ -86,14 +86,15 @@
   <xacro:macro name="realsense_d435i" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' size='0.02 0.05 0.02' ">
 
     <xacro:unless value="${attach_to == ''}">
-      <joint name="${prefix}rs_d435i_link_joint" type="fixed">
+      <!-- <joint name="${prefix}rs_d435i_link_joint" type="fixed"> -->
+      <joint name="${prefix}camera_link_joint" type="fixed">
         <parent link="${attach_to}"/>
-        <child link="${prefix}rs_d435i_link"/>
+        <child link="${prefix}camera_link"/>
         <origin xyz="${xyz}" rpy="${rpy}"/>
       </joint>
     </xacro:unless>
 
-    <link name="${prefix}rs_d435i_link">
+    <link name="${prefix}camera_link">
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
