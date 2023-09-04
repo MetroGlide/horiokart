@@ -13,7 +13,7 @@
 
   <!-- top frame for sensors -->
   <joint name="top_frame_link_joint" type="fixed">
-    <origin xyz="0.23 0 0.3" rpy="0 0 0"/>
+    <origin xyz="0.23 0 0.450" rpy="0 0 0"/>
     <parent link="base_link"/>
     <child link="top_frame_link"/>
   </joint>
@@ -29,7 +29,7 @@
   <xacro:lidar_2d prefix="top_" attach_to="top_frame_link" xyz="0 0 0.03" rpy="0 0 ${pi}"/>
   <xacro:lidar_3d prefix="livox_" attach_to="top_frame_link" xyz="0 0 0.06" rpy="0 0 0"/>
 
-  <xacro:realsense_d435i prefix="" attach_to="top_frame_link" xyz="0.01 0 -0.01" rpy="0 0 0"/>
+  <xacro:realsense_d435i prefix="" attach_to="top_frame_link" xyz="0.020 0 -0.100" rpy="0 0 0"/>
   <xacro:realsense_d435 prefix="" attach_to="top_frame_link" xyz="0.01 0 -0.02" rpy="0 0.35 0"/>
 
 
