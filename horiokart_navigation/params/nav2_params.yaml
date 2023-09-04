@@ -54,7 +54,7 @@ amcl:
     save_pose_rate: 0.5 # Maximum rate (Hz) at which to store the last estimated pose and covariance to the parameter server, in the variables ~initial_pose_* and ~initial_cov_*. This saved pose will be used on subsequent runs to initialize the filter (-1.0 to disable).
 
     #################
-    tf_broadcast: false # if use ekf, set false
+    tf_broadcast: true # if use ekf, set false
     #################
     transform_tolerance: 1.0
     set_initial_pose: true # Causes AMCL to set initial pose from the initial_pose* parameters instead of waiting for the initial_pose message.
@@ -287,7 +287,7 @@ local_costmap:
         mark_threshold: 0
         observation_sources: depth_camera
         depth_camera:
-          topic: /rs_d435/depth/color/points
+          topic: /camera/depth/color/points
           max_obstacle_height: 2.0
           clearing: True
           marking: True
