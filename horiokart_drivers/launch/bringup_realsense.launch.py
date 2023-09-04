@@ -21,43 +21,43 @@ def generate_launch_description():
     use_rs_d435i_arg = launch_argument_creator.create(
         "use_rs_d435i", default="true")
 
-    rs_pkg_name = "realse2_camera"
+    rs_pkg_name = "realsense2_camera"
     rs_pkg_share = get_package_share_directory(rs_pkg_name)
 
     # Launch action group with ifconditions
     sensors_group = launch.actions.GroupAction(
         [
             # RealSense D435
-            launch.actions.IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                        rs_pkg_share + "/launch/rs_launch.py"
-                ),
-                namespace="rs_d435",
-                launch_arguments={
-                    "serial_no": "",
-                    "align_depth.enable": True,
-                    "pointcloud.enable": True,
-                }.items(),
-                condition=launch.conditions.IfCondition(
-                    use_rs_d435_arg.launch_config),
-            ),
+            # launch.actions.IncludeLaunchDescription(
+            #     PythonLaunchDescriptionSource(
+            #             rs_pkg_share + "/launch/rs_launch.py"
+            #     ),
+            #     # namespace="rs_d435",
+            #     launch_arguments={
+            #         "serial_no": "",
+            #         "align_depth.enable": True,
+            #         "pointcloud.enable": True,
+            #     }.items(),
+            #     condition=launch.conditions.IfCondition(
+            #         use_rs_d435_arg.launch_config),
+            # ),
 
             # RealSense D435i
             launch.actions.IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                         rs_pkg_share + "/launch/rs_launch.py"
                 ),
-                namespace="rs_d435i",
+                # namespace="rs_d435i",
                 launch_arguments={
                     "serial_no": "",
-                    "align_depth.enable": True,
-                    "pointcloud.enable": True,
-                    "enable_gyro": True,
-                    "enable_accel": True,
-                    "unite_imu_method": 1,
+                    "align_depth.enable": "true",
+                    "pointcloud.enable": "true",
+                    "enable_gyro": "true",
+                    "enable_accel": "true",
+                    "unite_imu_method": "1",
                 }.items(),
-                condition=launch.conditions.IfCondition(
-                    use_rs_d435i_arg.launch_config),
+                # condition=launch.conditions.IfCondition(
+                #     use_rs_d435i_arg.launch_config),
             ),
         ],
     )

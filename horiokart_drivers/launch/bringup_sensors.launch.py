@@ -36,7 +36,7 @@ def generate_launch_description():
         "gps_port", default="/dev/ttyHoriokart-gps")
 
     use_rs_d435i_arg = launch_argument_creator.create(
-        "use_rs_d435i", default="false")
+        "use_rs_d435i", default="true")
     use_rs_d435_arg = launch_argument_creator.create(
         "use_rs_d435", default="false")
 
@@ -126,10 +126,15 @@ def generate_launch_description():
             launch.actions.IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     get_package_share_directory(
-                        "realsense2_camera") + "/launch/rs_aligned_depth.launch.py"
+                        "realsense2_camera") + "/launch/rs_launch.py"
                 ),
                 launch_arguments={
                     "serial_no": "",
+                    "align_depth.enable": "true",
+                    "pointcloud.enable": "true",
+                    "enable_gyro": "true",
+                    "enable_accel": "true",
+                    "unite_imu_method": "1",
                 }.items(),
                 condition=launch.conditions.IfCondition(
                     use_rs_d435i_arg.launch_config),
