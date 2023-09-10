@@ -47,6 +47,7 @@ add_library(${PROJECT_NAME}_lib
 
   "src/motor_driver_node.cpp"
   "src/wheel_odometry_node.cpp"
+  "src/pcl_downsampling_node.cpp"
 )
 
 set(DEPENDENCIES
@@ -62,6 +63,9 @@ set(DEPENDENCIES
   "tf2"
   "tf2_ros"
   "tf2_geometry_msgs"
+
+  "pcl_conversions"
+  "pcl_ros"
 )
 
 target_link_libraries(${PROJECT_NAME}_lib)
@@ -76,6 +80,11 @@ set(MOTOR_DRIVER_EXECUTABLE_NAME "motor_driver_node")
 add_executable(${MOTOR_DRIVER_EXECUTABLE_NAME} src/motor_driver_node.cpp)
 target_link_libraries(${MOTOR_DRIVER_EXECUTABLE_NAME} ${PROJECT_NAME}_lib)
 ament_target_dependencies(${MOTOR_DRIVER_EXECUTABLE_NAME} ${DEPENDENCIES})
+
+set(PCL_DOWNSAMPLING_EXECUTABLE_NAME "pcl_downsampling_node")
+add_executable(${PCL_DOWNSAMPLING_EXECUTABLE_NAME} src/pcl_downsampling_node.cpp)
+target_link_libraries(${PCL_DOWNSAMPLING_EXECUTABLE_NAME} ${PROJECT_NAME}_lib)
+ament_target_dependencies(${PCL_DOWNSAMPLING_EXECUTABLE_NAME} ${DEPENDENCIES})
 
 ################################################################################
 # Install
