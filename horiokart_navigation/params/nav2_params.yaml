@@ -236,6 +236,7 @@ local_costmap:
       # plugins: ["obstacle_layer", "voxel_layer", "denoise_layer", "inflation_layer"]
       # plugins: ["obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
       plugins: ["obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
+      # plugins: ["obstacle_layer", "depth_voxel_layer", "inflation_layer"]
       # plugins: ["obstacle_layer", "voxel_layer", "inflation_layer"]
 
       denoise_layer:
@@ -287,7 +288,7 @@ local_costmap:
         mark_threshold: 0
         observation_sources: depth_camera
         depth_camera:
-          topic: /camera/depth/color/points
+          topic: /rs_d435i/depth/color/points
           max_obstacle_height: 2.0
           clearing: True
           marking: True
@@ -369,7 +370,7 @@ global_costmap:
         mark_threshold: 0
         observation_sources: depth_camera
         depth_camera:
-          topic: /rs_d435/depth/color/points
+          topic: /rs_d435i/depth/color/points
           max_obstacle_height: 2.0
           clearing: True
           marking: True
