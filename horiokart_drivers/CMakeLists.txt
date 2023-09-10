@@ -117,6 +117,10 @@ install(PROGRAMS
   scripts/initialpose_to_setpose.py
   DESTINATION lib/${PROJECT_NAME}
 )
+install(PROGRAMS
+  scripts/pc_downsampling_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ################################################################################
 # Macro for ament package
