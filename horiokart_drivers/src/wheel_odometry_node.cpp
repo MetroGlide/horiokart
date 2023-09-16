@@ -32,6 +32,8 @@ void WheelOdometryNode::init_ros_params()
     this->declare_parameter<bool>("odometry.inv_y");
     this->declare_parameter<bool>("odometry.inv_th");
 
+    this->declare_parameter<int>("odometry.write_error_recovery_count");
+
     // Get parameters
     this->get_parameter_or<std::string>(
         "odometry.frame_id",
@@ -77,6 +79,11 @@ void WheelOdometryNode::init_ros_params()
         "odometry.inv_th",
         inv_th_,
         false);
+
+    this->get_parameter_or<int>(
+        "odometry.write_error_recovery_count",
+        write_error_recovery_count_,
+        6);
 }
 
 void WheelOdometryNode::prepare_ros_communications()
@@ -136,12 +143,23 @@ void WheelOdometryNode::update_odometry()
             current_data_.th *= -1;
 
         last_valid_data_ = current_data_;
+        write_error_count_ = 0;
     }
     else
     {
         RCLCPP_ERROR(this->get_logger(),
                      "Serial error: %s",
                      horiokart_drivers::SerialErrorStrings[static_cast<int>(current_data_.error)].c_str());
+
+        if (current_data_.error == horiokart_drivers::SerialError::WRITE_ERROR)
+        {
+            write_error_count_++;
+
+            if (write_error_count_ >= write_error_recovery_count_)
+            {
+                error_recovery();
+            }
+        }
     }
 }
 
@@ -232,6 +250,13 @@ void WheelOdometryNode::zero_reset_srv_callback(
     {
         response->success = false;
     }
+}
+
+void WheelOdometryNode::error_recovery()
+{
+    RCLCPP_ERROR(this->get_logger(),
+                 "Wheel odometry error recovery start");
+    wheel_odometry_->reset_serial();
 }
 
 int main(int argc, char **argv)

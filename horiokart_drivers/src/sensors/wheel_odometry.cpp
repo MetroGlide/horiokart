@@ -42,6 +42,11 @@ OdometryData WheelOdometry::decode(std::vector<uint8_t> ret)
     return odom;
 }
 
+void WheelOdometry::reset_serial()
+{
+    serial_.reset_serial();
+}
+
 OdometryData WheelOdometry::get_data()
 {
     OdometryData odom;

@@ -46,6 +46,8 @@ namespace horiokart_drivers
             const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
             std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
+        void error_recovery();
+
         std::shared_ptr<horiokart_drivers::WheelOdometry> wheel_odometry_;
 
         rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
@@ -67,6 +69,9 @@ namespace horiokart_drivers
         bool inv_x_, inv_y_, inv_th_;
 
         OdometryData last_valid_data_, current_data_;
+
+        int write_error_count_ = 0;
+        int write_error_recovery_count_; 
     };
 
 }

@@ -52,6 +52,15 @@ void SerialCommunicator::open_serial(string device_name)
     }
 }
 
+void SerialCommunicator::reset_serial()
+{
+    if (this->is_open_serial_)
+    {
+        close(this->fd1_);
+    }
+    this->open_serial(this->device_name_);
+}
+
 uint8_t SerialCommunicator::calc_checksum(vector<uint8_t> buf)
 {
     uint8_t sum = 0;

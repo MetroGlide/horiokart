@@ -46,6 +46,8 @@ namespace horiokart_drivers
         SerialCommunicator(){};
         SerialCommunicator(std::string device_name);
 
+        void reset_serial();
+
         int serial_write(std::vector<uint8_t> buf, bool input_flush = true, bool output_flush = true);
         std::vector<uint8_t> serial_read(int sleep_usec = 5000);
         std::vector<uint8_t> serial_readwrite(std::vector<uint8_t> buf, int sleep_usec = 5000, bool input_flush = true, bool output_flush = true);

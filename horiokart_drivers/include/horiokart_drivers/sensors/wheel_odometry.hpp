@@ -34,9 +34,11 @@ namespace horiokart_drivers
         std::vector<uint8_t> odom_buf_{0x24, 0x75};
 
     public:
-        explicit WheelOdometry() {};
+        explicit WheelOdometry(){};
         explicit WheelOdometry(std::string device_name);
         virtual ~WheelOdometry(){};
+
+        void reset_serial();
 
         OdometryData get_data();
         SerialError send_zero_reset(int retry = 1);
