@@ -28,6 +28,9 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
+find_package(pcl_ros REQUIRED)
+find_package(pcl_conversions REQUIRED)
+
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -47,6 +50,7 @@ add_library(${PROJECT_NAME}_lib
 
   "src/motor_driver_node.cpp"
   "src/wheel_odometry_node.cpp"
+
   "src/pcl_downsampling_node.cpp"
 )
 
@@ -98,6 +102,10 @@ install(TARGETS ${WHEEL_ODOMETRY_EXECUTABLE_NAME}
 )
 
 install(TARGETS ${MOTOR_DRIVER_EXECUTABLE_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS ${PCL_DOWNSAMPLING_EXECUTABLE_NAME}
   DESTINATION lib/${PROJECT_NAME}
 )
 
