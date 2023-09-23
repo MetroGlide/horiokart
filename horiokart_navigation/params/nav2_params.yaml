@@ -8,7 +8,7 @@ amcl:
     scan_topic: /scan_top_lidar
     laser_max_range: -1.0 # Maximum scan range to be considered, -1.0 will cause the laser’s reported maximum range to be used.
     laser_min_range: -1.0 # Minimum scan range to be considered, -1.0 will cause the laser’s reported minimum range to be used.
-    max_beams: 100 # How many evenly-spaced beams in each scan to be used when updating the filter.
+    max_beams: 1000 # How many evenly-spaced beams in each scan to be used when updating the filter.
     max_particles: 2000
     min_particles: 500
 
@@ -235,7 +235,7 @@ local_costmap:
       robot_radius: 0.3
       # plugins: ["obstacle_layer", "voxel_layer", "denoise_layer", "inflation_layer"]
       # plugins: ["obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
-      plugins: ["obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
+      plugins: ["top_obstacle_layer", "obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
       # plugins: ["obstacle_layer", "depth_voxel_layer", "inflation_layer"]
       # plugins: ["obstacle_layer", "voxel_layer", "inflation_layer"]
 
@@ -255,6 +255,17 @@ local_costmap:
         scan:
           # topic: /scan_top_lidar
           topic: /scan_front_lidar
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+      top_obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan_top_lidar
+          # topic: /scan_front_lidar
           max_obstacle_height: 2.0
           clearing: True
           marking: True
@@ -323,9 +334,24 @@ global_costmap:
       track_unknown_space: true
 
       # plugins: ["static_layer", "obstacle_layer", "voxel_layer", "inflation_layer"]
-      plugins: ["static_layer", "obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
+      plugins: ["static_layer", "top_obstacle_layer", "obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
       # plugins: ["static_layer", "depth_voxel_layer", "inflation_layer"]
 
+      top_obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        scan:
+          topic: /scan_top_lidar
+          # topic: /scan_front_lidar
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.0
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.0
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
