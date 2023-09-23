@@ -130,6 +130,8 @@ class WaypointsFollower:
 
     def _feedback_callback(self, feedback_msg):
         self.node.get_logger().debug(f"Nav to pose Feedback: {feedback_msg}")
+        if self.goal_handle is None:
+            return
         self.current_following_status = FollowingStatus(
             goal_status=self.goal_handle.status,
             current_pose=feedback_msg.feedback.current_pose,
