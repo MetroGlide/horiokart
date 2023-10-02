@@ -20,6 +20,8 @@ def generate_launch_description():
         "simulation", default="false")
     use_odom_arg = launch_argument_creator.create(
         "use_odom", default="true")
+    use_odom_tf_arg = launch_argument_creator.create(
+        "use_odom_tf", default="true")
     use_lidar_arg = launch_argument_creator.create(
         "use_lidar", default="true")
     use_gps_arg = launch_argument_creator.create(
@@ -43,7 +45,9 @@ def generate_launch_description():
                 }],
                 remappings=[("odom", "odom")],
                 condition=launch.conditions.IfCondition(
-                    use_odom_arg.launch_config),
+                    launch.substitutions.AndSubstitution(
+                        use_odom_arg.launch_config, use_odom_tf_arg.launch_config)
+                ),
             ),
 
             launch.actions.IncludeLaunchDescription(
@@ -85,7 +89,6 @@ def generate_launch_description():
             ),
         ]
     )
-
 
     return LaunchDescription(
         [

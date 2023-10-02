@@ -20,6 +20,15 @@ def generate_launch_description():
     drive_arg = launch_argument_creator.create(
         "drive", default="false")
 
+    use_odom_arg = launch_argument_creator.create(
+        "use_odom", default="true")
+    use_odom_tf_arg = launch_argument_creator.create(
+        "use_odom_tf", default="true")
+    use_lidar_arg = launch_argument_creator.create(
+        "use_lidar", default="true")
+    use_gps_arg = launch_argument_creator.create(
+        "use_gps", default="true")
+
     pkg_name = "horiokart_drivers"
     pkg_share = get_package_share_directory(pkg_name)
 
@@ -27,6 +36,13 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             pkg_share + "/launch/bringup_sensors.launch.py"
         ),
+        launch_arguments={
+            "simulation": simulation_arg.launch_config,
+            "use_odom": use_odom_arg.launch_config,
+            "use_odom_tf": use_odom_tf_arg.launch_config,
+            "use_lidar": use_lidar_arg.launch_config,
+            "use_gps": use_gps_arg.launch_config,
+        }.items(),
         condition=launch.conditions.UnlessCondition(
             simulation_arg.launch_config)
     )
@@ -37,6 +53,10 @@ def generate_launch_description():
         ),
         launch_arguments={
             "simulation": simulation_arg.launch_config,
+            "use_odom": use_odom_arg.launch_config,
+            "use_odom_tf": use_odom_tf_arg.launch_config,
+            "use_lidar": use_lidar_arg.launch_config,
+            "use_gps": use_gps_arg.launch_config,
         }.items(),
     )
 

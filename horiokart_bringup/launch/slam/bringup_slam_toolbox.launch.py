@@ -34,11 +34,18 @@ def generate_launch_description():
     )
 
     use_ekf_arg = launch_argument_creator.create(
-        "use_ekf", default="true")
+        "use_ekf", default="False")
     ekf_params_file_arg = launch_argument_creator.create(
         "ekf_params_file", default="ekf_slam.yaml")
     ekf_odom_topic_arg = launch_argument_creator.create(
         "ekf_odom_topic", default="ekf_odom")
+
+    use_odom_arg = launch_argument_creator.create(
+        "use_odom", default="true")
+    use_lidar_arg = launch_argument_creator.create(
+        "use_lidar", default="true")
+    use_gps_arg = launch_argument_creator.create(
+        "use_gps", default="true")
 
     launch_common = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -47,6 +54,11 @@ def generate_launch_description():
         launch_arguments={
             "simulation": simulation_arg.launch_config,
             "drive": drive_arg.launch_config,
+            "use_odom": use_odom_arg.launch_config,
+            "use_odom_tf": launch.substitutions.PythonExpression(
+                ["not ", use_ekf_arg.launch_config]),
+            "use_lidar": use_lidar_arg.launch_config,
+            "use_gps": use_gps_arg.launch_config,
         }.items(),
     )
 
@@ -59,11 +71,10 @@ def generate_launch_description():
                 output="screen",
                 parameters=[
                     {"use_sim_time": simulation_arg.launch_config},
-                    PathJoinSubstitution(   
-                        [drivers_pkg_share, "params", ekf_params_file_arg.launch_config]
+                    PathJoinSubstitution(
+                        [drivers_pkg_share, "params",
+                            ekf_params_file_arg.launch_config]
                     ),
-
-
                 ],
                 remappings=[
                     ("odometry/filtered", ekf_odom_topic_arg.launch_config),

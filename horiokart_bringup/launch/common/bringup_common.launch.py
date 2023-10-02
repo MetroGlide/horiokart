@@ -29,6 +29,16 @@ def generate_launch_description():
     drive_arg = launch_argument_creator.create(
         "drive", default="false")
 
+    use_odom_arg = launch_argument_creator.create(
+        "use_odom", default="true")
+    use_odom_tf_arg = launch_argument_creator.create(
+        "use_odom_tf", default="true")
+    use_lidar_arg = launch_argument_creator.create(
+        "use_lidar", default="true")
+    use_gps_arg = launch_argument_creator.create(
+        "use_gps", default="true")
+
+    # Launch drivers
     launch_drivers = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             drivers_pkg_share + "/launch/bringup.launch.py"
@@ -36,6 +46,10 @@ def generate_launch_description():
         launch_arguments={
             "simulation": simulation_arg.launch_config,
             "drive": drive_arg.launch_config,
+            "use_odom": use_odom_arg.launch_config,
+            "use_odom_tf": use_odom_tf_arg.launch_config,
+            "use_lidar": use_lidar_arg.launch_config,
+            "use_gps": use_gps_arg.launch_config,
         }.items(),
     )
 
