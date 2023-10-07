@@ -10,3 +10,11 @@
     local-name: rviz_satellite
     uri: https://github.com/nobleo/rviz_satellite.git
     version: ros2
+- git:
+    local-name: pointcloud_to_laserscan
+    uri: https://github.com/ros-perception/pointcloud_to_laserscan
+    version: humble
+- git:
+    local-name: kiss-icp
+    uri: https://github.com/Chu-son/kiss-icp.git
+    version: mg-devel
