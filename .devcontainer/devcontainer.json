@@ -16,7 +16,8 @@
 
 	// The optional 'workspaceFolder' property is the path VS Code should open by default when
 	// connected. This is typically a file mount in .devcontainer/docker-compose.yml
-	"workspaceFolder": "/app",
+	// "workspaceFolder": "/app",
+	"workspaceFolder": "/root/ros2_ws/src",
 	"customizations": {
 		"vscode": {
 			"extensions": [
@@ -28,7 +29,8 @@
 				"ms-vscode.cpptools-extension-pack",
 				"ms-toolsai.jupyter",
 				"VisualStudioExptTeam.vscodeintellicode",
-				"ms-python.autopep8"
+				"ms-python.autopep8",
+				"GitHub.copilot"
 			]
 		}
 	}
