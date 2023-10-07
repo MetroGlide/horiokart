@@ -25,6 +25,8 @@ import time
 
 from horiokart_navigation.waypoint import WaypointList, Waypoint, WaypointsLoader, OnReachedAction
 
+from ament_index_python.packages import get_package_share_directory
+
 
 class WaypointManager:
     def __init__(self, waypoints: WaypointList):
@@ -69,9 +71,12 @@ class WaypointManager:
 
 @dataclass
 class FollowingStatus:
-    goal_status: int
-    current_pose: PoseStamped
-    distance_remaining: float
+    goal_status: int = GoalStatus.STATUS_UNKNOWN
+    current_pose: PoseStamped = PoseStamped()
+    distance_remaining: float = 0.0
+    navigation_time: float = 0.0
+    number_of_recoveries: int = 0
+    estimated_time_remaining: float = 0.0
 
 
 class WaypointsFollower:
@@ -89,10 +94,7 @@ class WaypointsFollower:
 
         self._stop_request = True
 
-        self.current_following_status = FollowingStatus(
-            goal_status=GoalStatus.STATUS_UNKNOWN,
-            current_pose=PoseStamped(),
-            distance_remaining=0.0)
+        self.current_following_status = FollowingStatus()
 
         self.goal_handle = None
 
@@ -104,6 +106,12 @@ class WaypointsFollower:
         goal_msg = NavigateToPose.Goal()
         goal_msg.pose = waypoint.pose
         goal_msg.pose.header.stamp = self.node.get_clock().now().to_msg()
+
+        pkg_name = "horiokart_navigation"
+        # self.node.get_logger().info(f"pkg_name: {pkg_name}")
+
+        goal_msg.behavior_tree = get_package_share_directory(
+            pkg_name) + "/behavior_trees/mg_navigate_to_pose_recovery_only_wait.xml"
 
         self.client.wait_for_server()
         future = self.client.send_goal_async(
@@ -135,7 +143,10 @@ class WaypointsFollower:
         self.current_following_status = FollowingStatus(
             goal_status=self.goal_handle.status,
             current_pose=feedback_msg.feedback.current_pose,
-            distance_remaining=feedback_msg.feedback.distance_remaining)
+            distance_remaining=feedback_msg.feedback.distance_remaining,
+            navigation_time=feedback_msg.feedback.navigation_time,
+            number_of_recoveries=feedback_msg.feedback.number_of_recoveries,
+            estimated_time_remaining=feedback_msg.feedback.estimated_time_remaining)
 
     def _send_goal_done_callback(self, future):
         self.goal_handle = future.result()
@@ -146,8 +157,8 @@ class WaypointsFollower:
 
         self.current_following_status = FollowingStatus(
             goal_status=self.goal_handle.status,
-            current_pose=PoseStamped(),
-            distance_remaining=0.0)
+            current_pose=PoseStamped()
+        )
 
         self.node.get_logger().info("Goal accepted")
         self._result_future = self.goal_handle.get_result_async()
@@ -158,12 +169,12 @@ class WaypointsFollower:
 
         self.current_following_status = FollowingStatus(
             goal_status=self.goal_handle.status,
-            current_pose=PoseStamped(),
-            distance_remaining=0.0)
+            current_pose=PoseStamped()
+        )
 
 
 class RetryWaiter:
-    def __init__(self, node, retry_duration_sec=5.0, retry_func=None):
+    def __init__(self, node, retry_duration_sec=2.0, retry_func=None):
         self.node = node
         self.retry_duration_sec = retry_duration_sec
 
@@ -176,6 +187,8 @@ class RetryWaiter:
             return
 
         if self.node.get_clock().now() - self._retry_start_time >= rclpy.duration.Duration(seconds=self.retry_duration_sec):
+            self.node.get_logger().error(
+                f"Error detected. Retry function called. func name: {self._retry_func.__name__}")
             self._retry_start_time = None
             if self._retry_func is not None:
                 self._retry_func()
@@ -311,16 +324,27 @@ class WaypointsFollowerNode(Node):
         return self._calc_distance(waypoint.pose.pose.position, transform.transform.translation)
 
     def _check_reached(self, waypoint: Waypoint) -> bool:
-        if not self._waypoints_follower.current_following_status.goal_status == GoalStatus.STATUS_EXECUTING:
+        self.get_logger().info(
+            f"Goal status: {self._waypoints_follower.current_following_status.goal_status}"
+        )
+        if self._waypoints_follower.current_following_status.goal_status != GoalStatus.STATUS_EXECUTING:
             self.get_logger().error(
                 f"Goal status is not executing: {self._waypoints_follower.current_following_status.goal_status}")
             return True
 
-        distance = self._waypoints_follower.current_following_status.distance_remaining
-        if distance <= waypoint.reach_tolerance:
-            self.get_logger().info(
-                f"Distance remaining: {distance}. Reach tolerance: {waypoint.reach_tolerance}")
+        if self._waypoints_follower.current_following_status.distance_remaining == 0.0 \
+                and self._waypoints_follower.current_following_status.estimated_time_remaining == 0.0:
+            self.get_logger().error(
+                f"Distance remaining: 0.0. Estimated time: 0.0. Maybe error. Retry")
             return True
+
+        # distance = self._waypoints_follower.current_following_status.distance_remaining
+        # if distance <= waypoint.reach_tolerance:
+        #     self.get_logger().info(
+        #         f"Distance remaining: {distance}. Reach tolerance: {waypoint.reach_tolerance}")
+        #     return True
+
+        return False
 
     def _on_reached_action(self, waypoint: Waypoint):
         if OnReachedAction.WAIT_TRIGGER.value in waypoint.on_reached_action:
@@ -352,10 +376,10 @@ class WaypointsFollowerNode(Node):
                                   LoggingSeverity.INFO, throttle_duration_sec=2.0, throttle_time_source_type=self.get_clock())
             return
 
-        # When reached
         if self.get_distance(current_waypoint) < self.waypoint_manager.get_waypoint().reach_tolerance:
+            # When actual reached
             self.get_logger().info(
-                f"Waypoint {current_waypoint.index} reached. Next waypoint: {current_waypoint.index + 1}")
+                f"Waypoint {current_waypoint.index} ACUTUAL reached! Next waypoint: {current_waypoint.index + 1}")
             self._on_reached(current_waypoint)
 
             if self.waypoint_manager.is_goal_reached():
@@ -365,8 +389,8 @@ class WaypointsFollowerNode(Node):
             self._state_unknown_retry_waiter.reset()
             self._start_following()
 
-        # When reached but not close enough
         else:
+            # When reached but not close enough
             self._state_unknown_retry_waiter.tick()
             self.get_logger().log(
                 f"Waypoint {current_waypoint.index} reached. But not close enough. Retry waypoint {current_waypoint.index}",

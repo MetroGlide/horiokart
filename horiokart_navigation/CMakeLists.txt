@@ -88,7 +88,7 @@ ament_target_dependencies(${WAYPOINT_NAV_EXECUTABLE_NAME} ${DEPENDENCIES})
 ################################################################################
 # Install
 ################################################################################
-install(DIRECTORY launch params rviz
+install(DIRECTORY launch params rviz behavior_trees
   DESTINATION share/${PROJECT_NAME}
 )
 
