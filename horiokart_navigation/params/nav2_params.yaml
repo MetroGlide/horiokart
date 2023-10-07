@@ -143,8 +143,16 @@ controller_server:
 
     # DWB parameters
     FollowPath:
+      plugin: "nav2_rotation_shim_controller::RotationShimController"
+      angular_dist_threshold: 0.785
+      forward_sampling_distance: 0.5
+      rotate_to_heading_angular_vel: 1.8
+      max_angular_accel: 3.2
+      simulate_ahead_time: 1.0
+
       # ローカルプランナーのプラグインを指定します。
-      plugin: "dwb_core::DWBLocalPlanner"
+      # plugin: "dwb_core::DWBLocalPlanner"
+      primary_controller: "dwb_core::DWBLocalPlanner"
       # デバッグ用の軌跡詳細を表示するかどうかを指定します。
       debug_trajectory_details: True
       # x軸方向の最小速度を指定します。
