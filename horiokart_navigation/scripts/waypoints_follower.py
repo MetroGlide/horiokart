@@ -18,6 +18,7 @@ from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
 
 from nav2_msgs.action import NavigateToPose
+from nav2_msgs.srv import LoadMap
 
 from dataclasses import dataclass
 from typing import Any, List
@@ -198,6 +199,33 @@ class RetryWaiter:
 
 
 class WaypointsFollowerNode(Node):
+    class ServiceFuture:
+        def __init__(self, future, service_name, logger, timeout_sec=5.0, callback=None):
+            self.future = future
+            self.service_name = service_name
+            self.logger = logger
+            self.timeout_sec = timeout_sec
+            self.callback = callback
+
+        def __bool__(self):
+            # TODO: implement timeout
+
+            if self.future.done():
+                try:
+                    response = self.future.result()
+                    self.logger.info(
+                        f"Service call done: {self.service_name}")
+
+                    if self.callback is not None:
+                        self.callback(response, self.logger)
+
+                except Exception as e:
+                    self.get_logger().error(
+                        f"Service call failed: {self.service_name}. Exception: {e}")
+                return True
+
+            return False
+
     def __init__(self):
         super().__init__('waypoint_follower_node')
 
@@ -237,6 +265,18 @@ class WaypointsFollowerNode(Node):
 
         self._state_unknown_retry_waiter = RetryWaiter(
             self, retry_duration_sec=5.0, retry_func=self._start_following)
+
+        self._load_localization_map_srv_client = self.create_client(
+            LoadMap, "map_server/load_map")
+        self._load_localization_map_srv_client.wait_for_service()
+
+        self._load_planning_map_srv_client = self.create_client(
+            LoadMap, "planning_map_server/load_map")
+        self._load_planning_map_srv_client.wait_for_service()
+
+        self._on_reached_actions_progress_list = []
+
+        self.get_logger().info("Waypoints follower node initialized")
 
     def _stop_callback(self, request, response):
         self._stop_following()
@@ -324,7 +364,7 @@ class WaypointsFollowerNode(Node):
         return self._calc_distance(waypoint.pose.pose.position, transform.transform.translation)
 
     def _check_reached(self, waypoint: Waypoint) -> bool:
-        self.get_logger().info(
+        self.get_logger().debug(
             f"Goal status: {self._waypoints_follower.current_following_status.goal_status}"
         )
         if self._waypoints_follower.current_following_status.goal_status != GoalStatus.STATUS_EXECUTING:
@@ -346,15 +386,90 @@ class WaypointsFollowerNode(Node):
 
         return False
 
-    def _on_reached_action(self, waypoint: Waypoint):
-        if OnReachedAction.WAIT_TRIGGER.value in waypoint.on_reached_action:
+    def _check_reached_actions_done(self):
+        if all(self._on_reached_actions_progress_list):
+            self._on_reached_actions_progress_list = []
+            return True
+
+        return False
+
+    def _reload_map_response_callback(self, response, logger):
+        if response.result == LoadMap.Response.RESULT_SUCCESS:
+            logger.info(f"Reload map success")
+        else:
+            result_str = "Unknown"
+            if response.result == LoadMap.Response.RESULT_MAP_DOES_NOT_EXIST:
+                result_str = "Map does not exist"
+            elif response.result == LoadMap.Response.RESULT_INVALID_MAP_DATA:
+                result_str = "Invalid map data"
+            elif response.result == LoadMap.Response.RESULT_INVALID_MAP_METADATA:
+                result_str = "Invalid map metadata"
+            elif response.result == LoadMap.Response.RESULT_UNDEFINED_FAILURE:
+                result_str = "Undefined failure"
+
+            logger.error(
+                f"Reload map failed: {result_str}")
+
+    def _on_reached_action_reload_map(self, waypoint: Waypoint):
+        map_path = os.environ.get("MAP_PATH", "")
+        if map_path == "":
+            self.get_logger().error(
+                "MAP_PATH environment variable is not set")
+            return
+
+        if waypoint.localization_map_yaml != "":
+            # map directory from environment variable MAP_PATH
+            load_localization_map_yaml_path = os.path.join(
+                map_path, waypoint.localization_map_yaml)
+
+            self.get_logger().info(
+                f"Load localization map yaml: {load_localization_map_yaml_path}")
+
+            self._load_localization_map_srv_client.wait_for_service()
+            request = LoadMap.Request()
+            request.map_url = load_localization_map_yaml_path
+            future = self._load_localization_map_srv_client.call_async(
+                request)
+
+            self._on_reached_actions_progress_list.append(
+                self.ServiceFuture(future, "load_localization_map", self.get_logger(),
+                                   callback=self._reload_map_response_callback))
+
+        if waypoint.planning_map_yaml != "":
+            load_planning_map_yaml_path = os.path.join(
+                map_path, waypoint.planning_map_yaml)
+
+            self.get_logger().info(
+                f"Load planning map yaml: {load_planning_map_yaml_path}")
+
+            self._load_planning_map_srv_client.wait_for_service()
+            request = LoadMap.Request()
+            request.map_url = load_planning_map_yaml_path
+            future = self._load_planning_map_srv_client.call_async(
+                request)
+
+            self._on_reached_actions_progress_list.append(
+                self.ServiceFuture(future, "load_planning_map", self.get_logger(),
+                                   callback=self._reload_map_response_callback))
+
+        self.get_logger().info(f"Reload map action resistered")
+
+    def _on_reached_action(self, waypoint: Waypoint, on_reached_action: OnReachedAction):
+        if OnReachedAction.WAIT_TRIGGER == on_reached_action:
             self.get_logger().info(
                 f"OnReachedAction: Wait for trigger to continue to next waypoint")
             # self._stop_following()
             self._stop_request = True
 
+        elif OnReachedAction.RELOAD_MAP == on_reached_action:
+            self.get_logger().info(
+                f"OnReachedAction: Reload map")
+
+            self._on_reached_action_reload_map(waypoint)
+
     def _on_reached(self, waypoint: Waypoint):
-        self._on_reached_action(waypoint)
+        for on_reached_action in waypoint.on_reached_action:
+            self._on_reached_action(waypoint, on_reached_action)
 
         self.waypoint_manager.reached()
 
@@ -364,8 +479,13 @@ class WaypointsFollowerNode(Node):
 
     def _follow_waypoints(self):
         self.publish_waypoints_markers()
+        if not self._check_reached_actions_done():
+            self.get_logger().log("Waiting for reached actions done..", LoggingSeverity.INFO,
+                                  throttle_duration_sec=2.0, throttle_time_source_type=self.get_clock())
+            return
+
         if self._stop_request:
-            self.get_logger().log("Waiting for start trigger", LoggingSeverity.INFO,
+            self.get_logger().log("Waiting for start trigger..", LoggingSeverity.INFO,
                                   throttle_duration_sec=2.0, throttle_time_source_type=self.get_clock())
             return
 

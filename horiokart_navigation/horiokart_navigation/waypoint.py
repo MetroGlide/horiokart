@@ -10,6 +10,11 @@ import pprint
 
 class OnReachedAction(enum.Enum):
     WAIT_TRIGGER = "wait_trigger"
+    RELOAD_MAP = "reload_map"
+
+    @classmethod
+    def get_all_values(cls):
+        return [action.value for action in cls]
 
 
 @dataclass
@@ -18,6 +23,9 @@ class Waypoint:
     pose: PoseStamped
     reach_tolerance: float
     on_reached_action: List[OnReachedAction]
+
+    localization_map_yaml: str = ""
+    planning_map_yaml: str = ""
 
     def to_dict(self):
         return {
@@ -36,7 +44,9 @@ class Waypoint:
                     'z': self.pose.pose.orientation.z,
                     'w': self.pose.pose.orientation.w
                 }
-            }
+            },
+            'localization_map_yaml': self.localization_map_yaml,
+            'planning_map_yaml': self.planning_map_yaml
         }
 
     def _on_reached_action_to_string_list(self):
@@ -101,7 +111,12 @@ class WaypointsLoader:
                     index=waypoint['index'],
                     pose=pose,
                     reach_tolerance=waypoint['reach_tolerance'],
-                    on_reached_action=waypoint['on_reached_action']
+                    on_reached_action=[
+                        OnReachedAction(action)
+                        for action in waypoint['on_reached_action']
+                    ],
+                    localization_map_yaml=waypoint['localization_map_yaml'] if 'localization_map_yaml' in waypoint else "",
+                    planning_map_yaml=waypoint['planning_map_yaml'] if 'planning_map_yaml' in waypoint else ""
                 )
             )
 
