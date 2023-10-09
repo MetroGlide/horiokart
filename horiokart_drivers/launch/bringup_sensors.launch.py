@@ -65,7 +65,7 @@ def generate_launch_description():
                     "odometry.inv_th": False,
 
                     "odometry.always_publish": False,
-                    "odometry.write_error_recovery_count": 6,
+                    "odometry.error_recovery_count": 4,
                 }],
                 condition=launch.conditions.IfCondition(
                     use_odom_arg.launch_config),

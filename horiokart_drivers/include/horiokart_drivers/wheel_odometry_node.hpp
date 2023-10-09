@@ -70,8 +70,8 @@ namespace horiokart_drivers
 
         OdometryData last_valid_data_, current_data_;
 
-        int write_error_count_ = 0;
-        int write_error_recovery_count_; 
+        int error_count_ = 0;
+        int error_recovery_count_; 
     };
 
 }
