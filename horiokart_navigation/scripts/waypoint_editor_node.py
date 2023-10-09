@@ -66,18 +66,33 @@ class WaypointEditorNode(Node):
         marker = Marker()
         marker.type = Marker.ARROW
         marker.action = Marker.ADD
-        marker.scale.x = 1.0
-        marker.scale.y = 0.45
-        marker.scale.z = 0.45
+        marker.scale.x = 0.5
+        marker.scale.y = 0.25
+        marker.scale.z = 0.25
         marker.color.a = 1.0
         marker.color.r = 0.0
         marker.color.g = 1.0
         marker.color.b = 0.0
 
+        text_marker = Marker()
+        text_marker.type = Marker.TEXT_VIEW_FACING
+        text_marker.text = f"No.{index}"
+        text_marker.pose.position.y = -1.0
+        text_marker.pose.position.x = -1.0
+        text_marker.action = Marker.ADD
+        text_marker.scale.x = 2.0
+        text_marker.scale.y = 2.0
+        text_marker.scale.z = 0.45
+        text_marker.color.a = 1.0
+        text_marker.color.r = 1.0
+        text_marker.color.g = 0.0
+        text_marker.color.b = 0.0
+
         # Create a control for the InteractiveMarker
         control = InteractiveMarkerControl()
         control.always_visible = True
         control.markers.append(marker)
+        control.markers.append(text_marker)
 
         interactive_marker.controls.append(control)
 
@@ -188,7 +203,7 @@ class WaypointEditorNode(Node):
             Waypoint(
                 index=self.waypoints.get_next_index(),
                 pose=msg,
-                reach_tolerance=0.5,
+                reach_tolerance=1.0,
                 on_reached_action=[]
             )
         )
