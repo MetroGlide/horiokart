@@ -378,6 +378,11 @@ class WaypointsFollowerNode(Node):
                 f"Distance remaining: 0.0. Estimated time: 0.0. Maybe error. Retry")
             return True
 
+        distance = self.get_distance(waypoint)
+        if distance <= waypoint.reach_tolerance:
+            self.get_logger().info(
+                f"Distance remaining: {distance}. Reach tolerance: {waypoint.reach_tolerance}")
+            return True
         # distance = self._waypoints_follower.current_following_status.distance_remaining
         # if distance <= waypoint.reach_tolerance:
         #     self.get_logger().info(
