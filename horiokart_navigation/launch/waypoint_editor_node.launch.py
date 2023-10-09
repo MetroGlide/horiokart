@@ -17,43 +17,21 @@ import lifecycle_msgs.msg
 from horiokart_navigation.launch_argument import LaunchArgumentCreator
 
 
-def generate_launch_description():
-    # Getting directories and launch-files
-    pkg_name = "horiokart_navigation"
-    pkg_dir = get_package_share_directory(pkg_name)
-
-    rviz_config_dir = os.path.join(
-        pkg_dir, 'rviz', 'waypoint_editor.rviz')
-
-    # Launch arguments
-    launch_argument_creator = LaunchArgumentCreator()
-
-    simulation_arg = launch_argument_creator.create(
-        'simulation', default='false')
-    map_dir_arg = launch_argument_creator.create(
-        'map', default=EnvironmentVariable("PLANNING_MAP_PATH")
-    )
-
-    load_waypoints_yaml_path = launch_argument_creator.create(
-        'load_path', default=""
-    )
-    save_waypoints_yaml_path = launch_argument_creator.create(
-        'save_path', default=EnvironmentVariable("WAYPOINT_PATH")
-    )
-
+def get_map_group_action(index, map_yaml_path, simulation_arg):
     map_server_node = LifecycleNode(
         package='nav2_map_server',
         executable='map_server',
         parameters=[{
-                'use_sim_time': simulation_arg.launch_config,
-                'yaml_filename': map_dir_arg.launch_config,
+                'use_sim_time': simulation_arg,
+                'yaml_filename': map_yaml_path
         }],
+        remappings=[('map', f'map_{index}')],
         output='screen',
-        name='map_server',
+        name=f'map_server_{index}',
         namespace='',
     )
 
-    map_server_group = launch.actions.GroupAction([
+    return launch.actions.GroupAction([
         map_server_node,
         EmitEvent(
             event=launch_ros.events.lifecycle.ChangeState(
@@ -81,9 +59,49 @@ def generate_launch_description():
         ),
     ])
 
+
+def generate_launch_description():
+    # Getting directories and launch-files
+    pkg_name = "horiokart_navigation"
+    pkg_dir = get_package_share_directory(pkg_name)
+
+    rviz_config_dir = os.path.join(
+        pkg_dir, 'rviz', 'waypoint_editor.rviz')
+
+    # Launch arguments
+    launch_argument_creator = LaunchArgumentCreator()
+
+    simulation_arg = launch_argument_creator.create(
+        'simulation', default='false')
+    # map_dir_arg = launch_argument_creator.create(
+    #     # 'map', default=EnvironmentVariable("PLANNING_MAP_PATH")
+    #     'map_dir', default=EnvironmentVariable("MAP_PATH")
+    # )
+    map_dir_arg = os.environ["MAP_PATH"]
+
+    load_waypoints_yaml_path = launch_argument_creator.create(
+        'load_path', default=""
+    )
+    save_waypoints_yaml_path = launch_argument_creator.create(
+        'save_path', default=EnvironmentVariable("WAYPOINT_PATH")
+    )
+
+    # map_list_name = launch_argument_creator.create(
+    #     # 'map_list_path', default=EnvironmentVariable("MAP_LIST_PATH")
+    #     'map_list_name', default="map_list.txt"
+    # )
+    map_list_name = "map_list.txt"
+
+
+    with open(os.path.join(map_dir_arg, map_list_name), 'r') as file:
+        map_list = [map_name.strip() for map_name in file.readlines()]
+
+    map_server_group = [get_map_group_action(
+        index, os.path.join(map_dir_arg, map_name), simulation_arg.launch_config) for index, map_name in enumerate(map_list)]
+
     return LaunchDescription([
         *launch_argument_creator.get_created_declare_launch_args(),
-        map_server_group,
+        *map_server_group,
 
         Node(
             package=pkg_name,
