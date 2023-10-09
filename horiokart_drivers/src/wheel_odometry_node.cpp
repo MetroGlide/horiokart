@@ -32,6 +32,12 @@ void WheelOdometryNode::init_ros_params()
     this->declare_parameter<bool>("odometry.inv_y");
     this->declare_parameter<bool>("odometry.inv_th");
 
+    this->declare_parameter<double>("odometry.covariance_x");
+    this->declare_parameter<double>("odometry.covariance_y");
+    this->declare_parameter<double>("odometry.covariance_yaw");
+    this->declare_parameter<double>("odometry.covariance_vx");
+    this->declare_parameter<double>("odometry.covariance_vyaw");
+
     this->declare_parameter<int>("odometry.error_recovery_count");
 
     // Get parameters
@@ -84,6 +90,31 @@ void WheelOdometryNode::init_ros_params()
         "odometry.error_recovery_count",
         error_recovery_count_,
         4);
+
+    this->get_parameter_or<double>(
+        "odometry.covariance_x",
+        covariance_x_,
+        10.0);
+
+    this->get_parameter_or<double>(
+        "odometry.covariance_y",
+        covariance_y_,
+        10.0);
+
+    this->get_parameter_or<double>(
+        "odometry.covariance_yaw",
+        covariance_yaw_,
+        0.4);
+
+    this->get_parameter_or<double>(
+        "odometry.covariance_vx",
+        covariance_vx_,
+        0.5);
+
+    this->get_parameter_or<double>(
+        "odometry.covariance_vyaw",
+        covariance_vyaw_,
+        0.78);
 }
 
 void WheelOdometryNode::prepare_ros_communications()
@@ -186,6 +217,13 @@ void WheelOdometryNode::publish_odometry()
         odom_msg.twist.twist.linear.x = vx;
         odom_msg.twist.twist.linear.y = 0.0;
         odom_msg.twist.twist.angular.z = last_valid_data_.vth;
+
+        odom_msg.pose.covariance[0] = covariance_x_;
+        odom_msg.pose.covariance[7] = covariance_y_;
+        odom_msg.pose.covariance[35] = covariance_yaw_;
+
+        odom_msg.twist.covariance[0] = covariance_vx_;
+        odom_msg.twist.covariance[35] = covariance_vyaw_;
 
         odom_pub_->publish(odom_msg);
     }

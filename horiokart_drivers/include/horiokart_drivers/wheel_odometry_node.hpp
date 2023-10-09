@@ -70,6 +70,9 @@ namespace horiokart_drivers
 
         OdometryData last_valid_data_, current_data_;
 
+        double covariance_x_, covariance_y_, covariance_yaw_;
+        double covariance_vx_, covariance_vyaw_;
+
         int error_count_ = 0;
         int error_recovery_count_; 
     };

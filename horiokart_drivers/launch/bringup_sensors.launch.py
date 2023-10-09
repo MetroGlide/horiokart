@@ -64,6 +64,13 @@ def generate_launch_description():
                     "odometry.inv_y": True,
                     "odometry.inv_th": False,
 
+                    "odometry.covariance_x": 10.0,
+                    "odometry.covariance_y": 10.0,
+                    "odometry.covariance_yaw": 0.4,
+
+                    "odometry.covariance_vx": 0.5,
+                    "odometry.covariance_vyaw": 0.78,
+
                     "odometry.always_publish": False,
                     "odometry.error_recovery_count": 4,
                 }],
