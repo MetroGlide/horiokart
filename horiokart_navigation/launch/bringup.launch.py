@@ -90,6 +90,43 @@ def generate_launch_description():
             )
         ),
     ])
+
+    costmap_filter_info_server_node = LifecycleNode(
+        package='nav2_map_server',
+        executable='costmap_filter_info_server',
+        name='costmap_filter_info_server',
+        namespace='',
+        output='screen',
+        emulate_tty=True,
+        parameters=[param_dir],
+    )
+
+    costmap_filter_info_group = launch.actions.GroupAction([
+        costmap_filter_info_server_node,
+        EmitEvent(
+            event=launch_ros.events.lifecycle.ChangeState(
+                lifecycle_node_matcher=launch.events.matches_action(
+                    costmap_filter_info_server_node),
+                transition_id=lifecycle_msgs.msg.Transition.TRANSITION_CONFIGURE,
+            )),
+        launch.actions.RegisterEventHandler(  # イベントハンドラの登録
+            launch_ros.event_handlers.OnStateTransition(  # lifecycle_nodeが状態遷移したときのイベント
+                target_lifecycle_node=costmap_filter_info_server_node,  # ターゲットノード
+                start_state="configuring", goal_state="inactive",  # どの状態からどの状態へ遷移したかを書く
+                entities=[
+                    launch.actions.LogInfo(
+                        msg="transition start : costmap_filter_info_server :activating"),
+                    launch.actions.EmitEvent(
+                        event=launch_ros.events.lifecycle.ChangeState(
+                            lifecycle_node_matcher=launch.events.matches_action(
+                                costmap_filter_info_server_node),
+                            transition_id=lifecycle_msgs.msg.Transition.TRANSITION_ACTIVATE,
+                        )),
+                ],
+            )
+        ),
+    ])
+
     return LaunchDescription([
         *launch_argument_creator.get_created_declare_launch_args(),
 
@@ -102,6 +139,7 @@ def generate_launch_description():
                 'params_file': param_dir}.items(),
         ),
         map_server_group,
+        costmap_filter_info_group,
 
         Node(
             package='rviz2',
