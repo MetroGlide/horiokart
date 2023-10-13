@@ -527,4 +527,4 @@ costmap_filter_info_server:
     # base: 100.0
     # multiplier: -1.0
     base: 100.0
-    multiplier: -0.5
+    multiplier: -0.8
