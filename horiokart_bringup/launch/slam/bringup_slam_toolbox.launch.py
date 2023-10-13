@@ -33,6 +33,9 @@ def generate_launch_description():
         "rviz", default=EnvironmentVariable("USE_RVIZ")
     )
 
+    record_bag_arg = launch_argument_creator.create(
+        "record_bag", default="false")
+
     use_ekf_arg = launch_argument_creator.create(
         "use_ekf", default="False")
     ekf_params_file_arg = launch_argument_creator.create(
@@ -93,6 +96,7 @@ def generate_launch_description():
         launch_arguments={
             "simulation": simulation_arg.launch_config,
             "rviz": rviz_arg.launch_config,
+            "record_bag": record_bag_arg.launch_config,
         }.items(),
     )
 

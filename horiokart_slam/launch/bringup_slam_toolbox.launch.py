@@ -38,6 +38,9 @@ def generate_launch_description():
     rviz_param_arg = launch_argument_creator.create(
         'rviz_param', default='rviz.rviz')
 
+    record_bag_arg = launch_argument_creator.create(
+        'record_bag', default="false")
+
     # Variables
     lifecycle_nodes = ['map_saver']
 
@@ -92,6 +95,13 @@ def generate_launch_description():
         output='screen',
     )
 
+    record_bag_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_dir, 'launch', 'record_bag.launch.py')
+        ),
+        condition=IfCondition(record_bag_arg.launch_config),
+    )
+
     # Launch rviz2
     rviz_config_file = PathJoinSubstitution(
         [pkg_dir, 'rviz', rviz_param_arg.launch_config])
@@ -116,6 +126,9 @@ def generate_launch_description():
 
             # Running actual_path_publisher.py for debug
             actual_path_publisher_node,
+
+            # Running record_bag.launch.py
+            record_bag_launch,
 
             # Running rviz2
             start_rviz_cmd,
