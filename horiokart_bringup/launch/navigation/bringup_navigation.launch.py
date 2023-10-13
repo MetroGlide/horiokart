@@ -36,6 +36,8 @@ def generate_launch_description():
     rviz_arg = launch_argument_creator.create(
         "rviz", default=EnvironmentVariable("USE_RVIZ")
     )
+    record_bag_arg = launch_argument_creator.create(
+        "record_bag", default="false")
 
     use_ekf_arg = launch_argument_creator.create(
         "use_ekf", default="False")
@@ -102,6 +104,7 @@ def generate_launch_description():
             "map": map_path,
             "planning_map": planning_map_path_arg.launch_config,
             "rviz": rviz_arg.launch_config,
+            "record_bag": record_bag_arg.launch_config,
         }.items(),
     )
 

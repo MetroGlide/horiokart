@@ -35,6 +35,9 @@ def generate_launch_description():
     rviz_arg = launch_argument_creator.create(
         'rviz', default=EnvironmentVariable("USE_RVIZ")
     )
+    record_bag_arg = launch_argument_creator.create(
+        'record_bag', default="false")
+
     map_dir_arg = launch_argument_creator.create(
         'map', default=os.path.join(pkg_dir, 'map', 'map.yaml'))
     planning_map_dir_arg = launch_argument_creator.create(
@@ -127,6 +130,13 @@ def generate_launch_description():
         ),
     ])
 
+    record_bag_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_dir, 'launch', 'record_bag.launch.py')
+        ),
+        condition=IfCondition(record_bag_arg.launch_config),
+    )
+
     return LaunchDescription([
         *launch_argument_creator.get_created_declare_launch_args(),
 
@@ -141,6 +151,7 @@ def generate_launch_description():
         map_server_group,
         costmap_filter_info_group,
 
+        record_bag_launch,
         Node(
             package='rviz2',
             executable='rviz2',
