@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import copy
 
 import rclpy
 from rclpy.node import Node
@@ -10,57 +11,26 @@ from std_srvs.srv import Trigger
 from visualization_msgs.msg import InteractiveMarker, InteractiveMarkerControl
 from visualization_msgs.msg import InteractiveMarkerFeedback
 from interactive_markers.interactive_marker_server import InteractiveMarkerServer
+from interactive_markers.menu_handler import MenuHandler
 
 from horiokart_navigation.waypoint import WaypointList, Waypoint, get_index_from_waypoint_name, WaypointsLoader, WaypointsSaver
 
 
-class WaypointEditorNode(Node):
-    def __init__(self):
-        super().__init__('waypoint_editor_node')
+class InteractiveWaypointMarker:
+    def __init__(self, waypoint: Waypoint):
+        self.waypoint = waypoint
+        self._create_interactive_marker()
 
-        self.waypoints = WaypointList()
-        self._interactive_marker_server = InteractiveMarkerServer(
-            self, 'waypoint_editor')
-
-        self._save_path = self.declare_parameter('save_path').value
-        load_path = self.declare_parameter('load_path').value
-        if load_path != '':
-            self.load_waypoints_from_file(load_path)
-
-        self._pose_subscription = self.create_subscription(
-            PoseStamped,
-            '/goal_pose',
-            self._pose_callback,
-            1)
-
-        self._save_service = self.create_service(
-            Trigger,
-            'save_waypoints',
-            self._save_waypoints_callback)
-        self._force_save_service = self.create_service(
-            Trigger,
-            'force_save_waypoints',
-            self._force_save_waypoints_callback)
-
-    def _normalize_quaternion(self, quaternion_msg):
-        norm = quaternion_msg.x**2 + quaternion_msg.y**2 + \
-            quaternion_msg.z**2 + quaternion_msg.w**2
-        s = norm**(-0.5)
-        quaternion_msg.x *= s
-        quaternion_msg.y *= s
-        quaternion_msg.z *= s
-        quaternion_msg.w *= s
-
-        return quaternion_msg
-
-    def _create_interactive_marker(self, index: int, pose_stamped: PoseStamped):
+    def _create_interactive_marker(self):
+        pose_stamped = self.waypoint.pose
         pose_stamped.pose.position.z += 1.0
+
+        index = self.waypoint.index
 
         # Create InteractiveMarker
         interactive_marker = InteractiveMarker()
+
         interactive_marker.header.frame_id = 'map'
-        interactive_marker.name = f"waypoint_{index}"
-        interactive_marker.description = f"waypoint_{index}"
         interactive_marker.pose = pose_stamped.pose
 
         marker = Marker()
@@ -76,7 +46,6 @@ class WaypointEditorNode(Node):
 
         text_marker = Marker()
         text_marker.type = Marker.TEXT_VIEW_FACING
-        text_marker.text = f"No.{index}"
         text_marker.pose.position.y = -1.0
         text_marker.pose.position.x = -1.0
         text_marker.action = Marker.ADD
@@ -129,32 +98,186 @@ class WaypointEditorNode(Node):
 
         interactive_marker.controls.append(control)
 
-        self._interactive_marker_server.insert(
-            interactive_marker, feedback_callback=self._interactive_marker_feedback_callback)
+        self.interactive_marker = interactive_marker
+        self.text_marker = text_marker
 
-        self._interactive_marker_server.applyChanges()
-        self.get_logger().info(
-            f"InteractiveMarker {interactive_marker.name} created.")
+        self.set_index(index)
 
-    def _interactive_marker_feedback_callback(self, feedback: InteractiveMarkerFeedback):
+    def set_index(self, index: int):
+        self.waypoint.index = index
+        self.interactive_marker.name = f"waypoint_{index}"
+        self.interactive_marker.description = f"waypoint_{index}"
 
-        if feedback.event_type == InteractiveMarkerFeedback.POSE_UPDATE:
-            # self.waypoints.update(
-            #     get_index_from_waypoint_name(feedback.marker_name), feedback.pose)
-            pass
+        self.text_marker.text = f"No.{index}"
 
-        elif feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
-            self.get_logger().info(
-                f"Waypoint {feedback.marker_name} updated.")
+    def _normalize_quaternion(self, quaternion_msg):
+        norm = quaternion_msg.x**2 + quaternion_msg.y**2 + \
+            quaternion_msg.z**2 + quaternion_msg.w**2
+        s = norm**(-0.5)
+        quaternion_msg.x *= s
+        quaternion_msg.y *= s
+        quaternion_msg.z *= s
+        quaternion_msg.w *= s
+
+        return quaternion_msg
+
+    def get_interactive_marker(self):
+        return self.interactive_marker
+
+    def update_pose(self, feedback: InteractiveMarkerFeedback):
+        if feedback.event_type == InteractiveMarkerFeedback.MOUSE_UP:
+            # self.get_logger().info(
+            #     f"Waypoint {feedback.marker_name} updated.")
 
             pose_stamped = PoseStamped()
             pose_stamped.header.frame_id = 'map'
             pose_stamped.pose = feedback.pose
 
-            self.waypoints.update_pose(get_index_from_waypoint_name(
-                feedback.marker_name), pose_stamped)
+            self.waypoint.pose = pose_stamped
+            print(f"Waypoint {feedback.marker_name} updated.")
+            print(f"Pose: {feedback.pose}")
 
-            self._interactive_marker_server.applyChanges()
+
+class InteractiveWaypointsManager:
+    def __init__(self, interactive_marker_server: InteractiveMarkerServer):
+        self.i_waypoints = []
+        self.interactive_marker_server = interactive_marker_server
+        self.menu_handler = MenuHandler()
+
+        self.init_menu()
+
+    def _insert_server(self, interactive_waypoint: InteractiveWaypointMarker):
+        self.interactive_marker_server.insert(
+            interactive_waypoint.get_interactive_marker(),
+            feedback_callback=interactive_waypoint.update_pose
+        )
+        self.menu_handler.apply(self.interactive_marker_server,
+                                interactive_waypoint.get_interactive_marker().name)
+        self.interactive_marker_server.applyChanges()
+
+    def add(self, interactive_waypoint: InteractiveWaypointMarker):
+        self.i_waypoints.append(interactive_waypoint)
+        self._insert_server(interactive_waypoint)
+
+    def add_default(self, pose_stamped: PoseStamped):
+        i_waypoint = InteractiveWaypointMarker(
+            Waypoint(
+                index=self.get_next_index(),
+                pose=pose_stamped,
+                reach_tolerance=1.0,
+                on_reached_action=[]
+            )
+        )
+        self.add(i_waypoint)
+
+    def remove(self, index: int):
+        self.i_waypoints.pop(index)
+        self.reindex()
+
+        self.refresh()
+
+    def insert(self, index: int, interactive_waypoint: InteractiveWaypointMarker):
+        self.insert_index(index)
+        self.i_waypoints.insert(index, interactive_waypoint)
+
+        self.refresh()
+
+    def refresh(self):
+        self.interactive_marker_server.clear()
+        for i_waypoint in self.i_waypoints:
+            self._insert_server(i_waypoint)
+
+    def get(self, index: int) -> InteractiveWaypointMarker:
+        return self.i_waypoints[index]
+
+    def get_all(self) -> list:
+        return self.i_waypoints
+
+    def get_size(self) -> int:
+        return len(self.i_waypoints)
+
+    def clear(self):
+        self.i_waypoints = []
+
+    def get_next_index(self) -> int:
+        return self.get_size()
+
+    def sort_by_index(self):
+        self.i_waypoints.sort(key=lambda i_waypoint: i_waypoint.waypoint.index)
+
+    def reindex(self):
+        self.sort_by_index()
+        for i, i_waypoint in enumerate(self.i_waypoints):
+            i_waypoint.set_index(i)
+
+    def insert_index(self, index: int):
+        self.sort_by_index()
+        for i_waypoint in self.i_waypoints:
+            if i_waypoint.waypoint.index >= index:
+                i_waypoint.set_index(i_waypoint.waypoint.index + 1)
+
+    def convert_waypoint_list(self) -> WaypointList:
+        waypoint_list = WaypointList()
+        for i_waypoint in self.i_waypoints:
+            waypoint_list.add(i_waypoint.waypoint)
+
+        return waypoint_list
+
+    @staticmethod
+    def from_waypoint_list(waypoint_list: WaypointList, interactive_marker_server: InteractiveMarkerServer):
+        i_waypoints = InteractiveWaypointsManager(interactive_marker_server=interactive_marker_server)
+        for waypoint in waypoint_list.get_all():
+            i_waypoints.add(InteractiveWaypointMarker(waypoint))
+
+        return i_waypoints
+
+    # Menu definition
+    def init_menu(self):
+        self.menu_handler.insert(
+            "DuplicateNext", callback=self._duplicate_next_waypoint_callback)
+        self.menu_handler.insert(
+            "Delete", callback=self._delete_waypoint_callback)
+
+    def _duplicate_next_waypoint_callback(self, feedback):
+        index = get_index_from_waypoint_name(feedback.marker_name)
+        i_waypoint = copy.deepcopy(self.get(index))
+        i_waypoint.set_index(index + 1)
+        self.insert(index + 1, i_waypoint)
+
+    def _delete_waypoint_callback(self, feedback):
+        index = get_index_from_waypoint_name(feedback.marker_name)
+        self.remove(index)
+
+
+class WaypointEditorNode(Node):
+    def __init__(self):
+        super().__init__('waypoint_editor_node')
+
+        self._interactive_marker_server = InteractiveMarkerServer(
+            self, 'waypoint_editor')
+
+        self._interactive_waypoints_manager = InteractiveWaypointsManager(
+            self._interactive_marker_server)
+
+        self._save_path = self.declare_parameter('save_path').value
+        load_path = self.declare_parameter('load_path').value
+        if load_path != '':
+            self.load_waypoints_from_file(load_path)
+
+        self._pose_subscription = self.create_subscription(
+            PoseStamped,
+            '/goal_pose',
+            self._pose_callback,
+            1)
+
+        self._save_service = self.create_service(
+            Trigger,
+            'save_waypoints',
+            self._save_waypoints_callback)
+        self._force_save_service = self.create_service(
+            Trigger,
+            'force_save_waypoints',
+            self._force_save_waypoints_callback)
 
     def _save_waypoints_callback(self, request, response):
         file_path = self._save_path
@@ -186,27 +309,16 @@ class WaypointEditorNode(Node):
 
     def save_waypoints_to_file(self, file_path):
         saver = WaypointsSaver(file_path)
-        saver.save(self.waypoints)
+        saver.save(self._interactive_waypoints_manager.convert_waypoint_list())
 
     def load_waypoints_from_file(self, file_path):
         loader = WaypointsLoader(file_path)
-        self.waypoints = loader.load()
-
-        for i, waypoint in enumerate(self.waypoints.get_all()):
-            self._create_interactive_marker(
-                i, waypoint.pose)
+        self._interactive_waypoints_manager = InteractiveWaypointsManager.from_waypoint_list(
+            loader.load(),
+            self._interactive_marker_server)
 
     def _pose_callback(self, msg: PoseStamped):
-        self._create_interactive_marker(
-            self.waypoints.get_next_index(), msg)
-        self.waypoints.add(
-            Waypoint(
-                index=self.waypoints.get_next_index(),
-                pose=msg,
-                reach_tolerance=1.0,
-                on_reached_action=[]
-            )
-        )
+        self._interactive_waypoints_manager.add_default(msg)
 
 
 def main(args=None):
