@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import os
 import copy
+import pprint
+import datetime
 
 import rclpy
 from rclpy.node import Node
@@ -57,11 +59,28 @@ class InteractiveWaypointMarker:
         text_marker.color.g = 0.0
         text_marker.color.b = 0.0
 
+        detail_text_marker = Marker()
+        detail_text_marker.type = Marker.TEXT_VIEW_FACING
+        detail_text_marker.pose.position.y = -2.0
+        detail_text_marker.pose.position.x = -0.0
+        detail_text_marker.action = Marker.ADD
+        detail_text_marker.scale.x = 0.1
+        detail_text_marker.scale.y = 0.1
+        detail_text_marker.scale.z = 0.1
+        detail_text_marker.color.a = 1.0
+        detail_text_marker.color.r = 0.7
+        detail_text_marker.color.g = 0.3
+        detail_text_marker.color.b = 0.0
+
+        detail_text_marker.text = f"{pprint.pformat(self.waypoint.to_dict(), width=15).replace(' ', '')}"
+        # detail_text_marker.text = f"{self.waypoint.to_dict()}"
+
         # Create a control for the InteractiveMarker
         control = InteractiveMarkerControl()
         control.always_visible = True
         control.markers.append(marker)
         control.markers.append(text_marker)
+        control.markers.append(detail_text_marker)
 
         interactive_marker.controls.append(control)
 
@@ -100,8 +119,10 @@ class InteractiveWaypointMarker:
 
         self.interactive_marker = interactive_marker
         self.text_marker = text_marker
+        self.detail_text_marker = detail_text_marker
 
         self.set_index(index)
+        self.set_color_from_waypoint_type()
 
     def set_index(self, index: int):
         self.waypoint.index = index
@@ -109,6 +130,17 @@ class InteractiveWaypointMarker:
         self.interactive_marker.description = f"waypoint_{index}"
 
         self.text_marker.text = f"No.{index}"
+
+    def set_color(self, r: float, g: float, b: float):
+        self.interactive_marker.controls[0].markers[0].color.r = r
+        self.interactive_marker.controls[0].markers[0].color.g = g
+        self.interactive_marker.controls[0].markers[0].color.b = b
+
+    def set_color_from_waypoint_type(self):
+        if self.waypoint.is_through_point:
+            self.set_color(0.0, 1.0, 0.0)
+        else:
+            self.set_color(1.0, 0.0, 0.0)
 
     def _normalize_quaternion(self, quaternion_msg):
         norm = quaternion_msg.x**2 + quaternion_msg.y**2 + \
@@ -122,6 +154,7 @@ class InteractiveWaypointMarker:
         return quaternion_msg
 
     def get_interactive_marker(self):
+        self._create_interactive_marker()
         return self.interactive_marker
 
     def update_pose(self, feedback: InteractiveMarkerFeedback):
@@ -225,7 +258,8 @@ class InteractiveWaypointsManager:
 
     @staticmethod
     def from_waypoint_list(waypoint_list: WaypointList, interactive_marker_server: InteractiveMarkerServer):
-        i_waypoints = InteractiveWaypointsManager(interactive_marker_server=interactive_marker_server)
+        i_waypoints = InteractiveWaypointsManager(
+            interactive_marker_server=interactive_marker_server)
         for waypoint in waypoint_list.get_all():
             i_waypoints.add(InteractiveWaypointMarker(waypoint))
 
@@ -234,19 +268,59 @@ class InteractiveWaypointsManager:
     # Menu definition
     def init_menu(self):
         self.menu_handler.insert(
-            "DuplicateNext", callback=self._duplicate_next_waypoint_callback)
+            "Copy Next", callback=self._copy_next_waypoint_callback)
+        self.menu_handler.insert(
+            "Copy Next(Pose only)", callback=self._copy_next_pose_only_waypoint_callback)
+        self.menu_handler.insert(
+            "~~Approach~~", callback=self._approach_waypoint_callback)
         self.menu_handler.insert(
             "Delete", callback=self._delete_waypoint_callback)
 
-    def _duplicate_next_waypoint_callback(self, feedback):
+        self.menu_handler.insert(
+            "-----", callback=self._dummy_callback)
+
+        self.menu_handler.insert(
+            "Set through point", callback=self._set_through_point_callback)
+        self.menu_handler.insert(
+            "Set target point", callback=self._set_target_point_callback)
+
+    def _dummy_callback(self, feedback):
+        pass
+
+    def _copy_next_waypoint_callback(self, feedback):
         index = get_index_from_waypoint_name(feedback.marker_name)
         i_waypoint = copy.deepcopy(self.get(index))
         i_waypoint.set_index(index + 1)
         self.insert(index + 1, i_waypoint)
 
+    def _copy_next_pose_only_waypoint_callback(self, feedback):
+        index = get_index_from_waypoint_name(feedback.marker_name)
+        i_waypoint = InteractiveWaypointMarker(
+            Waypoint(
+                index=index + 1,
+                pose=self.get(index).waypoint.pose,
+                reach_tolerance=1.0,
+                on_reached_action=[]
+            )
+        )
+        self.insert(index + 1, i_waypoint)
+
+    def _approach_waypoint_callback(self, feedback):
+        pass
+
     def _delete_waypoint_callback(self, feedback):
         index = get_index_from_waypoint_name(feedback.marker_name)
         self.remove(index)
+
+    def _set_through_point_callback(self, feedback):
+        index = get_index_from_waypoint_name(feedback.marker_name)
+        self.i_waypoints[index].waypoint.is_through_point = True
+        self.refresh()
+
+    def _set_target_point_callback(self, feedback):
+        index = get_index_from_waypoint_name(feedback.marker_name)
+        self.i_waypoints[index].waypoint.is_through_point = False
+        self.refresh()
 
 
 class WaypointEditorNode(Node):
@@ -288,7 +362,7 @@ class WaypointEditorNode(Node):
             self.get_logger().error(response.message)
             return response
 
-        self.save_waypoints_to_file(file_path)
+        file_path = self.save_waypoints_to_file(file_path)
 
         response.success = True
         response.message = 'Waypoints saved to {}'.format(file_path)
@@ -299,7 +373,7 @@ class WaypointEditorNode(Node):
     def _force_save_waypoints_callback(self, request, response):
         file_path = self._save_path
 
-        self.save_waypoints_to_file(file_path)
+        file_path = self.save_waypoints_to_file(file_path)
 
         response.success = True
         response.message = f'Waypoints force saved to {file_path}'
@@ -308,8 +382,18 @@ class WaypointEditorNode(Node):
         return response
 
     def save_waypoints_to_file(self, file_path):
+        if not os.path.exists(os.path.dirname(file_path)):
+            os.makedirs(os.path.dirname(file_path))
+        if os.path.exists(file_path):
+            # add date to enc of file without extension
+            filename, ext = os.path.splitext(file_path)
+            file_path = filename + \
+                f"_{datetime.datetime.now().strftime('%Y%m%d-%H%M%S')}" + ext
+
         saver = WaypointsSaver(file_path)
         saver.save(self._interactive_waypoints_manager.convert_waypoint_list())
+
+        return file_path
 
     def load_waypoints_from_file(self, file_path):
         loader = WaypointsLoader(file_path)

@@ -64,6 +64,65 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        base_footprint:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        base_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        caster_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        front_lrf_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        gps_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        left_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        livox_lidar_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        right_wheel_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rs_d435_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        rs_d435i_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        top_frame_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        top_lrf_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
       Mass Properties:
         Inertia: false
         Mass: false
@@ -77,13 +136,76 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
+        base_footprint:
+          Value: true
+        base_link:
+          Value: true
+        caster_link:
+          Value: true
+        front_lrf_link:
+          Value: true
+        gps_link:
+          Value: true
+        left_wheel_link:
+          Value: true
+        livox_lidar_link:
+          Value: true
+        map:
+          Value: true
+        odom:
+          Value: true
+        right_wheel_link:
+          Value: true
+        rs_d435_link:
+          Value: true
+        rs_d435i_color_frame:
+          Value: true
+        rs_d435i_color_optical_frame:
+          Value: true
+        rs_d435i_depth_frame:
+          Value: true
+        rs_d435i_depth_optical_frame:
+          Value: true
+        rs_d435i_link:
+          Value: true
+        top_frame_link:
+          Value: true
+        top_lrf_link:
+          Value: true
       Marker Scale: 1
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: false
       Tree:
-        {}
+        map:
+          odom:
+            base_footprint:
+              base_link:
+                caster_link:
+                  {}
+                front_lrf_link:
+                  {}
+                gps_link:
+                  {}
+                left_wheel_link:
+                  {}
+                right_wheel_link:
+                  {}
+                top_frame_link:
+                  livox_lidar_link:
+                    {}
+                  rs_d435_link:
+                    {}
+                  rs_d435i_link:
+                    rs_d435i_color_frame:
+                      rs_d435i_color_optical_frame:
+                        {}
+                    rs_d435i_depth_frame:
+                      rs_d435i_depth_optical_frame:
+                        {}
+                  top_lrf_link:
+                    {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -466,7 +588,7 @@ Visualization Manager:
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /rs_d435/depth/color/points
+        Value: /rs_d435i/depth/color/points
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
@@ -747,7 +869,7 @@ Window Geometry:
     collapsed: false
   Height: 1643
   Hide Left Dock: false
-  Hide Right Dock: false
+  Hide Right Dock: true
   Navigation 2:
     collapsed: false
   QMainWindow State: 000000ff00000000fd00000004000000000000021d000005d9fc020000000afb0000001200530065006c0065006300740069006f006e00000001e10000009b000000ab00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c0061007900730100000069000002750000017800fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb00000018004e0061007600690067006100740069006f006e0020003201000002ea00000358000001fe00fffffffb0000001e005200650061006c00730065006e0073006500430061006d00650072006100000002c6000000c10000000000000000000000010000014d000005d9fc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a005600690065007700730000000069000005d90000012300fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004420000003efc0100000002fb0000000800540069006d00650100000000000004420000000000000000fb0000000800540069006d0065010000000000000450000000000000000000000631000005d900000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
@@ -756,7 +878,7 @@ Window Geometry:
   Tool Properties:
     collapsed: false
   Views:
-    collapsed: false
+    collapsed: true
   Width: 2138
   X: 6
   Y: 8
