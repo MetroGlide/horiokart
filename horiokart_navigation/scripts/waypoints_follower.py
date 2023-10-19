@@ -232,6 +232,9 @@ class WaypointsFollowerNode(Node):
         load_path = self.declare_parameter(
             'load_path', "/root/ros2_data/new_waypoints.yaml").value
 
+        self.through_point_tolerance = self.declare_parameter(
+            'through_point_tolerance', 1.2).value
+
         self.waypoint_manager = WaypointManager.load_waypoints_from_file(
             load_path, node=self)
 
@@ -378,18 +381,23 @@ class WaypointsFollowerNode(Node):
                 f"Distance remaining: 0.0. Estimated time: 0.0. Maybe error. Retry")
             return True
 
-        distance = self.get_distance(waypoint)
-        if distance <= waypoint.reach_tolerance:
-            self.get_logger().info(
-                f"Distance remaining: {distance}. Reach tolerance: {waypoint.reach_tolerance}")
+        if self._check_actual_reached(waypoint):
             return True
-        # distance = self._waypoints_follower.current_following_status.distance_remaining
-        # if distance <= waypoint.reach_tolerance:
-        #     self.get_logger().info(
-        #         f"Distance remaining: {distance}. Reach tolerance: {waypoint.reach_tolerance}")
-        #     return True
 
         return False
+
+    def _check_actual_reached(self, waypoint: Waypoint) -> bool:
+        distance = self.get_distance(waypoint)
+        if waypoint.is_through_point and distance <= self.through_point_tolerance:
+            self.get_logger().info(
+                f"Reach point! Distance remaining: {distance}. Through point tolerance: {self.through_point_tolerance}")
+            return True
+        elif distance <= waypoint.reach_tolerance:
+            self.get_logger().info(
+                f"Reach point! Distance remaining: {distance}. Reach tolerance: {waypoint.reach_tolerance}")
+            return True
+        else:
+            return False
 
     def _check_reached_actions_done(self):
         if all(self._on_reached_actions_progress_list):
@@ -501,7 +509,7 @@ class WaypointsFollowerNode(Node):
                                   LoggingSeverity.INFO, throttle_duration_sec=2.0, throttle_time_source_type=self.get_clock())
             return
 
-        if self.get_distance(current_waypoint) < self.waypoint_manager.get_waypoint().reach_tolerance:
+        if self._check_actual_reached(current_waypoint): # Double check
             # When actual reached
             self.get_logger().info(
                 f"Waypoint {current_waypoint.index} ACUTUAL reached! Next waypoint: {current_waypoint.index + 1}")
