@@ -21,17 +21,17 @@ class OnReachedAction(enum.Enum):
 class Waypoint:
     index: int
     pose: PoseStamped
-    reach_tolerance: float
+
+    reach_tolerance: float  # not through only
     on_reached_action: List[OnReachedAction]
 
+    is_through_point: bool = True
     localization_map_yaml: str = ""
     planning_map_yaml: str = ""
 
     def to_dict(self):
         return {
             'index': self.index,
-            'reach_tolerance': self.reach_tolerance,
-            'on_reached_action': self._on_reached_action_to_string_list(),
             'pose': {
                 'position': {
                     'x': self.pose.pose.position.x,
@@ -45,8 +45,11 @@ class Waypoint:
                     'w': self.pose.pose.orientation.w
                 }
             },
+            'reach_tolerance': self.reach_tolerance,
+            'on_reached_action': self._on_reached_action_to_string_list(),
+            "is_through_point": self.is_through_point,
             'localization_map_yaml': self.localization_map_yaml,
-            'planning_map_yaml': self.planning_map_yaml
+            'planning_map_yaml': self.planning_map_yaml,
         }
 
     def _on_reached_action_to_string_list(self):
@@ -116,7 +119,8 @@ class WaypointsLoader:
                         for action in waypoint['on_reached_action']
                     ],
                     localization_map_yaml=waypoint['localization_map_yaml'] if 'localization_map_yaml' in waypoint else "",
-                    planning_map_yaml=waypoint['planning_map_yaml'] if 'planning_map_yaml' in waypoint else ""
+                    planning_map_yaml=waypoint['planning_map_yaml'] if 'planning_map_yaml' in waypoint else "",
+                    is_through_point=waypoint['is_through_point'] if 'is_through_point' in waypoint else True,
                 )
             )
 
