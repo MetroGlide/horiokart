@@ -1,0 +1,4 @@
+- git:
+    local-name: groot
+    uri: https://github.com/BehaviorTree/Groot.git
+    version: master
