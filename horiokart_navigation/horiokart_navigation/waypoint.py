@@ -11,6 +11,8 @@ import pprint
 class OnReachedAction(enum.Enum):
     WAIT_TRIGGER = "wait_trigger"
     RELOAD_MAP = "reload_map"
+    FROMT_LIDAR_OFF = "front_lidar_off"
+    FRONT_LIDAR_ON = "front_lidar_on"
 
     @classmethod
     def get_all_values(cls):
@@ -106,6 +108,7 @@ class WaypointsLoader:
             pose = PoseStamped()
             pose.header.frame_id = 'map'
             pose.pose.position = Point(**waypoint['pose']['position'])
+            pose.pose.position.z = 1.0
             pose.pose.orientation = Quaternion(
                 **waypoint['pose']['orientation'])
 

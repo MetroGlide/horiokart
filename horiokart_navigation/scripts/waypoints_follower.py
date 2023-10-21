@@ -9,7 +9,7 @@ from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
 from visualization_msgs.msg import MarkerArray, Marker
 from nav_msgs.msg import Path
-from std_srvs.srv import Trigger
+from std_srvs.srv import Trigger, SetBool
 from std_msgs.msg import Int16
 
 from action_msgs.msg import GoalStatus
@@ -233,7 +233,7 @@ class WaypointsFollowerNode(Node):
             'load_path', "/root/ros2_data/new_waypoints.yaml").value
 
         self.through_point_tolerance = self.declare_parameter(
-            'through_point_tolerance', 1.2).value
+            'through_point_tolerance', 3.0).value
 
         self.waypoint_manager = WaypointManager.load_waypoints_from_file(
             load_path, node=self)
@@ -276,6 +276,9 @@ class WaypointsFollowerNode(Node):
         self._load_planning_map_srv_client = self.create_client(
             LoadMap, "planning_map_server/load_map")
         self._load_planning_map_srv_client.wait_for_service()
+
+        self._change_front_lidar_publish_state_srv_client = self.create_client(
+            SetBool, "front_lidar_publish_controller_node/change_publish_state")
 
         self._on_reached_actions_progress_list = []
 
@@ -467,6 +470,24 @@ class WaypointsFollowerNode(Node):
 
         self.get_logger().info(f"Reload map action resistered")
 
+    def _on_reached_action_front_lidar_on_off(self, waypoint: Waypoint, state: bool):
+        self._change_front_lidar_publish_state_srv_client.wait_for_service()
+        request = SetBool.Request()
+        request.data = state
+
+        future = self._change_front_lidar_publish_state_srv_client.call_async(
+            request)
+
+        self._on_reached_actions_progress_list.append(
+            self.ServiceFuture(future, "change_front_lidar_publish_state", self.get_logger(),
+                               callback=self._change_front_lidar_publish_state_callback))
+
+    def _change_front_lidar_publish_state_callback(self, response, logger):
+        if response.success:
+            logger.info(f"Change front lidar publish state success")
+        else:
+            logger.error(f"Change front lidar publish state failed")
+
     def _on_reached_action(self, waypoint: Waypoint, on_reached_action: OnReachedAction):
         if OnReachedAction.WAIT_TRIGGER == on_reached_action:
             self.get_logger().info(
@@ -479,6 +500,19 @@ class WaypointsFollowerNode(Node):
                 f"OnReachedAction: Reload map")
 
             self._on_reached_action_reload_map(waypoint)
+
+        elif OnReachedAction.FROMT_LIDAR_OFF == on_reached_action:
+            self.get_logger().info(
+                f"OnReachedAction: Front lidar off")
+
+            self._on_reached_action_front_lidar_on_off(waypoint, False)
+
+        elif OnReachedAction.FRONT_LIDAR_ON == on_reached_action:
+            self.get_logger().info(
+                f"OnReachedAction: Front lidar on")
+            
+            self._on_reached_action_front_lidar_on_off(waypoint, True)
+
 
     def _on_reached(self, waypoint: Waypoint):
         for on_reached_action in waypoint.on_reached_action:
@@ -509,7 +543,7 @@ class WaypointsFollowerNode(Node):
                                   LoggingSeverity.INFO, throttle_duration_sec=2.0, throttle_time_source_type=self.get_clock())
             return
 
-        if self._check_actual_reached(current_waypoint): # Double check
+        if self._check_actual_reached(current_waypoint):  # Double check
             # When actual reached
             self.get_logger().info(
                 f"Waypoint {current_waypoint.index} ACUTUAL reached! Next waypoint: {current_waypoint.index + 1}")
