@@ -36,7 +36,7 @@ def generate_launch_description():
         "gps_port", default="/dev/ttyHoriokart-gps")
 
     use_rs_d435i_arg = launch_argument_creator.create(
-        "use_rs_d435i", default="true")
+        "use_rs_d435i", default="false")
     use_rs_d435_arg = launch_argument_creator.create(
         "use_rs_d435", default="false")
 
@@ -91,7 +91,20 @@ def generate_launch_description():
                     "inverted": False,
                     "angle_compensate": True,
                 }],
-                remappings=[("scan", "scan_front_lidar")],
+                # remappings=[("scan", "scan_front_lidar")],
+                remappings=[("scan", "scan_front_lidar_origin")],
+                condition=launch.conditions.IfCondition(
+                    use_lidar_arg.launch_config),
+            ),
+            Node(
+                package="horiokart_drivers",
+                executable="lidar_publish_controller_node.py",
+                name="front_lidar_publish_controller_node",
+                output="screen",
+                parameters=[{
+                }],
+                remappings=[("scan_origin", "scan_front_lidar_origin"),
+                            ("scan", "scan_front_lidar")],
                 condition=launch.conditions.IfCondition(
                     use_lidar_arg.launch_config),
             ),

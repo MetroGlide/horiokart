@@ -140,6 +140,10 @@ install(PROGRAMS
   scripts/odom_covariance_override_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
+install(PROGRAMS
+  scripts/lidar_publish_controller_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ################################################################################
 # Macro for ament package
