@@ -43,6 +43,7 @@ include_directories(
 
 add_library(${PROJECT_NAME}_lib
   "src/base/serial_communicator.cpp"
+  "src/base/serial_communicator2.cpp"
 
   "src/devices/motor_driver.cpp"
   "src/sensors/wheel_odometry.cpp"

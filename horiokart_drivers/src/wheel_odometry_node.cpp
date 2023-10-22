@@ -153,7 +153,7 @@ void WheelOdometryNode::update_odometry()
 
     RCLCPP_DEBUG(this->get_logger(),
                  "RAW DATA: %s",
-                 SerialCommunicator::format_hex(current_data_.raw).c_str());
+                 SerialCommunicator2::format_hex(current_data_.raw).c_str());
 
     RCLCPP_DEBUG(this->get_logger(),
                  "x: %f, y: %f, th: %f, vx: %f, vy: %f, vth: %f",

@@ -1,16 +1,34 @@
 #pragma once
 
+// #include "horiokart_drivers/base/serial_communicator.hpp"
+
 #include <string>
-#include <fcntl.h>
-#include <termios.h>
 #include <iostream>
 #include <iomanip>
+#include <unistd.h>
 
 #include <fstream>
-#include <unistd.h>
 #include <vector>
 #include <algorithm>
 #include <time.h>
+
+#include <fcntl.h>
+#include <string.h> // for bzero()
+
+// #define MG_GNUC
+//__GNUC__
+#if defined(MG_GNUC)
+// for Linux extension
+#include <asm/ioctls.h>
+#include <asm/termbits.h>
+#include <sys/ioctl.h>
+extern "C" int tcflush(int fildes, int queue_selector);
+#else
+// for other standard UNIX
+#include <termios.h>
+#include <sys/ioctl.h>
+
+#endif
 
 namespace horiokart_drivers
 {
@@ -31,7 +49,7 @@ namespace horiokart_drivers
         "CHECKSUM_ERROR",
         "OTHER_ERROR"};
 
-    class SerialCommunicator
+    class SerialCommunicator2
     {
     private:
         int fd1_;
@@ -42,8 +60,8 @@ namespace horiokart_drivers
     public:
         bool is_open_serial_ = false;
 
-        SerialCommunicator(){};
-        SerialCommunicator(std::string device_name);
+        SerialCommunicator2(){};
+        SerialCommunicator2(std::string device_name);
 
         void reset_serial();
 
