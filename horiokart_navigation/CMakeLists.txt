@@ -84,6 +84,10 @@ add_executable(${WAYPOINT_NAV_EXECUTABLE_NAME} src/waypoint_navigator.cpp)
 target_link_libraries(${WAYPOINT_NAV_EXECUTABLE_NAME} ${PROJECT_NAME}_lib)
 ament_target_dependencies(${WAYPOINT_NAV_EXECUTABLE_NAME} ${DEPENDENCIES})
 
+set(COSTMAP_FOR_BAG_PLAY "costmap_for_bag_play")
+add_executable(${COSTMAP_FOR_BAG_PLAY} src/costmap_for_bag_play.cpp)
+target_link_libraries(${COSTMAP_FOR_BAG_PLAY} ${PROJECT_NAME}_lib)
+ament_target_dependencies(${COSTMAP_FOR_BAG_PLAY} ${DEPENDENCIES})
 
 ################################################################################
 # Install
@@ -93,6 +97,9 @@ install(DIRECTORY launch params rviz behavior_trees
 )
 
 install(TARGETS ${WAYPOINT_NAV_EXECUTABLE_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(TARGETS ${COSTMAP_FOR_BAG_PLAY}
   DESTINATION lib/${PROJECT_NAME}
 )
 
