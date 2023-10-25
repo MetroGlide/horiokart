@@ -101,7 +101,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             "simulation": simulation_arg.launch_config,
-            "map": map_path,
+            "localization_map": map_path,
             "planning_map": planning_map_path_arg.launch_config,
             "rviz": rviz_arg.launch_config,
             "record_bag": record_bag_arg.launch_config,

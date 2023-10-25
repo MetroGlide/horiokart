@@ -5,12 +5,15 @@ import launch_ros
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, EmitEvent
+from launch.actions import DeclareLaunchArgument, EmitEvent, GroupAction
 from launch.actions import IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from launch.conditions import IfCondition
-from launch_ros.actions import Node, LifecycleNode
+from launch_ros.actions import Node, LifecycleNode, PushRosNamespace
+from launch_ros.descriptions import ParameterFile
+
+from nav2_common.launch import RewrittenYaml, ReplaceString
 
 import lifecycle_msgs.msg
 
@@ -20,15 +23,26 @@ from horiokart_navigation.launch_argument import LaunchArgumentCreator
 def generate_launch_description():
     # Getting directories and launch-files
     pkg_dir = get_package_share_directory('horiokart_navigation')
-    nav2_bringup_dir = get_package_share_directory('nav2_bringup')
-    nav2_launch_file_dir = os.path.join(nav2_bringup_dir, 'launch')
+    pkg_launch_dir = os.path.join(pkg_dir, 'launch')
 
     rviz_config_dir = os.path.join(
         pkg_dir, 'rviz', 'rviz.rviz')
-    # nav2_bringup_dir, 'rviz', 'nav2_default_view.rviz')
 
     # Launch arguments
     launch_argument_creator = LaunchArgumentCreator()
+
+    namespace_arg = launch_argument_creator.create(
+        'namespace', default='')
+    use_namespace_arg = launch_argument_creator.create(
+        'use_namespace', default="false")
+    autostart_arg = launch_argument_creator.create(
+        'autostart', default="true")
+    use_composition_arg = launch_argument_creator.create(
+        'use_composition', default="True")
+    use_respawn_arg = launch_argument_creator.create(
+        'use_respawn', default="false")
+    log_level_arg = launch_argument_creator.create(
+        'log_level', default="info")
 
     simulation_arg = launch_argument_creator.create(
         'simulation', default=EnvironmentVariable('SIMULATION'))
@@ -38,12 +52,12 @@ def generate_launch_description():
     record_bag_arg = launch_argument_creator.create(
         'record_bag', default="false")
 
-    map_dir_arg = launch_argument_creator.create(
-        'map', default=os.path.join(pkg_dir, 'map', 'map.yaml'))
-    planning_map_dir_arg = launch_argument_creator.create(
+    localization_map_yamL_file_arg = launch_argument_creator.create(
+        'localization_map', default=os.path.join(pkg_dir, 'map', 'map.yaml'))
+    planning_map_yaml_file_arg = launch_argument_creator.create(
         'planning_map', default=os.path.join(pkg_dir, 'map', 'map.yaml'))
 
-    param_dir = LaunchConfiguration(
+    params_file = LaunchConfiguration(
         'params_file',
         default=os.path.join(
             pkg_dir, 'params', 'nav2_params.yaml'))
@@ -51,84 +65,22 @@ def generate_launch_description():
     remappings = [('/tf', 'tf'),
                   ('/tf_static', 'tf_static')]
 
-    map_server_node = LifecycleNode(
-        package='nav2_map_server',
-        executable='map_server',
-        name='planning_map_server',
-        namespace='',
-        output='screen',
-        parameters=[
-            {
-                'use_sim_time': simulation_arg.launch_config,
-                'yaml_filename': planning_map_dir_arg.launch_config,
-                # 'topic_name': 'planning_map',
-            },
-        ],
-        remappings=[('/map', '/planning_map')]
-    )
-    map_server_group = launch.actions.GroupAction([
-        map_server_node,
-        EmitEvent(
-            event=launch_ros.events.lifecycle.ChangeState(
-                lifecycle_node_matcher=launch.events.matches_action(
-                    map_server_node),
-                transition_id=lifecycle_msgs.msg.Transition.TRANSITION_CONFIGURE,
+    param_substitutions = {
+        'use_sim_time': simulation_arg.launch_config,
+        'yaml_filename': localization_map_yamL_file_arg.launch_config, }
 
-            )),
+    params_file = ReplaceString(
+        source_file=params_file,
+        replacements={'<robot_namespace>': ('/', namespace_arg.launch_config)},
+        condition=IfCondition(use_namespace_arg.launch_config))
 
-        launch.actions.RegisterEventHandler(  # イベントハンドラの登録
-            launch_ros.event_handlers.OnStateTransition(  # lifecycle_nodeが状態遷移したときのイベント
-                target_lifecycle_node=map_server_node,  # ターゲットノード
-                start_state="configuring", goal_state="inactive",  # どの状態からどの状態へ遷移したかを書く
-                entities=[
-                    launch.actions.LogInfo(
-                        msg="transition start : map_server :activating"),
-                    launch.actions.EmitEvent(
-                        event=launch_ros.events.lifecycle.ChangeState(
-                            lifecycle_node_matcher=launch.events.matches_action(
-                                map_server_node),
-                            transition_id=lifecycle_msgs.msg.Transition.TRANSITION_ACTIVATE,
-                        )),
-                ],
-            )
-        ),
-    ])
-
-    costmap_filter_info_server_node = LifecycleNode(
-        package='nav2_map_server',
-        executable='costmap_filter_info_server',
-        name='costmap_filter_info_server',
-        namespace='',
-        output='screen',
-        emulate_tty=True,
-        parameters=[param_dir],
-    )
-
-    costmap_filter_info_group = launch.actions.GroupAction([
-        costmap_filter_info_server_node,
-        EmitEvent(
-            event=launch_ros.events.lifecycle.ChangeState(
-                lifecycle_node_matcher=launch.events.matches_action(
-                    costmap_filter_info_server_node),
-                transition_id=lifecycle_msgs.msg.Transition.TRANSITION_CONFIGURE,
-            )),
-        launch.actions.RegisterEventHandler(  # イベントハンドラの登録
-            launch_ros.event_handlers.OnStateTransition(  # lifecycle_nodeが状態遷移したときのイベント
-                target_lifecycle_node=costmap_filter_info_server_node,  # ターゲットノード
-                start_state="configuring", goal_state="inactive",  # どの状態からどの状態へ遷移したかを書く
-                entities=[
-                    launch.actions.LogInfo(
-                        msg="transition start : costmap_filter_info_server :activating"),
-                    launch.actions.EmitEvent(
-                        event=launch_ros.events.lifecycle.ChangeState(
-                            lifecycle_node_matcher=launch.events.matches_action(
-                                costmap_filter_info_server_node),
-                            transition_id=lifecycle_msgs.msg.Transition.TRANSITION_ACTIVATE,
-                        )),
-                ],
-            )
-        ),
-    ])
+    configured_params = ParameterFile(
+        RewrittenYaml(
+            source_file=params_file,
+            root_key=namespace_arg.launch_config,
+            param_rewrites=param_substitutions,
+            convert_types=True),
+        allow_substs=True)
 
     record_bag_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -137,21 +89,59 @@ def generate_launch_description():
         condition=IfCondition(record_bag_arg.launch_config),
     )
 
+    # Specify the actions
+    bringup_cmd_group = GroupAction([
+        PushRosNamespace(
+            condition=IfCondition(use_namespace_arg.launch_config),
+            namespace=namespace_arg.launch_config),
+
+        # Composer
+        Node(
+            condition=IfCondition(use_composition_arg.launch_config),
+            name='nav2_container',
+            package='rclcpp_components',
+            executable='component_container_isolated',
+            parameters=[configured_params, {
+                'autostart': autostart_arg.launch_config}],
+            arguments=['--ros-args', '--log-level',
+                       log_level_arg.launch_config],
+            remappings=remappings,
+            output='screen'),
+
+        # Localization
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(pkg_launch_dir,
+                                                       'localization_launch.py')),
+            launch_arguments={'namespace': namespace_arg.launch_config,
+                              'map': localization_map_yamL_file_arg.launch_config,
+                              'use_sim_time': simulation_arg.launch_config,
+                              'autostart': autostart_arg.launch_config,
+                              'params_file': params_file,
+                              'use_composition': use_composition_arg.launch_config,
+                              'use_respawn': use_respawn_arg.launch_config,
+                              'container_name': 'nav2_container'}.items()),
+
+        # Navigation
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(os.path.join(
+                pkg_launch_dir, 'navigation_launch.py')),
+            launch_arguments={'namespace': namespace_arg.launch_config,
+                              'use_sim_time': simulation_arg.launch_config,
+                              'autostart': autostart_arg.launch_config,
+                              'params_file': params_file,
+                              'use_composition': use_composition_arg.launch_config,
+                              'use_respawn': use_respawn_arg.launch_config,
+                              'planning_map': planning_map_yaml_file_arg.launch_config,
+                              'container_name': 'nav2_container'}.items()),
+    ])
+
     return LaunchDescription([
         *launch_argument_creator.get_created_declare_launch_args(),
-
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                [nav2_launch_file_dir, '/bringup_launch.py']),
-            launch_arguments={
-                'map': map_dir_arg.launch_config,
-                'use_sim_time': simulation_arg.launch_config,
-                'params_file': param_dir}.items(),
-        ),
-        map_server_group,
-        costmap_filter_info_group,
+        bringup_cmd_group,
 
         record_bag_launch,
+
+        # Rviz
         Node(
             package='rviz2',
             executable='rviz2',
