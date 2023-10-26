@@ -158,14 +158,6 @@ Visualization Manager:
           Value: true
         rs_d435_link:
           Value: true
-        rs_d435i_color_frame:
-          Value: true
-        rs_d435i_color_optical_frame:
-          Value: true
-        rs_d435i_depth_frame:
-          Value: true
-        rs_d435i_depth_optical_frame:
-          Value: true
         rs_d435i_link:
           Value: true
         top_frame_link:
@@ -198,12 +190,7 @@ Visualization Manager:
                   rs_d435_link:
                     {}
                   rs_d435i_link:
-                    rs_d435i_color_frame:
-                      rs_d435i_color_optical_frame:
-                        {}
-                    rs_d435i_depth_frame:
-                      rs_d435i_depth_optical_frame:
-                        {}
+                    {}
                   top_lrf_link:
                     {}
       Update Interval: 0
@@ -257,9 +244,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 47
+      Max Intensity: 173.1743621826172
       Min Color: 0; 0; 0
-      Min Intensity: 47
+      Min Intensity: 0.7717527747154236
       Name: LaserScan
       Position Transformer: XYZ
       Selectable: true
@@ -805,6 +792,44 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /actual_path
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/Polygon
+      Color: 170; 0; 127
+      Enabled: true
+      Name: CollisionFrontPolygon
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /collision_detector/polygon_front
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/Polygon
+      Color: 170; 0; 127
+      Enabled: true
+      Name: CollisionRearPolygon
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /collision_detector/polygon_rear
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: CollisionMarkerArray
+      Namespaces:
+        collision_points: true
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /collision_detector/collision_points_marker
       Value: true
   Enabled: true
   Global Options:

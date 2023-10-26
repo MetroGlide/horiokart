@@ -51,6 +51,7 @@ def generate_launch_description():
         'bt_navigator',
         'velocity_smoother',
         'costmap_filter_info_server',
+        'collision_detector',
     ]
 
     remappings = [('/tf', 'tf'),
@@ -203,6 +204,18 @@ def generate_launch_description():
                 remappings=remappings
             ),
             Node(
+                package='nav2_collision_monitor',
+                executable='collision_detector',
+                name='collision_detector',
+                output='screen',
+                emulate_tty=True,
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[configured_params],
+                arguments=['--ros-args', '--log-level', log_level],
+                remappings=remappings,
+            ),
+            Node(
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
                 name='lifecycle_manager_navigation',
@@ -272,6 +285,13 @@ def generate_launch_description():
                 name='costmap_filter_info_server',
                 parameters=[configured_params],
                 remappings=remappings),
+            ComposableNode(
+                package='nav2_collision_monitor',
+                plugin='nav2_collision_monitor::CollisionDetector',
+                name='collision_detector',
+                parameters=[configured_params],
+                remappings=remappings
+            ),
             ComposableNode(
                 package='nav2_lifecycle_manager',
                 plugin='nav2_lifecycle_manager::LifecycleManager',
