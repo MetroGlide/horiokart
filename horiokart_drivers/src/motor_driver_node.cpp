@@ -43,6 +43,11 @@ void MotorDriverNode::prepare_ros_communications()
         "cmd_vel",
         rclcpp::QoS(1),
         std::bind(&MotorDriverNode::twist_sub_cb, this, std::placeholders::_1));
+
+    this->emergency_stop_sub_ = this->create_subscription<std_msgs::msg::Bool>(
+        "~/emergency_stop",
+        rclcpp::QoS(1),
+        std::bind(&MotorDriverNode::emergency_stop_sub_cb, this, std::placeholders::_1));
 }
 
 horiokart_drivers::SpeedParameter MotorDriverNode::create_speed_parameter(
@@ -76,9 +81,16 @@ horiokart_drivers::SpeedParameter MotorDriverNode::create_speed_parameter(
 void MotorDriverNode::twist_sub_cb(
     const geometry_msgs::msg::Twist::SharedPtr msg)
 {
+    if (emergency_stop_)
+    {
+        RCLCPP_WARN(this->get_logger(),
+                    "Emergency stop is active. Ignoring twist command.");
+        return;
+    }
+
     SpeedParameter req = create_speed_parameter(msg);
 
-    // TODO: print log about req 
+    // TODO: print log about req
     MotorDriverResponse res = motor_driver_->send_speed_command(req);
     // TODO: print log about res
 
@@ -87,6 +99,36 @@ void MotorDriverNode::twist_sub_cb(
         RCLCPP_ERROR(this->get_logger(),
                      "Failed to send speed command to motor driver: %s",
                      SerialErrorStrings[static_cast<int>(res.error)].c_str());
+    }
+}
+
+void MotorDriverNode::emergency_stop_sub_cb(
+    const std_msgs::msg::Bool::SharedPtr msg)
+{
+    emergency_stop_ = msg->data;
+
+    if (emergency_stop_)
+    {
+        RCLCPP_WARN(this->get_logger(),
+                    "Emergency stop is active. Stopping the robot.");
+
+        SpeedParameter req;
+        req.left_wheel_speed = 0;
+        req.right_wheel_speed = 0;
+
+        MotorDriverResponse res = motor_driver_->send_speed_command(req);
+
+        if (res.error != SerialError::NO_ERROR)
+        {
+            RCLCPP_ERROR(this->get_logger(),
+                         "Failed to send speed command to motor driver: %s",
+                         SerialErrorStrings[static_cast<int>(res.error)].c_str());
+        }
+    }
+    else
+    {
+        RCLCPP_INFO(this->get_logger(),
+                    "Emergency stop is inactive. Resuming the robot.");
     }
 }
 

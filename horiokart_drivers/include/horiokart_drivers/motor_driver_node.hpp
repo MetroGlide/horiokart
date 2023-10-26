@@ -4,6 +4,7 @@
 // ROS2
 #include <rclcpp/rclcpp.hpp>
 
+#include <std_msgs/msg/bool.hpp>
 #include <geometry_msgs/msg/quaternion.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_srvs/srv/trigger.hpp>
@@ -37,9 +38,13 @@ namespace horiokart_drivers
         void twist_sub_cb(
             const geometry_msgs::msg::Twist::SharedPtr msg);
 
+        void emergency_stop_sub_cb(
+            const std_msgs::msg::Bool::SharedPtr msg);
+
         std::shared_ptr<horiokart_drivers::MotorDriver> motor_driver_;
 
         rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr twist_sub_;
+        rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr emergency_stop_sub_;
 
         std::string device_name_;
 
@@ -47,11 +52,12 @@ namespace horiokart_drivers
         std::string base_frame_id_;
 
         double wheel_pitch_; // [m]
-        double max_speed_; // [m/s]
+        double max_speed_;   // [m/s]
+
+        bool emergency_stop_;
 
         SpeedParameter create_speed_parameter(
             const geometry_msgs::msg::Twist::SharedPtr msg);
-
     };
 
 }
