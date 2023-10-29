@@ -116,6 +116,10 @@ install(PROGRAMS
   scripts/waypoints_follower.py
   DESTINATION lib/${PROJECT_NAME}
 )
+install(PROGRAMS
+  scripts/collision_behavior_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ################################################################################
 # Macro for ament package
