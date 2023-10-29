@@ -8,7 +8,7 @@
   <xacro:horiokart_base/>
 
   <!-- <xacro:lidar_2d prefix="front_" attach_to="base_link" xyz="0.31 0 0.15"  rpy="0 0 0"/> -->
-  <xacro:lidar_2d prefix="front_" attach_to="base_link" xyz="0.31 0 0.15" rpy="0 0 ${pi}"/>
+  <xacro:lidar_2d prefix="front_" attach_to="base_link" xyz="0.32 0 0.15" rpy="0 0 ${pi}"/>
   <xacro:gps prefix="" attach_to="base_link" xyz="0.26 -0.13 0.33" rpy="0 0 0"/>
 
   <!-- top frame for sensors -->
