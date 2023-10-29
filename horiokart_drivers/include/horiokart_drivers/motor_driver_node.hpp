@@ -58,6 +58,8 @@ namespace horiokart_drivers
 
         SpeedParameter create_speed_parameter(
             const geometry_msgs::msg::Twist::SharedPtr msg);
+        MotorDriverResponse send_speed_command(
+            const SpeedParameter param);
     };
 
 }

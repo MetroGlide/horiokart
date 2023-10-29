@@ -1,6 +1,7 @@
 #pragma once
 
-#include "horiokart_drivers/base/serial_communicator.hpp"
+// #include "horiokart_drivers/base/serial_communicator.hpp"
+#include "horiokart_drivers/base/serial_communicator2.hpp"
 
 #include <string>
 
@@ -24,9 +25,10 @@ namespace horiokart_drivers
     private:
         std::string device_name_;
 
-        SerialCommunicator serial_;
+        // SerialCommunicator serial_;
+        SerialCommunicator2 serial_;
 
-        int sleep_usec_ = 1000; // usec
+        int sleep_usec_ = 40000; // usec
 
         int send_speed_command_size_ = 7;
         int receive_speed_command_size_ = 4;

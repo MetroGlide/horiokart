@@ -78,6 +78,23 @@ horiokart_drivers::SpeedParameter MotorDriverNode::create_speed_parameter(
     return req;
 }
 
+horiokart_drivers::MotorDriverResponse MotorDriverNode::send_speed_command(
+    horiokart_drivers::SpeedParameter param)
+{
+    // TODO: print log about req
+    MotorDriverResponse res = motor_driver_->send_speed_command(param);
+    // TODO: print log about res
+
+    if (res.error != SerialError::NO_ERROR && res.error != SerialError::CHECKSUM_ERROR)
+    {
+        RCLCPP_ERROR(this->get_logger(),
+                     "Failed to send speed command to motor driver: %s",
+                     SerialErrorStrings[static_cast<int>(res.error)].c_str());
+    }
+
+    return res;
+}
+
 void MotorDriverNode::twist_sub_cb(
     const geometry_msgs::msg::Twist::SharedPtr msg)
 {
@@ -90,16 +107,7 @@ void MotorDriverNode::twist_sub_cb(
 
     SpeedParameter req = create_speed_parameter(msg);
 
-    // TODO: print log about req
-    MotorDriverResponse res = motor_driver_->send_speed_command(req);
-    // TODO: print log about res
-
-    if (res.error != SerialError::NO_ERROR)
-    {
-        RCLCPP_ERROR(this->get_logger(),
-                     "Failed to send speed command to motor driver: %s",
-                     SerialErrorStrings[static_cast<int>(res.error)].c_str());
-    }
+    motor_driver_->send_speed_command(req);
 }
 
 void MotorDriverNode::emergency_stop_sub_cb(
@@ -116,14 +124,7 @@ void MotorDriverNode::emergency_stop_sub_cb(
         req.left_wheel_speed = 0;
         req.right_wheel_speed = 0;
 
-        MotorDriverResponse res = motor_driver_->send_speed_command(req);
-
-        if (res.error != SerialError::NO_ERROR)
-        {
-            RCLCPP_ERROR(this->get_logger(),
-                         "Failed to send speed command to motor driver: %s",
-                         SerialErrorStrings[static_cast<int>(res.error)].c_str());
-        }
+        motor_driver_->send_speed_command(req);
     }
     else
     {
