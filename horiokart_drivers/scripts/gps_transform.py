@@ -65,16 +65,44 @@ class UTMtoMAP_RefPoint:
 
 class ConverterBase:
     def __init__(self):
-        pass
+        self._previous_pose = None
+
+        self._previous_yaw_calc_pose = None
+        self._yaw_calc_threshold = 1.0  # unit: m
 
     def calc_map_pose(self, utm: Pose, ref_points: List[UTMtoMAP_RefPoint]) -> Pose:
         pass
 
+    def calc_yaw(self, estimated_x: float, estimated_y: float) -> float:
+        # calculate yaw from previous pose
+        if self._previous_yaw_calc_pose is None:
+            yaw = 0.0
+
+            self._previous_yaw_calc_pose = Pose(
+                estimated_x,
+                estimated_y,
+                yaw)
+
+        # previous pose is not None
+        elif (self._previous_yaw_calc_pose.x - estimated_x)**2 + (self._previous_yaw_calc_pose.y - estimated_y)**2 > self._yaw_calc_threshold**2:
+            yaw = math.atan2(
+                estimated_y - self._previous_yaw_calc_pose.y,
+                estimated_x - self._previous_yaw_calc_pose.x)
+
+            self._previous_yaw_calc_pose = Pose(
+                estimated_x,
+                estimated_y,
+                yaw)
+
+        # distance is too short
+        else:
+            yaw = self._previous_yaw_calc_pose.yaw
+
+        return yaw
+
 
 class SingleRefConverter(ConverterBase):
     # 初期位置をゼロとして、角度のみ都度補正する
-    def __init__(self):
-        self._previous_pose = None
 
     def calc_map_pose(self, utm: Pose, ref_points: List[UTMtoMAP_RefPoint]) -> Pose:
         # calculate offset from origin
@@ -97,19 +125,19 @@ class SingleRefConverter(ConverterBase):
         # rotate
         map_position = self.rotate(map_position, origin_utm)
 
+        estimated_x = map_position.x
+        estimated_y = map_position.y
+
         # calculate yaw from previous pose
-        if self._previous_pose is not None:
-            map_position.yaw = math.atan2(
-                map_position.y - self._previous_pose.y,
-                map_position.x - self._previous_pose.x)
+        yaw = self.calc_yaw(estimated_x, estimated_y)
 
         # update previous pose
         self._previous_pose = Pose(
             map_position.x,
             map_position.y,
-            map_position.yaw)
+            yaw)
 
-        return map_position
+        return Pose(estimated_x, estimated_y, yaw)
 
     def rotate(self, pose, origin_utm) -> Pose:
         if origin_utm is None:
@@ -148,10 +176,9 @@ class SingleRefConverter(ConverterBase):
 
 class MultiRefConverter(ConverterBase):
     NUM_USE_UTM2MAP_REFPOINT = 5
+    # VISUALIZE = False
+    VISUALIZE = True
     # 参照点を複数設定し、座標と距離から最適化計算する
-
-    def __init__(self):
-        self._previous_pose = None
 
     def calc_map_pose(self, utm: Pose, ref_points: List[UTMtoMAP_RefPoint]) -> Pose:
         if len(ref_points) < 2:
@@ -184,20 +211,16 @@ class MultiRefConverter(ConverterBase):
                 [use_utm_to_map_list[0].map.x, use_utm_to_map_list[0].map.y])
         )
 
-        # visualize
-        self.visualize_utm_to_map_offset(
-            [utm_to_map.map for utm_to_map in use_utm_to_map_list],
-            use_distance_list,
-            Pose(estimated_x, estimated_y, 0.0)
-        )
+        # visualize for debug
+        if self.VISUALIZE:
+            self.visualize_utm_to_map_offset(
+                [utm_to_map.map for utm_to_map in use_utm_to_map_list],
+                use_distance_list,
+                Pose(estimated_x, estimated_y, 0.0)
+            )
 
         # calculate yaw from previous pose
-        if self._previous_pose is not None:
-            yaw = math.atan2(
-                estimated_y - self._previous_pose.y,
-                estimated_x - self._previous_pose.x)
-        else:
-            yaw = 0.0
+        yaw = self.calc_yaw(estimated_x, estimated_y)
 
         # update previous pose
         self._previous_pose = Pose(
@@ -330,8 +353,10 @@ class GpsTransform:
         self.init_parameters()
 
         self._utm_to_map_converter = UTMtoMAPConverter(
-            # [], UTMtoMAPConverter.ConverterType.SINGLE)
-            [], UTMtoMAPConverter.ConverterType.HYBRID)
+            [], UTMtoMAPConverter.ConverterType.SINGLE
+            # [], UTMtoMAPConverter.ConverterType.MULTI
+            # [], UTMtoMAPConverter.ConverterType.HYBRID
+            )
 
     def init_parameters(self):
         self.proj = None
@@ -378,9 +403,9 @@ class GpsTransform:
         self._last_utm = self.to_utm(lat, lon)
 
         map_pose = self._utm_to_map_converter.calc_map_pose(self._last_utm)
-        print("---------------")
-        print(map_pose)
-        print("---------------")
+        # print("---------------")
+        # print(map_pose)
+        # print("---------------")
 
         return Pose(
             map_pose.x,
