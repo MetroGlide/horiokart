@@ -7,8 +7,9 @@ Panels:
         - /Global Options1
         - /TF1/Frames1
         - /TF1/Tree1
-        - /Odometry2/Shape1
-        - /Odometry3/Shape1
+        - /GPS_Odometry1/Shape1
+        - /EKF_Odometry1/Shape1
+        - /GPS_REF_Odometry1/Shape1
       Splitter Ratio: 0.5833333134651184
     Tree Height: 529
   - Class: rviz_common/Selection
@@ -146,15 +147,7 @@ Visualization Manager:
           Value: true
         gps_link:
           Value: true
-        left_wheel_link:
-          Value: true
         livox_lidar_link:
-          Value: true
-        map:
-          Value: true
-        odom:
-          Value: true
-        right_wheel_link:
           Value: true
         rs_d435_link:
           Value: true
@@ -170,29 +163,7 @@ Visualization Manager:
       Show Axes: true
       Show Names: false
       Tree:
-        map:
-          odom:
-            base_footprint:
-              base_link:
-                caster_link:
-                  {}
-                front_lrf_link:
-                  {}
-                gps_link:
-                  {}
-                left_wheel_link:
-                  {}
-                right_wheel_link:
-                  {}
-                top_frame_link:
-                  livox_lidar_link:
-                    {}
-                  rs_d435_link:
-                    {}
-                  rs_d435i_link:
-                    {}
-                  top_lrf_link:
-                    {}
+        {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -244,9 +215,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 173.1743621826172
+      Max Intensity: 47
       Min Color: 0; 0; 0
-      Min Intensity: 0.7717527747154236
+      Min Intensity: 47
       Name: LaserScan
       Position Transformer: XYZ
       Selectable: true
@@ -667,7 +638,7 @@ Visualization Manager:
         Value: true
       Enabled: false
       Keep: 100
-      Name: Odometry
+      Name: WHEEL_Odometry
       Position Tolerance: 0.10000000149011612
       Shape:
         Alpha: 1
@@ -706,7 +677,7 @@ Visualization Manager:
         Value: true
       Enabled: true
       Keep: 100
-      Name: Odometry
+      Name: GPS_Odometry
       Position Tolerance: 0.10000000149011612
       Shape:
         Alpha: 1
@@ -745,7 +716,7 @@ Visualization Manager:
         Value: true
       Enabled: true
       Keep: 100
-      Name: Odometry
+      Name: EKF_Odometry
       Position Tolerance: 0.10000000149011612
       Shape:
         Alpha: 1
@@ -764,6 +735,57 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /ekf_global_odom
+      Value: true
+    - Angle Tolerance: 0.10000000149011612
+      Class: rviz_default_plugins/Odometry
+      Covariance:
+        Orientation:
+          Alpha: 0.5
+          Color: 255; 255; 127
+          Color Style: Unique
+          Frame: Local
+          Offset: 1
+          Scale: 1
+          Value: true
+        Position:
+          Alpha: 0.30000001192092896
+          Color: 204; 51; 204
+          Scale: 1
+          Value: true
+        Value: true
+      Enabled: true
+      Keep: 100
+      Name: GPS_REF_Odometry
+      Position Tolerance: 0.10000000149011612
+      Shape:
+        Alpha: 1
+        Axes Length: 1
+        Axes Radius: 0.10000000149011612
+        Color: 255; 25; 0
+        Head Length: 0.6000000238418579
+        Head Radius: 0.5
+        Shaft Length: 0.6000000238418579
+        Shaft Radius: 0.20000000298023224
+        Value: Arrow
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /odom/gps/ref_point
+      Value: true
+    - Class: rviz_default_plugins/MarkerArray
+      Enabled: true
+      Name: GPS_REF_MarkerArray
+      Namespaces:
+        {}
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /gps_transform_node/utm_to_map_refpoint_markers
       Value: true
     - Alpha: 1
       Buffer Length: 1
@@ -823,7 +845,7 @@ Visualization Manager:
       Enabled: true
       Name: CollisionMarkerArray
       Namespaces:
-        collision_points: true
+        {}
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -869,7 +891,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 35
+      Distance: 48.310096740722656
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
