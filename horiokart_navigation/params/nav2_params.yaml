@@ -54,8 +54,8 @@ amcl:
     save_pose_rate: 0.5 # Maximum rate (Hz) at which to store the last estimated pose and covariance to the parameter server, in the variables ~initial_pose_* and ~initial_cov_*. This saved pose will be used on subsequent runs to initialize the filter (-1.0 to disable).
 
     #################
-    tf_broadcast: true # if use ekf, set false
-    # tf_broadcast: false # if use ekf, set false
+    # tf_broadcast: true # if use ekf, set false
+    tf_broadcast: false # if use ekf, set false
     #################
     transform_tolerance: 1.0
     set_initial_pose: true # Causes AMCL to set initial pose from the initial_pose* parameters instead of waiting for the initial_pose message.
@@ -125,7 +125,8 @@ controller_server:
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
-    failure_tolerance: 0.3
+    ## failure_tolerance: 0.3
+    failure_tolerance: 0.5
     progress_checker_plugin: "progress_checker"
     goal_checker_plugins: ["general_goal_checker"] 
     controller_plugins: ["FollowPath"]
@@ -154,7 +155,7 @@ controller_server:
       simulate_ahead_time: 1.0
 
       # ローカルプランナーのプラグインを指定します。
-      # plugin: "dwb_core::DWBLocalPlanner"
+      ## plugin: "dwb_core::DWBLocalPlanner"
       primary_controller: "dwb_core::DWBLocalPlanner"
       # デバッグ用の軌跡詳細を表示するかどうかを指定します。
       debug_trajectory_details: True
@@ -179,13 +180,16 @@ controller_server:
       # y軸方向の加速度の最大値を指定します。
       acc_lim_y: 0.0
       # 角加速度の最大値を指定します。
-      acc_lim_theta: 0.4 # 3.2
+      ## acc_lim_theta: 0.4 # 3.2
+      acc_lim_theta: 3.2
       # x軸方向の減速度の最大値を指定します。
-      decel_lim_x: -1.0 # -2.5
+      ## decel_lim_x: -1.0 # -2.5
+      decel_lim_x: -2.5
       # y軸方向の減速度の最大値を指定します。
       decel_lim_y: 0.0
       # 角減速度の最大値を指定します。
-      decel_lim_theta: -0.5 #-3.2
+      ## decel_lim_theta: -0.5 #-3.2
+      decel_lim_theta: -3.2
       # x軸方向の速度のサンプル数を指定します。
       vx_samples: 10
       # y軸方向の速度のサンプル数を指定します。
@@ -199,7 +203,8 @@ controller_server:
       # 角度移動の粒度を指定します。
       angular_granularity: 0.025
       # トランスフォームの許容誤差を指定します。
-      transform_tolerance: 0.2
+      ## transform_tolerance: 0.2
+      transform_tolerance: 0.5
       # xy平面上のゴールの許容誤差を指定します。
       xy_goal_tolerance: 0.05
       # 停止するための速度を指定します。
@@ -243,7 +248,10 @@ local_costmap:
       width: 8 # 3
       height: 8 # 3
       resolution: 0.05
-      robot_radius: 0.4
+
+      # robot_radius: 0.4
+      footprint: "[[0.4, 0.3], [0.4, -0.3], [-0.2, -0.3], [-0.2, 0.3]]"
+
       # plugins: ["obstacle_layer", "voxel_layer", "denoise_layer", "inflation_layer"]
       # plugins: ["obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
       plugins: ["top_obstacle_layer", "obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
@@ -253,7 +261,7 @@ local_costmap:
       denoise_layer:
         plugin: "nav2_costmap_2d::DenoiseLayer"
         enabled: True
-        # enabled: False
+        ## enabled: False
         minimal_group_size: 10
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -264,7 +272,6 @@ local_costmap:
         enabled: True
         observation_sources: scan
         scan:
-          # topic: /scan_top_lidar
           topic: /scan_front_lidar
           max_obstacle_height: 2.0
           clearing: True
@@ -276,7 +283,6 @@ local_costmap:
         observation_sources: scan
         scan:
           topic: /scan_top_lidar
-          # topic: /scan_front_lidar
           max_obstacle_height: 2.0
           clearing: True
           marking: True
@@ -340,7 +346,10 @@ global_costmap:
       global_frame: map
       robot_base_frame: base_link
       use_sim_time: True
-      robot_radius: 0.3
+
+      # robot_radius: 0.3
+      footprint: "[[0.4, 0.3], [0.4, -0.3], [-0.2, -0.3], [-0.2, 0.3]]"
+
       resolution: 0.05
       track_unknown_space: true
 
@@ -356,7 +365,6 @@ global_costmap:
         observation_sources: scan
         scan:
           topic: /scan_top_lidar
-          # topic: /scan_front_lidar
           max_obstacle_height: 2.0
           clearing: True
           marking: True
@@ -370,7 +378,6 @@ global_costmap:
         enabled: True
         observation_sources: scan
         scan:
-          # topic: /scan_top_lidar
           topic: /scan_front_lidar
           max_obstacle_height: 2.0
           clearing: True
@@ -425,16 +432,16 @@ global_costmap:
       denoise_layer:
         plugin: "nav2_costmap_2d::DenoiseLayer"
         enabled: True
-        # enabled: False
+        ## enabled: False
         minimal_group_size: 10
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        # cost_scaling_factor: 3.0
+        ## cost_scaling_factor: 3.0
         cost_scaling_factor: 2.0
-        # inflation_radius: 0.55
+        ## inflation_radius: 0.55
         inflation_radius: 1.0
 
       speed_filter:
@@ -456,11 +463,6 @@ map_server:
     use_sim_time: False
     yaml_filename: "map.yaml"
 
-planning_map_server:
-  ros__parameters:
-    use_sim_time: False
-    yaml_filename: "map.yaml"
-
 map_saver:
   ros__parameters:
     use_sim_time: False
@@ -471,7 +473,8 @@ map_saver:
 
 planner_server:
   ros__parameters:
-    expected_planner_frequency: 20.0
+    ## expected_planner_frequency: 20.0
+    expected_planner_frequency: 10.0
     use_sim_time: False
     planner_plugins: ["GridBased"]
     GridBased:
@@ -509,23 +512,48 @@ robot_state_publisher:
   ros__parameters:
     use_sim_time: False
 
-waypoint_follower:
-  ros__parameters:
-    loop_rate: 2000
-    stop_on_failure: false
-    waypoint_task_executor_plugin: "wait_at_waypoint"   
-    wait_at_waypoint:
-      plugin: "nav2_waypoint_follower::WaitAtWaypoint"
-      enabled: True
-      waypoint_pause_duration: 200
-
 costmap_filter_info_server:
   ros__parameters:
     use_sim_time: true
     type: 1
     filter_info_topic: "/costmap_filter_info"
     mask_topic: "/local_costmap/costmap"
-    # base: 100.0
-    # multiplier: -1.0
+    ## base: 100.0
+    ## multiplier: -1.0
     base: 100.0
     multiplier: -0.8
+  
+collision_detector:
+  ros__parameters:
+    use_sim_time: False
+    base_frame_id: "base_footprint"
+    odom_frame_id: "odom"
+    transform_tolerance: 0.5
+    source_timeout: 3.0
+    base_shift_correction: True
+    polygons: ["PolygonFront", "PolygonRear"]
+
+    PolygonFront:
+      type: "polygon"
+      points: [0.6, 0.3, 0.6, -0.3, 0.3, -0.3, 0.3, 0.3]
+      action_type: "none"
+      min_points: 4
+      visualize: True
+      polygon_pub_topic: "~/polygon_front"
+    PolygonRear:
+      type: "polygon"
+      points: [-0.2, 0.3, -0.2, -0.3, -0.4, -0.3, -0.4, 0.3]
+      action_type: "none"
+      min_points: 4
+      visualize: True
+      polygon_pub_topic: "~/polygon_rear"
+
+    observation_sources: ["scan_top", "scan_front"]
+    scan_top:
+      type: "scan"
+      topic: "scan_top_lidar"
+      enabled: True
+    scan_front:
+      type: "scan"
+      topic: "scan_front_lidar"
+      enabled: True
