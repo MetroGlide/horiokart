@@ -40,7 +40,8 @@ def generate_launch_description():
         "record_bag", default="false")
 
     use_ekf_arg = launch_argument_creator.create(
-        "use_ekf", default="False")
+        "use_ekf", default="True")
+        # "use_ekf", default="False")
     ekf_params_file_arg = launch_argument_creator.create(
         "ekf_params_file", default="ekf_global.yaml")
     ekf_odom_topic_arg = launch_argument_creator.create(
