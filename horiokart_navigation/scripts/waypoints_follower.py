@@ -230,7 +230,8 @@ class WaypointsFollowerNode(Node):
         super().__init__('waypoint_follower_node')
 
         load_path = self.declare_parameter(
-            'load_path', "/root/ros2_data/new_waypoints.yaml").value
+            # 'load_path', "/root/ros2_data/new_waypoints.yaml").value
+            'load_path', "/root/ros2_data/map/waypoints_list.yaml").value
 
         self.through_point_tolerance = self.declare_parameter(
             'through_point_tolerance', 3.0).value
