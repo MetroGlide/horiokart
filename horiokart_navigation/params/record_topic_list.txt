@@ -1,10 +1,12 @@
 /odom
 /scan_top_lidar
 /scan_front_lidar
+/scan_front_lidar/origin
 /nmea_sentence
 
 /actual_path
 /amcl_pose
+/amcl_pose/origin
 /behavior_tree_log
 /cmd_vel
 /cost_cloud
