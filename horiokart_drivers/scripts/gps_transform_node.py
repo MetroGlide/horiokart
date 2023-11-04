@@ -73,7 +73,8 @@ class GpsTransformNode(Node):
             'covariance_publish_threshold',
             10.0).value
 
-        self._gps_transform = GpsTransform(offset_yaw=2.75)
+        # self._gps_transform = GpsTransform(offset_yaw=2.75)
+        self._gps_transform = GpsTransform(offset_yaw=3.14)
         if not self._gps_transform.load_utm_to_map_list(self.utm_param_yaml_path):
             self.get_logger().info(
                 f'failed to load {self.utm_param_yaml_path}')
@@ -180,7 +181,7 @@ class GpsTransformNode(Node):
             ])[2]
         )
 
-        self._gps_transform.feedback_pose(map_frame_pose)
+        # self._gps_transform.feedback_pose(map_frame_pose)
         if self.resistration:
             # TODO!: for debug
             if self._gps_transform.add_utm_to_map_refpoint(self._gps_transform.last_utm, map_frame_pose, covariance):
