@@ -145,6 +145,10 @@ install(PROGRAMS
   scripts/lidar_publish_controller_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
+install(PROGRAMS
+  scripts/pose_with_cov_publish_controller_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ################################################################################
 # Macro for ament package
