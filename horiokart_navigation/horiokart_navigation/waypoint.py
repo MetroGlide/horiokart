@@ -13,6 +13,7 @@ class OnReachedAction(enum.Enum):
     RELOAD_MAP = "reload_map"
     FROMT_LIDAR_OFF = "front_lidar_off"
     FRONT_LIDAR_ON = "front_lidar_on"
+    AMCL_ON = "amcl_on"
 
     @classmethod
     def get_all_values(cls):

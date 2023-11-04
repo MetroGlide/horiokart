@@ -6,7 +6,7 @@ from rclpy.logging import LoggingSeverity
 from rclpy.clock import Clock
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from geometry_msgs.msg import PoseStamped, Point, Quaternion
+from geometry_msgs.msg import PoseStamped, Point, Quaternion, PoseWithCovarianceStamped
 from visualization_msgs.msg import MarkerArray, Marker
 from nav_msgs.msg import Path
 from std_srvs.srv import Trigger, SetBool
@@ -281,6 +281,14 @@ class WaypointsFollowerNode(Node):
         self._change_front_lidar_publish_state_srv_client = self.create_client(
             SetBool, "front_lidar_publish_controller_node/change_publish_state")
 
+        self._change_amcl_publish_state_srv_client = self.create_client(
+            SetBool, "amcl_publish_controller_node/change_publish_state")
+
+        self._amcl_initialpose_publisher = self.create_publisher(
+            PoseWithCovarianceStamped,
+            "initialpose",
+            1)
+
         self._on_reached_actions_progress_list = []
 
         self.get_logger().info("Waypoints follower node initialized")
@@ -483,6 +491,49 @@ class WaypointsFollowerNode(Node):
             self.ServiceFuture(future, "change_front_lidar_publish_state", self.get_logger(),
                                callback=self._change_front_lidar_publish_state_callback))
 
+    def _on_reached_action_amcl_on_off(self, waypoint: Waypoint, state: bool):
+        if state:
+            # reset amcl init pose
+            for _ in range(5):
+                try:
+                    transform = self._tf_buffer.lookup_transform(
+                        "map", "base_footprint", rclpy.time.Time())
+                    break
+                except Exception as e:
+                    self.get_logger().error(f"Failed to lookup transform: {e}")
+
+            if transform is not None:
+                pose = PoseWithCovarianceStamped()
+                pose.header.frame_id = "map"
+                pose.header.stamp = self.get_clock().now().to_msg()
+                pose.pose.pose.position = Point(
+                    transform.transform.translation.x, transform.transform.translation.y, transform.transform.translation.z
+                )
+                pose.pose.pose.orientation = transform.transform.rotation
+
+                pose.covariance = [
+                    0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, 0.06853891909122467
+                ]
+
+                self._amcl_initialpose_publisher.publish(pose)
+                self.get_logger().info(f"Reset amcl init pose")            
+
+        self._change_amcl_publish_state_srv_client.wait_for_service()
+        request = SetBool.Request()
+        request.data = state
+
+        future = self._change_amcl_publish_state_srv_client.call_async(
+            request)
+
+        self._on_reached_actions_progress_list.append(
+            self.ServiceFuture(future, "change_amcl_publish_state", self.get_logger(),
+                               callback=self._change_amcl_publish_state_callback))
+
     def _change_front_lidar_publish_state_callback(self, response, logger):
         if response.success:
             logger.info(f"Change front lidar publish state success")
@@ -513,6 +564,12 @@ class WaypointsFollowerNode(Node):
                 f"OnReachedAction: Front lidar on")
             
             self._on_reached_action_front_lidar_on_off(waypoint, True)
+
+        elif OnReachedAction.AMCL_ON == on_reached_action:
+            self.get_logger().info(
+                f"OnReachedAction: AMCL on")
+            
+            self._on_reached_action_amcl_on_off(waypoint, True)
 
 
     def _on_reached(self, waypoint: Waypoint):

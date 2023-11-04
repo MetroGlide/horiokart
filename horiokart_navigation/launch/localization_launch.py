@@ -132,7 +132,7 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings),
+                remappings=remappings + [('amcl_pose', 'amcl_pose_origin')]),
             Node(
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
@@ -160,7 +160,7 @@ def generate_launch_description():
                 plugin='nav2_amcl::AmclNode',
                 name='amcl',
                 parameters=[configured_params],
-                remappings=remappings),
+                remappings=remappings + [('amcl_pose', 'amcl_pose_origin')]),
             ComposableNode(
                 package='nav2_lifecycle_manager',
                 plugin='nav2_lifecycle_manager::LifecycleManager',
@@ -169,6 +169,14 @@ def generate_launch_description():
                              'autostart': autostart,
                              'node_names': lifecycle_nodes}]),
         ],
+    )
+
+    change_amcl_publish_state_node = Node(
+        package='horiokart_drivers',
+        executable='pose_with_cov_publish_controller_node.py',
+        name='amcl_publish_controller_node',
+        output='screen',
+        remappings=[("pose_with_cov_origin","amcl_pose_origin"), ("pose_with_cov", "amcl_pose")]
     )
 
     # Create the launch description and populate
@@ -191,5 +199,7 @@ def generate_launch_description():
     # Add the actions to launch all of the localiztion nodes
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
+
+    ld.add_action(change_amcl_publish_state_node)
 
     return ld
