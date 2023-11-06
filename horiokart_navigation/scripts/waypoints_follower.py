@@ -507,11 +507,13 @@ class WaypointsFollowerNode(Node):
                 pose.header.frame_id = "map"
                 pose.header.stamp = self.get_clock().now().to_msg()
                 pose.pose.pose.position = Point(
-                    transform.transform.translation.x, transform.transform.translation.y, transform.transform.translation.z
+                    x=transform.transform.translation.x,
+                    y=transform.transform.translation.y,
+                    z=transform.transform.translation.z
                 )
                 pose.pose.pose.orientation = transform.transform.rotation
 
-                pose.covariance = [
+                pose.pose.covariance = [
                     0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
                     0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
                     0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -521,7 +523,7 @@ class WaypointsFollowerNode(Node):
                 ]
 
                 self._amcl_initialpose_publisher.publish(pose)
-                self.get_logger().info(f"Reset amcl init pose")            
+                self.get_logger().info(f"Reset amcl init pose")
 
         self._change_amcl_publish_state_srv_client.wait_for_service()
         request = SetBool.Request()
@@ -539,6 +541,12 @@ class WaypointsFollowerNode(Node):
             logger.info(f"Change front lidar publish state success")
         else:
             logger.error(f"Change front lidar publish state failed")
+
+    def _change_amcl_publish_state_callback(self, response, logger):
+        if response.success:
+            logger.info(f"Change amcl publish state success")
+        else:
+            logger.error(f"Change amcl publish state failed")
 
     def _on_reached_action(self, waypoint: Waypoint, on_reached_action: OnReachedAction):
         if OnReachedAction.WAIT_TRIGGER == on_reached_action:
@@ -562,15 +570,14 @@ class WaypointsFollowerNode(Node):
         elif OnReachedAction.FRONT_LIDAR_ON == on_reached_action:
             self.get_logger().info(
                 f"OnReachedAction: Front lidar on")
-            
+
             self._on_reached_action_front_lidar_on_off(waypoint, True)
 
         elif OnReachedAction.AMCL_ON == on_reached_action:
             self.get_logger().info(
                 f"OnReachedAction: AMCL on")
-            
-            self._on_reached_action_amcl_on_off(waypoint, True)
 
+            self._on_reached_action_amcl_on_off(waypoint, True)
 
     def _on_reached(self, waypoint: Waypoint):
         for on_reached_action in waypoint.on_reached_action:
