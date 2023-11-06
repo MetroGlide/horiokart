@@ -50,13 +50,13 @@ def generate_launch_description():
                 ),
             ),
 
-            launch.actions.IncludeLaunchDescription(
-                PythonLaunchDescriptionSource(
-                    pkg_share + "/launch/laser_filters.launch.py"
-                ),
-                condition=launch.conditions.IfCondition(
-                    use_lidar_arg.launch_config),
-            ),
+            # launch.actions.IncludeLaunchDescription(
+            #     PythonLaunchDescriptionSource(
+            #         pkg_share + "/launch/laser_filters.launch.py"
+            #     ),
+            #     condition=launch.conditions.IfCondition(
+            #         use_lidar_arg.launch_config),
+            # ),
 
             Node(
                 package="nmea_navsat_driver",
