@@ -70,18 +70,47 @@ class ConverterBase:
         self._previous_yaw_calc_pose = None
         self._yaw_calc_threshold = 1.0  # unit: m
 
+        self._odom_yaw = 0.0
+        self._previous_odom_yaw = None
+        self._odom_offset_yaw = 0.0
+
     def calc_map_pose(self, utm: Pose, ref_points: List[UTMtoMAP_RefPoint]) -> Pose:
         pass
 
-    def calc_yaw(self, estimated_x: float, estimated_y: float) -> float:
+    def get_yaw(self, estimated_x: float, estimated_y: float) -> float:
+        yaw_from_pose = self.calc_yaw_from_pose(estimated_x, estimated_y)
+        # return yaw_from_pose
+
+        diff_yaw = yaw_from_pose - self._odom_yaw
+        diff_yaw = self._normalize_yaw(diff_yaw)
+
+        coef = 0.01
+        self._odom_offset_yaw = diff_yaw * coef + \
+            self._odom_offset_yaw * (1.0 - coef)
+
+        
+        # self._odom_yaw += self._odom_offset_yaw
+        self._odom_yaw += diff_yaw * 0.1
+        # self._previous_yaw_calc_pose.yaw = self._odom_yaw
+
+        print(f"yaw_from_pose: {yaw_from_pose}")
+        print(f"self._odom_yaw: {self._odom_yaw}")
+        print(f"self._odom_offset_yaw: {self._odom_offset_yaw}")
+        print("-------------")
+
+        return self._odom_yaw
+
+    def calc_yaw_from_pose(self, estimated_x: float, estimated_y: float) -> float:
         # calculate yaw from previous pose
         if self._previous_yaw_calc_pose is None:
-            yaw = 0.0
+            yaw = self._odom_yaw
 
             self._previous_yaw_calc_pose = Pose(
                 estimated_x,
                 estimated_y,
                 yaw)
+
+            return yaw
 
         # previous pose is not None
         elif (self._previous_yaw_calc_pose.x - estimated_x)**2 + (self._previous_yaw_calc_pose.y - estimated_y)**2 > self._yaw_calc_threshold**2:
@@ -94,11 +123,40 @@ class ConverterBase:
                 estimated_y,
                 yaw)
 
+            return yaw
+
         # distance is too short
         else:
             yaw = self._previous_yaw_calc_pose.yaw
+            return yaw
 
+    def _normalize_yaw(self, yaw: float) -> float:
+        while yaw > math.pi:
+            yaw -= math.pi * 2
+        while yaw < -math.pi:
+            yaw += math.pi * 2
         return yaw
+
+    def odom_yaw_feedback(self, odom_yaw: float):
+        # self._odom_yaw = odom_yaw
+
+        if self._previous_odom_yaw is None:
+            self._previous_odom_yaw = odom_yaw
+            return
+
+        diff_yaw = odom_yaw - self._previous_odom_yaw
+        diff_yaw = self._normalize_yaw(diff_yaw)
+
+        self._odom_yaw += diff_yaw
+        self._previous_odom_yaw = odom_yaw
+
+    def init_odom_yaw(self, odom_yaw: float):
+        self._odom_yaw = odom_yaw
+        self._previous_odom_yaw = odom_yaw
+        self._odom_offset_yaw = 0.0
+
+        if self._previous_pose is not None:
+            self._previous_pose.yaw = odom_yaw
 
 
 class SingleRefConverter(ConverterBase):
@@ -129,7 +187,7 @@ class SingleRefConverter(ConverterBase):
         estimated_y = map_position.y
 
         # calculate yaw from previous pose
-        yaw = self.calc_yaw(estimated_x, estimated_y)
+        yaw = self.get_yaw(estimated_x, estimated_y)
 
         # update previous pose
         self._previous_pose = Pose(
@@ -220,7 +278,7 @@ class MultiRefConverter(ConverterBase):
             )
 
         # calculate yaw from previous pose
-        yaw = self.calc_yaw(estimated_x, estimated_y)
+        yaw = self.get_yaw(estimated_x, estimated_y)
 
         # update previous pose
         self._previous_pose = Pose(
@@ -344,6 +402,14 @@ class UTMtoMAPConverter:
         self._utm_to_map_list[0].utm = self._single_ref_converter.feedback(
             map_pose, self._utm_to_map_list[0].utm)
 
+    def odom_yaw_feedback(self, odom_yaw: float):
+        self._single_ref_converter.odom_yaw_feedback(odom_yaw)
+        self._multi_ref_converter.odom_yaw_feedback(odom_yaw)
+
+    def init_odom_yaw(self, odom_yaw: float):
+        self._single_ref_converter.init_odom_yaw(odom_yaw)
+        self._multi_ref_converter.init_odom_yaw(odom_yaw)
+
 
 class GpsTransform:
 
@@ -356,7 +422,7 @@ class GpsTransform:
             [], UTMtoMAPConverter.ConverterType.SINGLE
             # [], UTMtoMAPConverter.ConverterType.MULTI
             # [], UTMtoMAPConverter.ConverterType.HYBRID
-            )
+        )
 
     def init_parameters(self):
         self.proj = None
@@ -411,3 +477,9 @@ class GpsTransform:
             map_pose.x,
             map_pose.y,
             map_pose.yaw)
+
+    def odom_yaw_feedback(self, odom_yaw: float):
+        self._utm_to_map_converter.odom_yaw_feedback(odom_yaw)
+
+    def init_odom_yaw(self, odom_yaw: float):
+        self._utm_to_map_converter.init_odom_yaw(odom_yaw)

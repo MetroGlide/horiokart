@@ -7,7 +7,7 @@ import rclpy
 from rclpy.node import Node
 
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Quaternion, Pose
+from geometry_msgs.msg import Quaternion, Pose, PoseWithCovarianceStamped
 from sensor_msgs.msg import NavSatFix
 from std_srvs.srv import Trigger, SetBool
 
@@ -71,10 +71,9 @@ class GpsTransformNode(Node):
 
         self.covariance_publish_threshold = self.declare_parameter(
             'covariance_publish_threshold',
-            10.0).value
+            15.0).value
 
-        # self._gps_transform = GpsTransform(offset_yaw=2.75)
-        self._gps_transform = GpsTransform(offset_yaw=3.14)
+        self._gps_transform = GpsTransform(offset_yaw=2.75)
         if not self._gps_transform.load_utm_to_map_list(self.utm_param_yaml_path):
             self.get_logger().info(
                 f'failed to load {self.utm_param_yaml_path}')
@@ -82,6 +81,8 @@ class GpsTransformNode(Node):
         self.odom_msg = Odometry()
         self.odom_msg.header.frame_id = self.map_frame_id
         self.odom_msg.child_frame_id = self.gps_frame_id
+
+        self._yaw_offset = 0.0
 
     def init_ros_communication(self):
         self.gps_sub = self.create_subscription(
@@ -109,6 +110,12 @@ class GpsTransformNode(Node):
             Odometry,
             'odom',
             self.odom_callback,
+            1)
+
+        self.initial_pose_sub = self.create_subscription(
+            PoseWithCovarianceStamped,
+            'initialpose',
+            self.initial_pose_callback,
             1)
 
         self.set_resistration_mode_srv = self.create_service(
@@ -187,13 +194,8 @@ class GpsTransformNode(Node):
             if self._gps_transform.add_utm_to_map_refpoint(self._gps_transform.last_utm, map_frame_pose, covariance):
                 pass
 
-        # if len(self._gps_transform._utm_to_map_converter.utm_to_map_list) < 2:
-        #     return
-        # if len(self._gps_transform._utm_to_map_converter.utm_to_map_list) > 3 and self.resistration:
-        #     self.resistration = False
-
         else:
-        # if True:  # TODO!: for debug
+            # if True:  # TODO!: for debug
             if covariance > self.covariance_publish_threshold:
                 return
 
@@ -201,6 +203,7 @@ class GpsTransformNode(Node):
             self.odom_msg.pose.pose.position.x = map_position.x
             self.odom_msg.pose.pose.position.y = map_position.y
             self.odom_msg.pose.pose.position.z = 0.0
+
             # set orientation from yaw
             q = quaternion_from_euler(0.0, 0.0, map_position.yaw)
             self.odom_msg.pose.pose.orientation = Quaternion(
@@ -209,11 +212,10 @@ class GpsTransformNode(Node):
             # set covariance
             self.odom_msg.pose.covariance[0] = covariance
             self.odom_msg.pose.covariance[7] = covariance
-            # self.odom_msg.pose.covariance[14] = 0.0
-            self.odom_msg.pose.covariance[14] = 1.5
+            self.odom_msg.pose.covariance[14] = 0.0
             self.odom_msg.pose.covariance[21] = 0.0
             self.odom_msg.pose.covariance[28] = 0.0
-            self.odom_msg.pose.covariance[35] = 0.0
+            self.odom_msg.pose.covariance[35] = 1.5
 
             self.odom_pub.publish(self.odom_msg)
 
@@ -221,6 +223,39 @@ class GpsTransformNode(Node):
 
     def odom_callback(self, msg):
         self.current_odom_msg = msg
+
+        current_odom_yaw = euler_from_quaternion([
+            self.current_odom_msg.pose.pose.orientation.x,
+            self.current_odom_msg.pose.pose.orientation.y,
+            self.current_odom_msg.pose.pose.orientation.z,
+            self.current_odom_msg.pose.pose.orientation.w
+        ])[2]
+        current_odom_yaw += self._yaw_offset
+        self._gps_transform.odom_yaw_feedback(current_odom_yaw)
+
+    def initial_pose_callback(self, msg: PoseWithCovarianceStamped):
+        if self.current_odom_msg is None:
+            self.get_logger().error('odom is not received yet')
+            return
+
+        # calc diff between current odom and initial pose about yaw
+        current_odom_yaw = euler_from_quaternion([
+            self.current_odom_msg.pose.pose.orientation.x,
+            self.current_odom_msg.pose.pose.orientation.y,
+            self.current_odom_msg.pose.pose.orientation.z,
+            self.current_odom_msg.pose.pose.orientation.w
+        ])[2]
+
+        initial_pose_yaw = euler_from_quaternion([
+            msg.pose.pose.orientation.x,
+            msg.pose.pose.orientation.y,
+            msg.pose.pose.orientation.z,
+            msg.pose.pose.orientation.w
+        ])[2]
+
+        self._yaw_offset = initial_pose_yaw - current_odom_yaw
+
+        self._gps_transform.init_odom_yaw(current_odom_yaw)
 
     def set_resistration_mode_callback(self, request, response):
         self.resistration = request.data
