@@ -93,11 +93,6 @@ class ConverterBase:
         self._odom_yaw += diff_yaw * 0.1
         # self._previous_yaw_calc_pose.yaw = self._odom_yaw
 
-        print(f"yaw_from_pose: {yaw_from_pose}")
-        print(f"self._odom_yaw: {self._odom_yaw}")
-        print(f"self._odom_offset_yaw: {self._odom_offset_yaw}")
-        print("-------------")
-
         return self._odom_yaw
 
     def calc_yaw_from_pose(self, estimated_x: float, estimated_y: float) -> float:
@@ -173,7 +168,8 @@ class SingleRefConverter(ConverterBase):
             origin_utm = Pose(
                 ref_points[0].utm.x,
                 ref_points[0].utm.y,
-                ref_points[0].utm.yaw)
+                # ref_points[0].utm.yaw)
+                2.75)
 
         map_position = Pose(
             utm.x - origin_utm.x,
@@ -234,8 +230,9 @@ class SingleRefConverter(ConverterBase):
 
 class MultiRefConverter(ConverterBase):
     NUM_USE_UTM2MAP_REFPOINT = 5
-    # VISUALIZE = False
-    VISUALIZE = True
+    VISUALIZE = False
+    # VISUALIZE = True
+
     # 参照点を複数設定し、座標と距離から最適化計算する
 
     def calc_map_pose(self, utm: Pose, ref_points: List[UTMtoMAP_RefPoint]) -> Pose:
@@ -300,7 +297,7 @@ class MultiRefConverter(ConverterBase):
                 errors.append(error)
             return errors
 
-        power = 3.0
+        power = 1.0
         result = minimize(
             lambda p: np.sum(
                 np.square(distance_error(p, known_points, distances, power))),
@@ -336,7 +333,8 @@ class MultiRefConverter(ConverterBase):
 
 class UTMtoMAPConverter:
     UTM2MAP_APPEND_THRESHOLD = 20  # unit: m
-    UTM_VARIANCE_THRESHOLD = 5.5  # unit: m
+    # UTM_VARIANCE_THRESHOLD = 5.5  # unit: m
+    UTM_VARIANCE_THRESHOLD = 25.5  # unit: m
 
     class ConverterType(enum.IntEnum):
         SINGLE = enum.auto()
@@ -419,8 +417,8 @@ class GpsTransform:
         self.init_parameters()
 
         self._utm_to_map_converter = UTMtoMAPConverter(
-            [], UTMtoMAPConverter.ConverterType.SINGLE
-            # [], UTMtoMAPConverter.ConverterType.MULTI
+            # [], UTMtoMAPConverter.ConverterType.SINGLE
+            [], UTMtoMAPConverter.ConverterType.MULTI
             # [], UTMtoMAPConverter.ConverterType.HYBRID
         )
 

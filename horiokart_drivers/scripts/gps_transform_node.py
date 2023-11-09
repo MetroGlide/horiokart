@@ -22,12 +22,19 @@ from gps_transform import Pose as GpsPose
 
 
 class HDOP2Covariance:
-    def __init__(self):
-        self.a = 19.23076923
-        self.b = -4.230769231
+    # require 2 pair of hdop and radius
+    def __init__(self, hdop_radius_pair1: tuple, hdop_radius_pair2: tuple):
+        # self.a = 19.23076923
+        # self.b = -4.230769231
+        self._calc_coefficient(hdop_radius_pair1, hdop_radius_pair2)
 
         self.mean_num = 10
         self.covariance_history = []
+
+    def _calc_coefficient(self, hdop_radius_pair1: tuple, hdop_radius_pair2: tuple) -> [float, float]:
+        self.a = (hdop_radius_pair1[1] - hdop_radius_pair2[1]) / \
+            (hdop_radius_pair1[0] - hdop_radius_pair2[0])
+        self.b = hdop_radius_pair1[1] - self.a * hdop_radius_pair1[0]
 
     def get_covariance(self, hdop: float) -> float:
         cov = (hdop * self.a + self.b) ** 2
@@ -48,7 +55,14 @@ class GpsTransformNode(Node):
         self.prepare_tf()
         self.init_ros_communication()
 
-        self._hdop_to_covariance = HDOP2Covariance()
+        self._hdop_to_covariance = HDOP2Covariance(
+            hdop_radius_pair1=(0.35, 2.5),
+            hdop_radius_pair2=(1.0, 15.0)
+        )
+        self.get_logger().info(
+            f'hdop_to_covariance: a={self._hdop_to_covariance.a}, b={self._hdop_to_covariance.b}')
+
+        self.get_logger().info('gps_transform_node initialized')
 
     def init_parameters(self):
         self.resistration = self.declare_parameter(
@@ -71,7 +85,7 @@ class GpsTransformNode(Node):
 
         self.covariance_publish_threshold = self.declare_parameter(
             'covariance_publish_threshold',
-            15.0).value
+            25.0).value
 
         self._gps_transform = GpsTransform(offset_yaw=2.75)
         if not self._gps_transform.load_utm_to_map_list(self.utm_param_yaml_path):
@@ -152,11 +166,11 @@ class GpsTransformNode(Node):
         self._gps_to_base_link_transform = tf2_py.inverse_transform(
             self._base_link_to_gps_transform)
 
-    def hdop_to_covariance(self, hdop: float) -> float:
-        a = 19.23076923
-        b = -4.230769231
-        return (hdop * a + b) ** 2  # temporary
-        # return a * math.exp(-b * hdop)
+    # def hdop_to_covariance(self, hdop: float) -> float:
+    #     a = 19.23076923
+    #     b = -4.230769231
+    #     return (hdop * a + b) ** 2  # temporary
+    #     # return a * math.exp(-b * hdop)
 
     def gps_callback(self, msg):
         map_position = self._gps_transform.transform_to_map(
@@ -188,15 +202,18 @@ class GpsTransformNode(Node):
             ])[2]
         )
 
-        # self._gps_transform.feedback_pose(map_frame_pose)
+        self._gps_transform.feedback_pose(map_frame_pose)
         if self.resistration:
             # TODO!: for debug
             if self._gps_transform.add_utm_to_map_refpoint(self._gps_transform.last_utm, map_frame_pose, covariance):
-                pass
+                self.get_logger().info(
+                    f'added utm_to_map_refpoint: {self._gps_transform.last_utm} -> {map_frame_pose}. covariance: {covariance}')
 
         else:
             # if True:  # TODO!: for debug
             if covariance > self.covariance_publish_threshold:
+                self.get_logger().warn(
+                    f'covariance is too large: {covariance}')
                 return
 
             self.odom_msg.header.stamp = msg.header.stamp
