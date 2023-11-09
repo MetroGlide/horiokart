@@ -579,6 +579,12 @@ class WaypointsFollowerNode(Node):
 
             self._on_reached_action_amcl_on_off(waypoint, True)
 
+        elif OnReachedAction.AMCL_OFF == on_reached_action:
+            self.get_logger().info(
+                f"OnReachedAction: AMCL off")
+
+            self._on_reached_action_amcl_on_off(waypoint, False)
+
     def _on_reached(self, waypoint: Waypoint):
         for on_reached_action in waypoint.on_reached_action:
             self._on_reached_action(waypoint, on_reached_action)
