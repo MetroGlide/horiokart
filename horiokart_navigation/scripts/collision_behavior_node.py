@@ -47,6 +47,7 @@ class CollisionBehavior(Node):
         self._init_ros_communications()
 
         self._phase = self.Phase.UNKNOWN
+        self._same_detection_flag = False
 
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
@@ -61,6 +62,7 @@ class CollisionBehavior(Node):
             self._controller_main
         )
 
+        self.waypoint_follower_stop_future = None
         while not self._waypoint_follower_stop_client.wait_for_service(timeout_sec=2.0):
             self.get_logger().warn(
                 'Waypoint follower stop service not available, waiting again...'
@@ -124,6 +126,11 @@ class CollisionBehavior(Node):
 
     def _collision_detector_subscriber_callback(self, msg: CollisionDetectorState):
         if msg.detections[0]:
+            if self._same_detection_flag:
+                return
+
+            self._same_detection_flag = True
+
             if self._phase == self.Phase.NO_COLLISION or self._phase == self.Phase.UNKNOWN:
                 self._emergency_stop.data = True
                 self._emergency_stop_pub.publish(self._emergency_stop)
@@ -134,21 +141,19 @@ class CollisionBehavior(Node):
 
                 if self._waypoint_follower_stop_client.wait_for_service(timeout_sec=1.0):
                     waypoint_follower_stop_request = Trigger.Request()
-                    waypoint_follower_stop_future = self._waypoint_follower_stop_client.call_async(
+                    self.waypoint_follower_stop_future = self._waypoint_follower_stop_client.call_async(
                         waypoint_follower_stop_request
                     )
-                    # todo: check result
+
                 else:
                     self.get_logger().error(
                         'Failed to call waypoint follower stop service.'
                     )
-
-                self._phase = self.Phase.WAIT
-                self._wait_start_time = None
-                self._start_position = None
-                self._retry_count = 0
+                    self._reset_emergency()
 
         else:
+            self._same_detection_flag = False
+
             if self._phase == self.Phase.UNKNOWN:
                 self._phase = self.Phase.NO_COLLISION
 
@@ -180,7 +185,36 @@ class CollisionBehavior(Node):
                 'Failed to call waypoint follower start service.'
             )
 
+    def _check_stop_response_done(self):
+        if self.waypoint_follower_stop_future is None:
+            return
+        if not self.waypoint_follower_stop_future.done():
+            self.get_logger().info(
+                'Waiting for waypoint follower stop service response...'
+            )
+
+        if self.waypoint_follower_stop_future.result().success:
+            self.get_logger().info(
+                'Waypoint follower stop service succeeded.'
+            )
+
+            # initialize phase
+            self._phase = self.Phase.WAIT
+            self._wait_start_time = None
+            self._start_position = None
+            self._retry_count = 0
+
+        else:
+            self.get_logger().error(
+                'Waypoint follower stop service failed.'
+            )
+            self._reset_emergency()
+
+        self.waypoint_follower_stop_future = None
+
     def _controller_main(self):
+        self._check_stop_response_done()
+
         if self._phase in [self.Phase.UNKNOWN, self.Phase.NO_COLLISION]:
             return
 

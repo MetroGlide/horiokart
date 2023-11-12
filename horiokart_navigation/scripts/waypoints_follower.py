@@ -293,17 +293,21 @@ class WaypointsFollowerNode(Node):
 
         self.get_logger().info("Waypoints follower node initialized")
 
-    def _stop_callback(self, request, response):
-        self._stop_following()
-        response.success = True
+    def _stop_callback(self, request, response) -> Trigger.Response:
+        response.success = self._stop_following()
         return response
 
-    def _stop_following(self):
+    def _stop_following(self) -> bool:
+        if self._stop_request:
+            self.get_logger().error("Already stopped")
+            return False
+
         self.get_logger().info("Stop following waypoints")
         self._stop_request = True
         self._waypoints_follower.stop_request()
+        return True
 
-    def _start_callback(self, request, response):
+    def _start_callback(self, request, response) -> Trigger.Response:
         if not self._stop_request:
             self.get_logger().error(f"Already running")
 
