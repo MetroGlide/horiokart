@@ -68,6 +68,11 @@ horiokart_drivers::SpeedParameter MotorDriverNode::create_speed_parameter(
         linear_x = -max_speed_;
     }
 
+    if (abs(angular_z) > 0.8)
+    {
+        angular_z = 0.8 * angular_z/abs(angular_z);
+    }
+
     double left_speed = linear_x - angular_z * wheel_pitch_ / 2.0;
     double right_speed = linear_x + angular_z * wheel_pitch_ / 2.0;
 
