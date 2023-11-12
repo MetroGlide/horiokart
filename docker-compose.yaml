@@ -26,12 +26,12 @@ services:
       - /dev:/dev
       - ${HOME}/ros2_data:/root/ros2_data
 
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
 
     command: "/app/docker/docker-entrypoint.sh"
