@@ -12,7 +12,7 @@ class PoseWithCovariancePublishControllerNode(Node):
         super().__init__("pose_with_covariance_publish_controller_node")
 
         self.get_logger().info("pose_with_covariance_publish_controller_node started")
-        self._publish = False
+        self._publish = True
 
         self.init_parameters()
         self.init_ros_topics()

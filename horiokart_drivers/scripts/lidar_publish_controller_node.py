@@ -12,7 +12,7 @@ class LidarPublishControllerNode(Node):
         super().__init__("lidar_publish_controller_node")
 
         self.get_logger().info("lidar_publish_controller_node started")
-        self._publish = False
+        self._publish = True
 
         self.init_parameters()
         self.init_ros_topics()
