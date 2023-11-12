@@ -230,8 +230,8 @@ class SingleRefConverter(ConverterBase):
 
 class MultiRefConverter(ConverterBase):
     NUM_USE_UTM2MAP_REFPOINT = 5
-    VISUALIZE = False
-    # VISUALIZE = True
+    # VISUALIZE = False
+    VISUALIZE = True
 
     # 参照点を複数設定し、座標と距離から最適化計算する
 
@@ -293,7 +293,7 @@ class MultiRefConverter(ConverterBase):
             errors = []
             for i in range(len(known_points)):
                 error = np.linalg.norm(known_points[i] - point) - distances[i]
-                error *= inverse_distance_weight(distances[i], power)
+                # error *= inverse_distance_weight(distances[i], power)
                 errors.append(error)
             return errors
 
