@@ -85,6 +85,10 @@ class CollisionBehavior(Node):
             'back_up_velocity',
             0.2  # m/s
         ).value
+        self._back_up_theta_velocity = self.declare_parameter(
+            'back_up_theta_velocity',
+            0.2  # rad
+        ).value
         self._controller_rate = self.declare_parameter(
             'controller_rate',
             10.0
@@ -203,6 +207,7 @@ class CollisionBehavior(Node):
             self._wait_start_time = None
             self._start_position = None
             self._retry_count = 0
+            self._back_up_theta_velocity *= -1
 
         else:
             self.get_logger().error(
@@ -290,7 +295,7 @@ class CollisionBehavior(Node):
             # send back up velocity
             twist = Twist()
             twist.linear.x = -1 * abs(self._back_up_velocity)
-            twist.angular.z = 0.0
+            twist.angular.z = self._back_up_theta_velocity
             self._twist_pub.publish(twist)
 
             # check back up distance
