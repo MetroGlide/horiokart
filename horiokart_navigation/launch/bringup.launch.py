@@ -146,7 +146,6 @@ def generate_launch_description():
         Node(
             package='horiokart_navigation',
             executable='collision_behavior_node.py',
-            name='collision_behavior_node',
             parameters=[configured_params],
             output='screen',
             condition=IfCondition(use_collision_behavior_arg.launch_config),
@@ -156,7 +155,6 @@ def generate_launch_description():
         Node(
             package='horiokart_navigation',
             executable='waypoints_follower.py',
-            name='waypoints_follower_node',
             parameters=[configured_params],
             output='screen',
             condition=IfCondition(use_waypoints_follower_arg.launch_config),
