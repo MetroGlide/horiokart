@@ -31,6 +31,11 @@ def generate_launch_description():
     # Launch arguments
     launch_argument_creator = LaunchArgumentCreator()
 
+    use_collision_behavior_arg = launch_argument_creator.create(
+        'use_collision_behavior', default="true")
+    use_waypoints_follower_arg = launch_argument_creator.create(
+        'use_waypoints_follower', default="true")
+
     namespace_arg = launch_argument_creator.create(
         'namespace', default='')
     use_namespace_arg = launch_argument_creator.create(
@@ -106,7 +111,8 @@ def generate_launch_description():
             arguments=['--ros-args', '--log-level',
                        log_level_arg.launch_config],
             remappings=remappings,
-            output='screen'),
+            output='screen'
+        ),
 
         # Localization
         IncludeLaunchDescription(
@@ -119,7 +125,8 @@ def generate_launch_description():
                               'params_file': params_file,
                               'use_composition': use_composition_arg.launch_config,
                               'use_respawn': use_respawn_arg.launch_config,
-                              'container_name': 'nav2_container'}.items()),
+                              'container_name': 'nav2_container'}.items()
+        ),
 
         # Navigation
         IncludeLaunchDescription(
@@ -132,7 +139,29 @@ def generate_launch_description():
                               'use_composition': use_composition_arg.launch_config,
                               'use_respawn': use_respawn_arg.launch_config,
                               'planning_map': planning_map_yaml_file_arg.launch_config,
-                              'container_name': 'nav2_container'}.items()),
+                              'container_name': 'nav2_container'}.items()
+        ),
+
+        # Collision Avoidance Node
+        Node(
+            package='horiokart_navigation',
+            executable='collision_behavior_node.py',
+            name='collision_behavior_node',
+            parameters=[configured_params],
+            output='screen',
+            condition=IfCondition(use_collision_behavior_arg.launch_config),
+        ),
+
+        # Waypoint Follower
+        Node(
+            package='horiokart_navigation',
+            executable='waypoints_follower.py',
+            name='waypoints_follower_node',
+            parameters=[configured_params],
+            output='screen',
+            condition=IfCondition(use_waypoints_follower_arg.launch_config),
+        ),
+
     ])
 
     return LaunchDescription([
