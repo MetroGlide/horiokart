@@ -150,7 +150,7 @@ controller_server:
       plugin: "nav2_rotation_shim_controller::RotationShimController"
       angular_dist_threshold: 0.785
       forward_sampling_distance: 0.5
-      rotate_to_heading_angular_vel: 0.4
+      rotate_to_heading_angular_vel: 0.8
       max_angular_accel: 1.6
       simulate_ahead_time: 1.0
 
@@ -168,8 +168,8 @@ controller_server:
       # y軸方向の最大速度を指定します。
       max_vel_y: 0.0
       # 角速度の最大値を指定します。
-      # max_vel_theta: 0.8
-      max_vel_theta: 0.4
+      max_vel_theta: 0.8
+      # max_vel_theta: 0.4
       # xy平面上の最小速度を指定します。
       min_speed_xy: 0.0
       # xy平面上の最大速度を指定します。
@@ -257,7 +257,8 @@ local_costmap:
 
       # plugins: ["obstacle_layer", "voxel_layer", "denoise_layer", "inflation_layer"]
       # plugins: ["obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
-      plugins: ["top_obstacle_layer", "obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
+      # plugins: ["top_obstacle_layer", "obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
+      plugins: ["top_obstacle_layer", "obstacle_layer", "denoise_layer", "inflation_layer"]
       # plugins: ["obstacle_layer", "depth_voxel_layer", "inflation_layer"]
       # plugins: ["obstacle_layer", "voxel_layer", "inflation_layer"]
 
@@ -357,7 +358,8 @@ global_costmap:
       track_unknown_space: true
 
       # plugins: ["static_layer", "obstacle_layer", "voxel_layer", "inflation_layer"]
-      plugins: ["static_layer", "top_obstacle_layer", "obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
+      # plugins: ["static_layer", "top_obstacle_layer", "obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
+      plugins: ["static_layer", "top_obstacle_layer", "obstacle_layer", "denoise_layer", "inflation_layer"]
       # plugins: ["static_layer", "depth_voxel_layer", "inflation_layer"]
 
       filters: ["speed_filter"]
