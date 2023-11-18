@@ -204,6 +204,8 @@ class GpsTransformNode(Node):
 
         # self._gps_transform.feedback_pose(map_frame_pose)
         if self.resistration:
+            return # temporary
+
             # TODO!: for debug
             if self._gps_transform.add_utm_to_map_refpoint(self._gps_transform.last_utm, map_frame_pose, covariance):
                 self.get_logger().info(

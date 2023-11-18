@@ -15,6 +15,8 @@ class OnReachedAction(enum.Enum):
     FRONT_LIDAR_ON = "front_lidar_on"
     AMCL_ON = "amcl_on"
     AMCL_OFF = "amcl_off"
+    GPS_ON = "gps_on"
+    GPS_OFF = "gps_off"
 
     @classmethod
     def get_all_values(cls):

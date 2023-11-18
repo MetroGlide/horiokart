@@ -284,6 +284,9 @@ class WaypointsFollowerNode(Node):
         self._change_amcl_publish_state_srv_client = self.create_client(
             SetBool, "amcl_publish_controller_node/change_publish_state")
 
+        self._change_gps_resistration_state_srv_client = self.create_client(
+            SetBool, "gps_transform_node/set_resistration_mode")
+
         self._amcl_initialpose_publisher = self.create_publisher(
             PoseWithCovarianceStamped,
             "initialpose",
@@ -483,6 +486,23 @@ class WaypointsFollowerNode(Node):
 
         self.get_logger().info(f"Reload map action resistered")
 
+    def _on_reach_action_gps_on_off(self, waypoint: Waypoint, state: bool):
+        self._change_gps_resistration_state_srv_client.wait_for_service()
+        request = SetBool.Request()
+        request.data = state
+
+        future = self._change_gps_resistration_state_srv_client.call_async(request)
+
+        self._on_reached_actions_progress_list.append(
+            self.ServiceFuture(
+                future,
+                "change_gps_state",
+                self.get_logger(),
+                callback=self._change_gps_resistration_state_callback
+            )
+        )
+
+
     def _on_reached_action_front_lidar_on_off(self, waypoint: Waypoint, state: bool):
         self._change_front_lidar_publish_state_srv_client.wait_for_service()
         request = SetBool.Request()
@@ -540,6 +560,12 @@ class WaypointsFollowerNode(Node):
             self.ServiceFuture(future, "change_amcl_publish_state", self.get_logger(),
                                callback=self._change_amcl_publish_state_callback))
 
+    def _change_gps_resistration_state_callback(self, response, logger):
+        if response.success:
+            logger.info(f"Change gps publish state success")
+        else:
+            logger.info(f"Change gps publish state failed")
+
     def _change_front_lidar_publish_state_callback(self, response, logger):
         if response.success:
             logger.info(f"Change front lidar publish state success")
@@ -588,6 +614,18 @@ class WaypointsFollowerNode(Node):
                 f"OnReachedAction: AMCL off")
 
             self._on_reached_action_amcl_on_off(waypoint, False)
+
+        elif OnReachedAction.GPS_ON == on_reached_action:
+            self.get_logger().info(
+                f"OnReachedAction: GPS on"
+            )
+            self._on_reach_action_gps_on_off(waypoint, False)
+
+        elif OnReachedAction.GPS_OFF == on_reached_action:
+            self.get_logger().info(
+                f"OnReachedAction: GPS off"
+            )
+            self._on_reach_action_gps_on_off(waypoint, True)
 
     def _on_reached(self, waypoint: Waypoint):
         for on_reached_action in waypoint.on_reached_action:
