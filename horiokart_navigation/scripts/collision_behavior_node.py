@@ -197,6 +197,9 @@ class CollisionBehavior(Node):
                 'Waiting for waypoint follower stop service response...'
             )
 
+        if self.waypoint_follower_stop_future.result() is None:
+            return
+
         if self.waypoint_follower_stop_future.result().success:
             self.get_logger().info(
                 'Waypoint follower stop service succeeded.'
