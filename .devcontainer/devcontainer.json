@@ -30,7 +30,8 @@
 				"ms-toolsai.jupyter",
 				"VisualStudioExptTeam.vscodeintellicode",
 				"ms-python.autopep8",
-				"GitHub.copilot"
+				"GitHub.copilot",
+				"Ranch-Hand-Robotics.rde-pack"
 			]
 		}
 	}
