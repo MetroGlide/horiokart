@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<library path="libhoriokart_depth_camera_costmap">
+  <class name="DepthCameraCostmapLayer" type="horiokart_depth_camera_costmap::DepthCameraCostmapLayer" base_class_type="nav2_costmap_2d::Layer">
+    <description>Depth camera costmap layer plugin for Navigation2 (costmap_2d).</description>
+  </class>
+</library>
