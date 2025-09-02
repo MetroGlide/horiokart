@@ -4,6 +4,9 @@
 #include <utility>
 #include <Eigen/Dense>
 
+namespace horiokart_depth_camera_costmap
+{
+
 struct ObstacleCluster
 {
     std::vector<std::pair<int, int>> cells;
@@ -22,3 +25,5 @@ private:
     int cluster_min_points_;
     float grid_resolution_m_;
 };
+
+} // namespace horiokart_depth_camera_costmap

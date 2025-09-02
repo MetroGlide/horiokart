@@ -6,6 +6,7 @@
 #include <pluginlib/class_list_macros.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 #include <tf2_eigen/tf2_eigen.h>
+#include <cmath>
 
 namespace horiokart_depth_camera_costmap
 {
@@ -80,6 +81,12 @@ namespace horiokart_depth_camera_costmap
     void DepthCameraCostmapLayer::updateBounds(double robot_x, double robot_y, double robot_yaw,
                                                double *min_x, double *min_y, double *max_x, double *max_y)
     {
+        // store robot pose for use in updateCosts when converting local grid indices to world coords
+        last_robot_x_ = robot_x;
+        last_robot_y_ = robot_y;
+        last_robot_yaw_ = robot_yaw;
+
+        // conservative bounds around robot
         *min_x = robot_x - 5.0;
         *min_y = robot_y - 5.0;
         *max_x = robot_x + 5.0;
@@ -96,30 +103,48 @@ namespace horiokart_depth_camera_costmap
         ParameterManager param_mgr(node.get());
         auto params = param_mgr.getParams();
 
+        // Iterate through stored cost_map_ whose keys are grid cell indices in base_link frame
         for (const auto &kv : cost_map_)
         {
-            int i = kv.first.first;
-            int j = kv.first.second;
+            int ix = kv.first.first;
+            int iy = kv.first.second;
             int cost = kv.second;
-            if (i >= min_i && i < max_i && j >= min_j && j < max_j)
+
+            // convert cell index to local (base_link) coordinates (cell center)
+            float cell_x = (static_cast<float>(ix) + 0.5f) * static_cast<float>(params.grid_resolution_m);
+            float cell_y = (static_cast<float>(iy) + 0.5f) * static_cast<float>(params.grid_resolution_m);
+
+            // rotate by robot yaw and translate by robot world pose to get world coordinates
+            float cy = std::cos(static_cast<float>(last_robot_yaw_));
+            float sy = std::sin(static_cast<float>(last_robot_yaw_));
+            float world_x = static_cast<float>(last_robot_x_) + cy * cell_x - sy * cell_y;
+            float world_y = static_cast<float>(last_robot_y_) + sy * cell_x + cy * cell_y;
+
+            unsigned int mx, my;
+            if (!master_grid.worldToMap(world_x, world_y, mx, my))
+                continue; // outside master grid
+
+            // check update window (map indices)
+            if (static_cast<int>(mx) < min_i || static_cast<int>(mx) >= max_i || static_cast<int>(my) < min_j || static_cast<int>(my) >= max_j)
+                continue;
+
+            // clamp cost to valid range
+            int clamped = std::min(255, std::max(0, cost));
+            if (params.conditional_overwrite)
             {
-                // clamp cost to valid range
-                int clamped = std::min(255, std::max(0, cost));
-                if (params.conditional_overwrite)
+                unsigned char existing = master_grid.getCost(mx, my);
+                // overwrite only if depth camera suggests a lower cost (e.g., correct LIDAR false positives)
+                if (clamped < static_cast<int>(existing))
                 {
-                    unsigned char existing = master_grid.getCost(i, j);
-                    // overwrite only if depth camera suggests a lower cost (e.g., correct LIDAR false positives)
-                    if (clamped < static_cast<int>(existing))
-                    {
-                        master_grid.setCost(i, j, static_cast<unsigned char>(clamped));
-                    }
-                }
-                else
-                {
-                    master_grid.setCost(i, j, static_cast<unsigned char>(clamped));
+                    master_grid.setCost(mx, my, static_cast<unsigned char>(clamped));
                 }
             }
+            else
+            {
+                master_grid.setCost(mx, my, static_cast<unsigned char>(clamped));
+            }
         }
+
         visualization_msgs::msg::MarkerArray marker_array;
         int id = 0;
         for (const auto &cluster : clusters_)

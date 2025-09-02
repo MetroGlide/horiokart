@@ -4,28 +4,10 @@
 #include <map>
 #include <utility>
 #include <Eigen/Dense>
+#include <algorithm>
 
 namespace horiokart_depth_camera_costmap
 {
-
-    struct ObstacleCluster
-    {
-        std::vector<std::pair<int, int>> cells;
-        Eigen::Vector2f centroid;
-        std::string type; // "wall", "rock", "slope" など
-    };
-
-    class ObstacleClusterer
-    {
-    public:
-        ObstacleClusterer(float cluster_distance_threshold, int cluster_min_points, float grid_resolution_m);
-        std::vector<ObstacleCluster> cluster(const std::map<std::pair<int, int>, int> &cost_map, int cost_threshold);
-
-    private:
-        float cluster_distance_threshold_;
-        int cluster_min_points_;
-        float grid_resolution_m_;
-    };
 
     ObstacleClusterer::ObstacleClusterer(float cluster_distance_threshold, int cluster_min_points, float grid_resolution_m)
         : cluster_distance_threshold_(cluster_distance_threshold), cluster_min_points_(cluster_min_points), grid_resolution_m_(grid_resolution_m) {}
@@ -44,6 +26,7 @@ namespace horiokart_depth_camera_costmap
         std::vector<ObstacleCluster> clusters;
         if (points.empty())
             return clusters;
+
         // Convert eps from meters to cell units
         const float eps = cluster_distance_threshold_ / grid_resolution_m_;
         const int n = static_cast<int>(points.size());

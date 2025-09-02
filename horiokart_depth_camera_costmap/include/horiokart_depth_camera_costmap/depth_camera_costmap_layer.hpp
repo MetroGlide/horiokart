@@ -2,7 +2,6 @@
 
 #include <nav2_costmap_2d/layer.hpp>
 #include <nav2_costmap_2d/layered_costmap.hpp>
-#include <pluginlib/class_list_macros.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -39,8 +38,13 @@ namespace horiokart_depth_camera_costmap
         rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
         std::map<std::pair<int, int>, int> cost_map_;
         std::vector<ObstacleCluster> clusters_;
+
+        // store last robot pose received in updateBounds so updateCosts can convert local cell coords to world coords
+        double last_robot_x_ = 0.0;
+        double last_robot_y_ = 0.0;
+        double last_robot_yaw_ = 0.0;
     };
 
 } // namespace horiokart_depth_camera_costmap
 
-PLUGINLIB_EXPORT_CLASS(horiokart_depth_camera_costmap::DepthCameraCostmapLayer, nav2_costmap_2d::Layer)
+// Note: PLUGINLIB_EXPORT_CLASS must be placed in a single .cpp implementation file, not in headers.
