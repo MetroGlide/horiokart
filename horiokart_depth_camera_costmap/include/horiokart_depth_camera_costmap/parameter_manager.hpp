@@ -40,6 +40,9 @@ namespace horiokart_depth_camera_costmap
         int pointcloud_queue_size = 10;
         int marker_queue_size = 10;
         int tf_lookup_timeout_ms = 100;
+        // TF retry policy
+        int tf_retry_count = 3;           // number of attempts to try TF lookup
+        int tf_retry_backoff_ms = 50;     // base backoff in ms (exponential)
 
         // ... add other params as needed
     };

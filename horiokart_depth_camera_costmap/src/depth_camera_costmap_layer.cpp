@@ -55,35 +55,40 @@ namespace horiokart_depth_camera_costmap
             auto cloud_filtered = pc_proc.removeOutliers(cloud_ds, params.sor_mean_k, params.sor_stddev_mul_thresh);
             geometry_msgs::msg::TransformStamped tf;
             bool tf_ok = false;
-            try
+            rclcpp::Duration timeout = rclcpp::Duration::from_seconds(static_cast<double>(params.tf_lookup_timeout_ms) / 1000.0);
+            for (int attempt = 0; attempt < params.tf_retry_count && !tf_ok; ++attempt)
             {
-                // Prefer using message timestamp if transform is available within timeout
-                rclcpp::Duration timeout = rclcpp::Duration::from_seconds(static_cast<double>(params.tf_lookup_timeout_ms) / 1000.0);
-                if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, msg->header.stamp, timeout))
+                try
                 {
-                    tf = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, msg->header.stamp);
-                    tf_ok = true;
+                    if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, msg->header.stamp, timeout))
+                    {
+                        tf = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, msg->header.stamp);
+                        tf_ok = true;
+                        break;
+                    }
+                    if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0), timeout))
+                    {
+                        tf = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0));
+                        tf_ok = true;
+                        RCLCPP_WARN(node->get_logger(), "TF lookup with message time not available; fell back to latest transform (attempt %d).", attempt + 1);
+                        break;
+                    }
                 }
-                else if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0), timeout))
+                catch (const std::exception &e)
                 {
-                    tf = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0));
-                    tf_ok = true;
-                    RCLCPP_WARN(node->get_logger(), "TF lookup with message time not available; fell back to latest transform.");
+                    RCLCPP_DEBUG(node->get_logger(), "TF lookup attempt %d failed: %s", attempt + 1, e.what());
                 }
-                else
-                {
-                    throw std::runtime_error("TF not available within timeout");
-                }
-            }
-            catch (const std::exception &e)
-            {
-                RCLCPP_WARN(node->get_logger(), "TF取得失敗（タイムアウト）: %s", e.what());
-                return;
-            }
 
+                // exponential backoff
+                if (attempt + 1 < params.tf_retry_count)
+                {
+                    int backoff = params.tf_retry_backoff_ms * (1 << attempt);
+                    rclcpp::sleep_for(std::chrono::milliseconds(backoff));
+                }
+            }
             if (!tf_ok)
             {
-                RCLCPP_WARN(node->get_logger(), "TF not available for transform from %s to %s", msg->header.frame_id.c_str(), params.target_frame.c_str());
+                RCLCPP_WARN(node->get_logger(), "TF not available for transform from %s to %s after %d attempts", msg->header.frame_id.c_str(), params.target_frame.c_str(), params.tf_retry_count);
                 return;
             }
 

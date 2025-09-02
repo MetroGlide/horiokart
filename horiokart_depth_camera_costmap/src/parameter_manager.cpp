@@ -46,6 +46,8 @@ namespace horiokart_depth_camera_costmap
             n->declare_parameter("pointcloud_queue_size", params.pointcloud_queue_size);
             n->declare_parameter("marker_queue_size", params.marker_queue_size);
             n->declare_parameter("tf_lookup_timeout_ms", params.tf_lookup_timeout_ms);
+            n->declare_parameter("tf_retry_count", params.tf_retry_count);
+            n->declare_parameter("tf_retry_backoff_ms", params.tf_retry_backoff_ms);
 
             n->get_parameter("grid_resolution_m", params.grid_resolution_m);
             n->get_parameter("max_step_height_m", params.max_step_height_m);
@@ -74,6 +76,8 @@ namespace horiokart_depth_camera_costmap
             n->get_parameter("pointcloud_queue_size", params.pointcloud_queue_size);
             n->get_parameter("marker_queue_size", params.marker_queue_size);
             n->get_parameter("tf_lookup_timeout_ms", params.tf_lookup_timeout_ms);
+            n->get_parameter("tf_retry_count", params.tf_retry_count);
+            n->get_parameter("tf_retry_backoff_ms", params.tf_retry_backoff_ms);
         };
 
         if (node_)

@@ -23,7 +23,16 @@ def generate_launch_description():
                 'sor_mean_k': 50,
                 'sor_stddev_mul_thresh': 1.0,
                 'cluster_distance_threshold_m': 0.20,
-                'cluster_min_points': 10
+                'cluster_min_points': 10,
+                'pointcloud_topic': '/rs_d435/depth_registered/points',
+                'marker_topic': '/depth_costmap/markers',
+                'pointcloud_queue_size': 10,
+                'marker_queue_size': 10,
+                'target_frame': 'base_link',
+                'tf_lookup_timeout_ms': 100,
+                'tf_retry_count': 3,
+                'tf_retry_backoff_ms': 50,
+                'conditional_overwrite': True
             }]
         )
     ])
