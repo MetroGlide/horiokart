@@ -1,0 +1,27 @@
+horiokart_depth_camera_costmap:
+  ros__parameters:
+    pointcloud_topic: /camera/depth/points
+    marker_topic: /depth_camera/obstacle_markers
+    target_frame: base_link
+    pointcloud_queue_size: 10
+    marker_queue_size: 1
+    tf_lookup_timeout_ms: 200
+    tf_retry_count: 5
+    tf_retry_backoff_ms: 50
+
+    # processing params
+    voxel_leaf_size_m: 0.05
+    sor_mean_k: 50
+    sor_std_dev_mul_thresh: 1.0
+    grid_resolution_m: 0.1
+    grid_width_m: 10.0
+    grid_height_m: 10.0
+
+    # traversability
+    traversability_slope_threshold_deg: 30.0
+    traversability_variance_threshold: 0.02
+    cost_max: 254
+    cost_min: 0
+    cost_traversable: 0
+    cost_unknown: 255
+    condition_overwrite: true

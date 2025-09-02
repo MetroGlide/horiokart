@@ -20,6 +20,7 @@ find_package(Eigen3 REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(tf2_eigen REQUIRED)
+find_package(ament_cmake_gtest REQUIRED)
 
 include_directories(
   include
@@ -55,9 +56,24 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
+# Install sample config so users can load YAML from ros2 launch
+install(DIRECTORY config/
+  DESTINATION share/${PROJECT_NAME}/config
+)
+
 install(FILES plugin.xml
   DESTINATION share/${PROJECT_NAME}
 )
+
+# Simple unit test (sanity) to be expanded: test target source placed in test/
+ament_add_gtest(test_coordinate_conversion
+  test/test_coordinate_conversion.cpp
+)
+if(TARGET test_coordinate_conversion)
+  target_link_libraries(test_coordinate_conversion
+    depth_camera_costmap_layer
+  )
+endif()
 
 # Ensure the built/shared library uses an $ORIGIN-relative rpath to find dependencies at runtime
 set_target_properties(depth_camera_costmap_layer PROPERTIES

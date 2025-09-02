@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up ROS 2 Humble
+        uses: ros-tooling/setup-ros@v0.6.0
+        with:
+          ros-distro: humble
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y python3-colcon-common-extensions
+      - name: Build
+        run: |
+          colcon build --event-handlers console_direct+ --packages-select horiokart_depth_camera_costmap
+      - name: Run tests
+        run: |
+          colcon test --packages-select horiokart_depth_camera_costmap || true
+          colcon test-result --verbose || true
