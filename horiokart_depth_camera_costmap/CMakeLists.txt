@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.8)
 project(horiokart_depth_camera_costmap)
 
+# Prefer runtime-origin-based RPATH to avoid cycles between system (/opt/ros) and workspace install paths
+set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+# Install rpath should point to the library directory relative to the installed binary
+set(CMAKE_INSTALL_RPATH "$ORIGIN")
+
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -50,6 +57,13 @@ install(DIRECTORY include/
 
 install(FILES plugin.xml
   DESTINATION share/${PROJECT_NAME}
+)
+
+# Ensure the built/shared library uses an $ORIGIN-relative rpath to find dependencies at runtime
+set_target_properties(depth_camera_costmap_layer PROPERTIES
+  BUILD_WITH_INSTALL_RPATH FALSE
+  BUILD_RPATH "$ORIGIN/../lib;$ORIGIN"
+  INSTALL_RPATH "$ORIGIN"
 )
 
 ament_package()
