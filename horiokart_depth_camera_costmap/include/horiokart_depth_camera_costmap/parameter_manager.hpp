@@ -31,6 +31,16 @@ namespace horiokart_depth_camera_costmap
         int cost_obstacle = 150;
         int cost_lethal = 255;
 
+        // Topic / frame parameters
+        std::string pointcloud_topic = "pointcloud";
+        std::string marker_topic = "costmap_markers";
+        std::string target_frame = "base_link";
+
+        // Queue sizes and TF timeout
+        int pointcloud_queue_size = 10;
+        int marker_queue_size = 10;
+        int tf_lookup_timeout_ms = 100;
+
         // ... add other params as needed
     };
 

@@ -39,6 +39,14 @@ namespace horiokart_depth_camera_costmap
             n->declare_parameter("cost_obstacle", params.cost_obstacle);
             n->declare_parameter("cost_lethal", params.cost_lethal);
 
+            // new topic/frame params
+            n->declare_parameter("pointcloud_topic", params.pointcloud_topic);
+            n->declare_parameter("marker_topic", params.marker_topic);
+            n->declare_parameter("target_frame", params.target_frame);
+            n->declare_parameter("pointcloud_queue_size", params.pointcloud_queue_size);
+            n->declare_parameter("marker_queue_size", params.marker_queue_size);
+            n->declare_parameter("tf_lookup_timeout_ms", params.tf_lookup_timeout_ms);
+
             n->get_parameter("grid_resolution_m", params.grid_resolution_m);
             n->get_parameter("max_step_height_m", params.max_step_height_m);
             n->get_parameter("max_normal_angle_deg", params.max_normal_angle_deg);
@@ -58,6 +66,14 @@ namespace horiokart_depth_camera_costmap
             n->get_parameter("cost_semi_traversable", params.cost_semi_traversable);
             n->get_parameter("cost_obstacle", params.cost_obstacle);
             n->get_parameter("cost_lethal", params.cost_lethal);
+
+            // get new topic/frame params
+            n->get_parameter("pointcloud_topic", params.pointcloud_topic);
+            n->get_parameter("marker_topic", params.marker_topic);
+            n->get_parameter("target_frame", params.target_frame);
+            n->get_parameter("pointcloud_queue_size", params.pointcloud_queue_size);
+            n->get_parameter("marker_queue_size", params.marker_queue_size);
+            n->get_parameter("tf_lookup_timeout_ms", params.tf_lookup_timeout_ms);
         };
 
         if (node_)

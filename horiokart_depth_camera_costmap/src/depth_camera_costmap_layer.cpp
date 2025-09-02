@@ -25,12 +25,17 @@ namespace horiokart_depth_camera_costmap
         auto node = node_.lock();
         if (!node)
             return;
+
+        // read parameters to configure topics/frames
+        ParameterManager param_mgr(node.get());
+        auto params = param_mgr.getParams();
+
         pointcloud_sub_ = node->create_subscription<sensor_msgs::msg::PointCloud2>(
-            "pointcloud", 10,
+            params.pointcloud_topic, params.pointcloud_queue_size,
             std::bind(&DepthCameraCostmapLayer::pointCloudCallback, this, std::placeholders::_1));
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-        marker_pub_ = node->create_publisher<visualization_msgs::msg::MarkerArray>("costmap_markers", 10);
+        marker_pub_ = node->create_publisher<visualization_msgs::msg::MarkerArray>(params.marker_topic, params.marker_queue_size);
     }
 
     void DepthCameraCostmapLayer::pointCloudCallback(sensor_msgs::msg::PointCloud2::SharedPtr msg)
@@ -49,19 +54,39 @@ namespace horiokart_depth_camera_costmap
             auto cloud_ds = pc_proc.downsample(pcl_cloud, static_cast<float>(params.voxel_leaf_size_m));
             auto cloud_filtered = pc_proc.removeOutliers(cloud_ds, params.sor_mean_k, params.sor_stddev_mul_thresh);
             geometry_msgs::msg::TransformStamped tf;
+            bool tf_ok = false;
             try
             {
-                tf = tf_buffer_->lookupTransform("base_link", msg->header.frame_id, msg->header.stamp);
+                // Prefer using message timestamp if transform is available within timeout
+                rclcpp::Duration timeout = rclcpp::Duration::from_seconds(static_cast<double>(params.tf_lookup_timeout_ms) / 1000.0);
+                if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, msg->header.stamp, timeout))
+                {
+                    tf = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, msg->header.stamp);
+                    tf_ok = true;
+                }
+                else if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0), timeout))
+                {
+                    tf = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0));
+                    tf_ok = true;
+                    RCLCPP_WARN(node->get_logger(), "TF lookup with message time not available; fell back to latest transform.");
+                }
+                else
+                {
+                    throw std::runtime_error("TF not available within timeout");
+                }
             }
             catch (const std::exception &e)
             {
-                auto node = node_.lock();
-                if (node)
-                {
-                    RCLCPP_WARN(node->get_logger(), "TF取得失敗: %s", e.what());
-                }
+                RCLCPP_WARN(node->get_logger(), "TF取得失敗（タイムアウト）: %s", e.what());
                 return;
             }
+
+            if (!tf_ok)
+            {
+                RCLCPP_WARN(node->get_logger(), "TF not available for transform from %s to %s", msg->header.frame_id.c_str(), params.target_frame.c_str());
+                return;
+            }
+
             Eigen::Affine3f tf_eigen = tf2::transformToEigen(tf.transform).cast<float>();
             auto cloud_trans = pc_proc.transform(cloud_filtered, tf_eigen);
             auto grid_features = pc_proc.computeGridFeatures(cloud_trans, static_cast<float>(params.grid_resolution_m));
@@ -150,7 +175,7 @@ namespace horiokart_depth_camera_costmap
         for (const auto &cluster : clusters_)
         {
             visualization_msgs::msg::Marker m;
-            m.header.frame_id = "base_link";
+            m.header.frame_id = params.target_frame;
             m.header.stamp = node->now();
             m.ns = "depth_camera_clusters";
             m.id = id++;
@@ -159,8 +184,13 @@ namespace horiokart_depth_camera_costmap
             // centroid is in cell coordinates; convert to meters using grid resolution from parameters
             float gx = cluster.centroid.x() * static_cast<float>(params.grid_resolution_m);
             float gy = cluster.centroid.y() * static_cast<float>(params.grid_resolution_m);
-            m.pose.position.x = gx;
-            m.pose.position.y = gy;
+            // convert local base_link coords to world using last_robot pose
+            float cy = std::cos(static_cast<float>(last_robot_yaw_));
+            float sy = std::sin(static_cast<float>(last_robot_yaw_));
+            float world_gx = static_cast<float>(last_robot_x_) + cy * gx - sy * gy;
+            float world_gy = static_cast<float>(last_robot_y_) + sy * gx + cy * gy;
+            m.pose.position.x = world_gx;
+            m.pose.position.y = world_gy;
             m.pose.position.z = 0.5; // arbitrary height for visualization
             m.scale.x = params.grid_resolution_m * 1.0f * static_cast<float>(cluster.cells.size());
             m.scale.y = params.grid_resolution_m * 1.0f * static_cast<float>(cluster.cells.size());
