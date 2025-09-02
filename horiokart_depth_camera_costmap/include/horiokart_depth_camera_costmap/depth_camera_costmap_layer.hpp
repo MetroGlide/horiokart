@@ -9,6 +9,8 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <memory>
+#include <map>
+#include <vector>
 #include "horiokart_depth_camera_costmap/point_cloud_processor.hpp"
 #include "horiokart_depth_camera_costmap/traversability_evaluator.hpp"
 #include "horiokart_depth_camera_costmap/obstacle_clusterer.hpp"
