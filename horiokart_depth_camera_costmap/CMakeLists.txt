@@ -17,7 +17,6 @@ find_package(tf2_eigen REQUIRED)
 include_directories(
   include
   ${PCL_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIR}
 )
 
 add_library(depth_camera_costmap_layer SHARED
@@ -28,8 +27,13 @@ add_library(depth_camera_costmap_layer SHARED
   src/parameter_manager.cpp
 )
 
+target_include_directories(depth_camera_costmap_layer PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
 ament_target_dependencies(depth_camera_costmap_layer
-  rclcpp sensor_msgs nav_msgs visualization_msgs tf2_ros pluginlib PCL Eigen3 nav2_costmap_2d pcl_conversions tf2_eigen
+  rclcpp sensor_msgs nav_msgs visualization_msgs tf2_ros pluginlib PCL nav2_costmap_2d pcl_conversions tf2_eigen
 )
 
 pluginlib_export_plugin_description_file(nav2_costmap_2d plugin.xml)

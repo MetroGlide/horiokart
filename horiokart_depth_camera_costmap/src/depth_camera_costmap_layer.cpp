@@ -5,7 +5,7 @@
 #include "horiokart_depth_camera_costmap/parameter_manager.hpp"
 #include <pluginlib/class_list_macros.hpp>
 #include <pcl_conversions/pcl_conversions.h>
-#include <tf2_eigen/tf2_eigen.h>
+#include <tf2_eigen/tf2_eigen.hpp>
 #include <cmath>
 
 namespace horiokart_depth_camera_costmap
