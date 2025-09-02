@@ -18,16 +18,17 @@ namespace horiokart_depth_camera_costmap
     class ObstacleClusterer
     {
     public:
-        ObstacleClusterer(float cluster_distance_threshold, int cluster_min_points);
+        ObstacleClusterer(float cluster_distance_threshold, int cluster_min_points, float grid_resolution_m);
         std::vector<ObstacleCluster> cluster(const std::map<std::pair<int, int>, int> &cost_map, int cost_threshold);
 
     private:
         float cluster_distance_threshold_;
         int cluster_min_points_;
+        float grid_resolution_m_;
     };
 
-    ObstacleClusterer::ObstacleClusterer(float cluster_distance_threshold, int cluster_min_points)
-        : cluster_distance_threshold_(cluster_distance_threshold), cluster_min_points_(cluster_min_points) {}
+    ObstacleClusterer::ObstacleClusterer(float cluster_distance_threshold, int cluster_min_points, float grid_resolution_m)
+        : cluster_distance_threshold_(cluster_distance_threshold), cluster_min_points_(cluster_min_points), grid_resolution_m_(grid_resolution_m) {}
 
     std::vector<ObstacleCluster> ObstacleClusterer::cluster(const std::map<std::pair<int, int>, int> &cost_map, int cost_threshold)
     {
@@ -43,8 +44,8 @@ namespace horiokart_depth_camera_costmap
         std::vector<ObstacleCluster> clusters;
         if (points.empty())
             return clusters;
-        // Simple DBSCAN-like clustering on grid indices using Euclidean distance in cell units
-        const float eps = cluster_distance_threshold_ / 1.0f; // cluster_distance_threshold in meters, grid unit assumed 1 cell == grid_resolution in meters; caller should interpret accordingly
+        // Convert eps from meters to cell units
+        const float eps = cluster_distance_threshold_ / grid_resolution_m_;
         const int n = static_cast<int>(points.size());
         std::vector<int> labels(n, -1);
         int cid = 0;
@@ -69,22 +70,22 @@ namespace horiokart_depth_camera_costmap
             }
             // expand cluster
             std::vector<int> stack = neighbors;
-            for (int idx : stack)
+            for (int idx = 0; idx < static_cast<int>(stack.size()); ++idx)
             {
-                if (labels[idx] == -2)
-                    labels[idx] = cid;
-                if (labels[idx] != -1)
+                int sidx = stack[idx];
+                if (labels[sidx] == -2)
+                    labels[sidx] = cid;
+                if (labels[sidx] != -1)
                     continue;
-                labels[idx] = cid;
-                // find neighbors of idx
+                labels[sidx] = cid;
+                // find neighbors of sidx
                 for (int j = 0; j < n; ++j)
                 {
-                    float dx = static_cast<float>(points[idx].first - points[j].first);
-                    float dy = static_cast<float>(points[idx].second - points[j].second);
+                    float dx = static_cast<float>(points[sidx].first - points[j].first);
+                    float dy = static_cast<float>(points[sidx].second - points[j].second);
                     float dist = std::sqrt(dx * dx + dy * dy);
                     if (dist <= eps)
                     {
-                        // add if not already in stack
                         if (std::find(stack.begin(), stack.end(), j) == stack.end())
                             stack.push_back(j);
                     }

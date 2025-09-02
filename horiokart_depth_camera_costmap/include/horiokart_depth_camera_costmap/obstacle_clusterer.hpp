@@ -14,10 +14,11 @@ struct ObstacleCluster
 class ObstacleClusterer
 {
 public:
-    ObstacleClusterer(float cluster_distance_threshold, int cluster_min_points);
+    ObstacleClusterer(float cluster_distance_threshold, int cluster_min_points, float grid_resolution_m);
     std::vector<ObstacleCluster> cluster(const std::map<std::pair<int, int>, int> &cost_map, int cost_threshold);
 
 private:
     float cluster_distance_threshold_;
     int cluster_min_points_;
+    float grid_resolution_m_;
 };

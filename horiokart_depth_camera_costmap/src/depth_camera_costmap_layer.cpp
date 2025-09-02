@@ -39,12 +39,8 @@ namespace horiokart_depth_camera_costmap
             return;
         try
         {
-            // ParameterManager expects a LifecycleNode pointer. DepthCameraCostmapLayer runs in a Nav2 plugin which exposes node_.lock() as a rclcpp::Node::SharedPtr
-            // To keep it simple, use dynamic_cast to LifecycleNode when possible, otherwise use a temporary object that wraps rclcpp::Node.
-            rclcpp_lifecycle::LifecycleNode *lifecycle_node = nullptr;
-            lifecycle_node = dynamic_cast<rclcpp_lifecycle::LifecycleNode *>(node.get());
-            // If cast fails, create a temporary lifecycle-like wrapper is not trivial; assume node is LifecycleNode in Nav2 context.
-            ParameterManager param_mgr(lifecycle_node);
+            // Use rclcpp::Node* for ParameterManager
+            ParameterManager param_mgr(node.get());
             auto params = param_mgr.getParams();
             PointCloudProcessor pc_proc;
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
@@ -68,12 +64,11 @@ namespace horiokart_depth_camera_costmap
             Eigen::Affine3f tf_eigen = tf2::transformToEigen(tf.transform).cast<float>();
             auto cloud_trans = pc_proc.transform(cloud_filtered, tf_eigen);
             auto grid_features = pc_proc.computeGridFeatures(cloud_trans, static_cast<float>(params.grid_resolution_m));
-            TraversabilityEvaluator trav_eval(
-                static_cast<float>(params.max_slope_angle_deg), static_cast<float>(params.max_step_height_m), static_cast<float>(params.z_variance_threshold),
-                static_cast<float>(params.normal_angle_threshold_deg), params.cost_traversable, params.cost_semi_traversable,
-                params.cost_obstacle, params.cost_lethal);
-            cost_map_ = trav_eval.evaluate(grid_features);
-            ObstacleClusterer clusterer(static_cast<float>(params.cluster_distance_threshold_m / params.grid_resolution_m), params.cluster_min_points);
+            TraversabilityEvaluator evaluator(static_cast<float>(params.max_normal_angle_deg), static_cast<float>(params.max_step_height_m), static_cast<float>(params.z_variance_threshold),
+                                              static_cast<float>(params.normal_angle_threshold_deg), params.cost_traversable, params.cost_semi_traversable,
+                                              params.cost_obstacle, params.cost_lethal);
+            cost_map_ = evaluator.evaluate(grid_features);
+            ObstacleClusterer clusterer(params.cluster_distance_threshold_m, params.cluster_min_points, params.grid_resolution_m);
             clusters_ = clusterer.cluster(cost_map_, params.cost_obstacle);
         }
         catch (const std::exception &e)
@@ -97,6 +92,10 @@ namespace horiokart_depth_camera_costmap
         auto node = node_.lock();
         if (!node)
             return;
+        // fetch params once
+        ParameterManager param_mgr(node.get());
+        auto params = param_mgr.getParams();
+
         for (const auto &kv : cost_map_)
         {
             int i = kv.first.first;
@@ -104,7 +103,21 @@ namespace horiokart_depth_camera_costmap
             int cost = kv.second;
             if (i >= min_i && i < max_i && j >= min_j && j < max_j)
             {
-                master_grid.setCost(i, j, static_cast<unsigned char>(cost));
+                // clamp cost to valid range
+                int clamped = std::min(255, std::max(0, cost));
+                if (params.conditional_overwrite)
+                {
+                    unsigned char existing = master_grid.getCost(i, j);
+                    // overwrite only if depth camera suggests a lower cost (e.g., correct LIDAR false positives)
+                    if (clamped < static_cast<int>(existing))
+                    {
+                        master_grid.setCost(i, j, static_cast<unsigned char>(clamped));
+                    }
+                }
+                else
+                {
+                    master_grid.setCost(i, j, static_cast<unsigned char>(clamped));
+                }
             }
         }
         visualization_msgs::msg::MarkerArray marker_array;
@@ -119,9 +132,6 @@ namespace horiokart_depth_camera_costmap
             m.type = visualization_msgs::msg::Marker::CUBE;
             m.action = visualization_msgs::msg::Marker::ADD;
             // centroid is in cell coordinates; convert to meters using grid resolution from parameters
-            rclcpp_lifecycle::LifecycleNode *lifecycle_node = dynamic_cast<rclcpp_lifecycle::LifecycleNode *>(node.get());
-            ParameterManager param_mgr(lifecycle_node);
-            auto params = param_mgr.getParams();
             float gx = cluster.centroid.x() * static_cast<float>(params.grid_resolution_m);
             float gy = cluster.centroid.y() * static_cast<float>(params.grid_resolution_m);
             m.pose.position.x = gx;
