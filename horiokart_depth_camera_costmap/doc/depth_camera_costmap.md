@@ -1,235 +1,213 @@
-# 深度カメラによる地形・障害物検出システム仕様書
+# 深度カメラによる地形・障害物検出システム設計書
 
 ## 1. 概要
-本システムは、屋外の不整地を移動するロボットの自律走行を支援するため、Realsense D435カメラの点群データと2DLIDARデータを活用し、観測された地形を「走行可能な路面」と「障害物」に分類します。base_link座標系を唯一の安定した基準とした相対評価により、ロボットの現在の姿勢に合わせた走行可否判定を行います。
-本ノードは2D自己位置推定（AMCL等）およびNavigation2によるナビゲーションシステムと統合され、コストマップ情報をナビゲーションスタックへ提供します。
+この文書は、深度カメラ（例: Realsense D435）から得られる色付き点群を用いて、ロボット周辺の地形を2Dグリッドに変換し、各セルの走行可能性を評価してコストマップを生成し、障害物クラスタを抽出するためのアルゴリズム仕様と実装詳細を定義する。
+本システムはコア処理（ROS非依存）とROSアダプタ（メッセージ変換、TF、publish/subscribe、Nav2連携）に分離して実装する。
 
-## 2. 前提条件
-- ロボットの走行能力（最大傾斜角・最大段差高さ）が既知であること
-- base_linkのZ軸は重力方向と必ずしも一致しない
-- 2D自己位置推定（AMCL等）およびNavigation2によるナビゲーションシステムが稼働していること
-- ロボットの座標系（base_link）と地図座標系（map）のTFが正しく管理されていること
-- 深度カメラと2DLIDARのキャリブレーションが行われていること
+## 2. 前提条件・用語
+- ロボット基準座標系: `base_link`（すべての評価はこの座標系を基準とする）
+- 点群メッセージ: `sensor_msgs/msg/PointCloud2`（色付き点群を前提）
+- 出力グリッド解像度: `grid_resolution_m`（例: 0.05〜0.10 m/セル）
+- コストスケール: 内部は 0..254 を有効コスト、255 を unknown（予約値）とする uint8 値で扱う
 
-## 3. 入出力
-### 3.1 入力データ
-- Realsense D435カメラデータ（sensor_msgs/msg/PointCloud2形式、一定周期で取得）
-- 2DLIDARデータ（sensor_msgs/msg/LaserScan形式、一定周期で取得）
-- ロボットの姿勢情報（TFによるbase_linkからカメラまでの位置・姿勢）
-- 地図座標系（map）とロボット座標系（base_link）のTF（2Dナビゲーション統合用）
+## 3. 入出力インタフェース
+### 3.1 core ライブラリ（関数/型）
+- 型
+  - Point3D { float x, y, z; uint8_t r,g,b; }
+  - GridCellFeature { float z_min, z_max, z_variance; Eigen::Vector3f mean_normal; Eigen::Vector3f mean_rgb; }
+  - GridCostMap {
+      std::unordered_map<std::pair<int,int>, uint8_t> costs; // key: (ix,iy), values: 0..254 valid, 255 = unknown
+      int min_ix, max_ix, min_iy, max_iy;
+      int width; int height; // computed as max_ix-min_ix+1, max_iy-min_iy+1
+      struct Origin { double x, y, z; } origin; // world coordinates of cell (min_ix, min_iy)
+      double resolution_m;
+      std::string frame_id; // metadata
+    }
+  - ObstacleCluster { std::vector<std::pair<int,int>> cells; Eigen::Vector2f centroid; enum Type { WALL, ROCK, UNKNOWN } type; }
+- 関数
+  - GridCostMap processPointCloud(const std::vector<Point3D>& points, const CoreParams& params);
+  - std::vector<ObstacleCluster> clusterCostMap(const GridCostMap& grid, const ClusterParams& params);
+  - GridCostMap mergeCostMaps(const GridCostMap& a, const GridCostMap& b, MergeMode m);
+  - std::vector<uint8_t> convertToOccupancyArray(const GridCostMap& grid, const OccupancyOptions& opt); // returns row-major byte array: 0..254 valid cost values, 255 reserved for unknown
 
-### 3.2 出力データ
-- コストマップ（nav_msgs/msg/OccupancyGrid形式の2次元グリッドマップ、Navigation2/costmap_2dへ提供）
-- オブジェクト情報（visualization_msgs/msg/Marker形式などで表現される障害物の位置・形状・分類、RViz等で可視化）
+### 3.2 ROS アダプタ（ノード/トピック）
+- Subscriber: `/camera/depth/color/points` (sensor_msgs/PointCloud2)
+- Publisher: `/depth_costmap/occupancy_grid` (nav_msgs/OccupancyGrid またはカスタムGridCostMapMsg)
+- Publisher: `/depth_costmap/clusters` (visualization_msgs/MarkerArray)
+- Optional: `/depth_costmap/sparse_costmap` (カスタム msg で sparse representation を提供)
+- Nav2 連携: `costmap_adapter_node` が `/depth_costmap/occupancy_grid` を受け取り master costmap に反映する
 
-## 4. アルゴリズム概要
-### 4.1 基本方針
-- 特定の「地面」を前提とせず、観測された地形すべてを走行可能性で評価
-- base_link座標系を唯一の基準とし、すべての判断をその基準に対する相対的な関係で行う
-- 2Dナビゲーションシステムのコストマップレイヤーとして動作し、他レイヤー（静的地図・障害物等）と合成される
-- 深度カメラ層と2DLIDAR層の情報を安全冗長的に合成
+## 4. 点群処理パイプライン
+処理は以下ステップで行う。core は座標系依存を避けるため、入力点群は既に `target_frame`（通常 `base_link`）に変換済みの `std::vector<Point3D>` を受け取る。
 
-## 5. 処理ステップ
-### 5.1 点群の前処理とグリッドマップ生成
-1. ROS 2トピックから色付き点群を受信
-2. pcl::VoxelGridフィルタで点群をダウンサンプリング
-3. pcl::StatisticalOutlierRemovalフィルタでノイズ除去
-4. tf2_rosでcamera_link→base_link座標系への変換を取得
-5. pcl::transformPointCloudで点群をbase_link座標系に変換
-6. base_linkのXY平面に投影し、一定解像度（例: 0.1m/セル）で2次元グリッドマップを初期化
-7. 各グリッドセルに属する点群から以下の特徴量を抽出
-   - Z_min, Z_max（高さ）
-   - Z_variance（高さ分散）
-   - Mean_Normal（法線ベクトル、pcl::NormalEstimation使用）
-   - Mean_RGB（平均色）
+1. Downsample（VoxelGrid）
+   - 入力: Point3D 配列
+   - パラメータ: `voxel_leaf_size_m`
+   - 処理: 各 voxel の中心に最も近い点を代表点にする。高速化のため hash map を用いる。
 
-### 5.2 地形の識別と相対評価
-1. 走行可能な路面の認識
-   - Z_varianceが低く（例: < 0.005）、Mean_Normalベクトルの傾きが最大傾斜角以内のセルを走行可能と分類
-2. 変曲点と障害物の認識
-   - 隣接セルのMean_Normalベクトルの急変（角度差が閾値以上）を変曲点として識別
-   - 変曲点の前後でZ_min差が最大段差高さ超過→段差障害物
-   - 変曲点以降の傾斜が最大傾斜角超過→急傾斜障害物
-   - 急激なZ_min変化、Z_maxが重心より高い領域→障害物
+2. RemoveOutliers（StatisticalOutlierRemoval）
+   - 入力: downsampled 点群
+   - パラメータ: `sor_mean_k`, `sor_stddev_mul_thresh`
+   - 処理: 各点の近傍距離の平均と分散を計算し、閾値外の点を除去する。
 
-### 5.3 トラバーサビリティ評価とコストマップ生成
-1. スロープ：相対傾斜角と最大傾斜角で評価
-2. 段差：相対高さと最大段差高さで評価
-3. コスト割当
-   - 走行可能な路面：低コスト（例: 0-50）
-   - 乗り越え可能なスロープ/段差：中コスト（例: 51-127）
-   - 乗り越え不能な障害物：高コスト（例: 128-254）、通行不可（255）
-4. オブジェクト情報：障害物領域をクラスタリングし、位置・形状・分類をvisualization_msgs/msg/Marker等で出力
+3. 投影とグリッド化
+   - 入力: 前処理済点群（base_link 座標）
+   - グリッドインデックス計算: ix = floor(x / resolution), iy = floor(y / resolution)
+   - 各セルに属する点群を集約（sparse map: unordered_map<pair<int,int>, vector<Point3D>>）
 
-## 6. 参考
-- 使用ライブラリ：PCL, ROS2 TF, sensor_msgs, visualization_msgs, nav_msgs, costmap_2d, tf2_ros
-- カメラ設置：ロボット上部から正面斜め下向き
-- 2D自己位置推定（AMCL等）・Navigation2との連携を前提
+4. グリッドセル特徴量算出
+   - 各セルについて:
+     - z_min = min(z)
+     - z_max = max(z)
+     - mean_z = average(z)
+     - z_variance = (1/N) * sum((z - mean_z)^2)
+     - mean_rgb = avg(r,g,b)
+     - 法線推定: pcl::NormalEstimation を用いるか、最小二乗法で局所平面をフィットして法線を求める。
+       - パラメータ: `normal_k`（法線推定に用いる点数）
+     - 法線ベクトルは正規化して保存
+
+5. Traversability 評価（セル毎）
+   - 入力: GridCellFeature と閾値パラメータ
+   - パラメータ: `max_slope_angle_deg`, `max_step_height_m`, `z_variance_threshold`, `normal_angle_threshold_deg`, `cost_traversable`, `cost_semi_traversable`, `cost_obstacle`, `cost_lethal`
+   - 処理ルール（順序適用）:
+     1. 安全路面判定:
+        - 条件: z_variance < z_variance_threshold AND angle(mean_normal, vertical) < max_slope_angle_deg
+        - 出力: cost = cost_traversable
+     2. 段差判定:
+        - 条件: (z_max - z_min) > max_step_height_m
+        - 出力: cost = cost_obstacle
+     3. 半通行判定:
+        - 条件: angle(mean_normal, vertical) < (max_slope_angle_deg + normal_angle_threshold_deg)
+        - 出力: cost = cost_semi_traversable
+     4. 致命判定:
+        - それ以外 -> cost = cost_lethal
+   - 補足: angle(mean_normal, vertical) は acos(clamp(n.z, -1,1)) * 180/pi で算出
+
+6. GridCostMap 生成
+   - 各セルインデックス (ix,iy) に対して上記の cost を割当てる
+   - bounds を min/max ix,iy で確定する
+   - 内部表現は sparse map（unordered_map<pair<int,int>, uint8_t>）で保持する
+
+## 5. 障害物クラスタリング
+クラスタリングはセルレベルでの DBSCAN 風アルゴリズムを採用する。距離はセル単位（メートル→セルへ変換）で計算する。
+
+1. パラメータ: `cluster_distance_threshold_m`, `cluster_min_points`
+2. eps_cells = cluster_distance_threshold_m / grid_resolution_m
+3. データ: cost >= cost_threshold (通常 cost_obstacle 以上) のセル集合を points にする
+4. DBSCAN 風アルゴリズム:
+   - 初期ラベルを -1（未訪問）で設定
+   - 各未訪問点 p について:
+     - 近傍 N = { q | dist(p,q) <= eps_cells }
+     - if |N| < cluster_min_points then label = noise (-2)
+     - else create new cluster id, expand: for each q in N visit neighbors and add
+   - 収集後、cluster_min_points より小さいクラスタは破棄
+5. クラスタ情報生成:
+   - セルリスト、centroid（セル座標の平均）を計算
+   - クラスタ種別推定: size > wall_threshold -> WALL, size > rock_threshold -> ROCK, else UNKNOWN
+
+## 6. OccupancyGrid への変換
+GridCostMap を nav_msgs/OccupancyGrid もしくはカスタム msg へ変換する際の手順:
+
+1. width = max_ix - min_ix + 1, height = max_iy - min_iy + 1
+2. origin の決定: origin.x = min_ix * resolution_m, origin.y = min_iy * resolution_m（frame は GridCostMap.frame_id）
+3. data 配列を row-major で作成する。初期値は -1（unknown）または 0（free）に設定する運用を選択する。
+4. 内部コスト 0..254 を OccupancyGrid の 0..100 スケールに線形変換するか、保持する場合はカスタム msg を用いる。変換式例（確定）: occ = round((cost / 254.0) * 100.0)
+   - 注意: コア側が返す reservation 値 255 は unknown を意味し、OccupancyGrid では -1 にマップされることを明示する。
+5. 出力メタデータ: resolution, width, height, origin, header.stamp, header.frame_id
+
+## 7. TF とアダプタの振る舞い
+- ROS アダプタは点群受信後、TF lookup→点群変換→core呼び出し→OccupancyArray生成→OccupancyGrid作成→publishまでの処理を担当する。
+
+## 8. Nav2 への反映（costmap アダプタ）
+- `costmap_adapter_node` は `/depth_costmap/occupancy_grid` を購読し、差分セルのみを master costmap に反映する。conditional_overwrite パラメータで上書き条件を制御する。
+
+## 9. パラメータ一覧（型とデフォルト値）
+- grid_resolution_m: double = 0.05
+- voxel_leaf_size_m: double = 0.02
+- sor_mean_k: int = 50
+- sor_stddev_mul_thresh: double = 1.0
+- normal_k: int = 10
+- max_slope_angle_deg: double = 30.0
+- normal_angle_threshold_deg: double = 10.0
+- max_step_height_m: double = 0.10
+- z_variance_threshold: double = 0.02
+- cost_traversable: int = 0
+- cost_semi_traversable: int = 50
+- cost_obstacle: int = 150
+- cost_lethal: int = 255
+- cluster_distance_threshold_m: double = 0.20
+- cluster_min_points: int = 3
+- tf_lookup_timeout_ms: int = 100
+- tf_retry_count: int = 3
+- tf_retry_backoff_ms: int = 50
+- conditional_overwrite: bool = true
+- output_occupancy_topic: string = "/depth_costmap/occupancy_grid"
+- marker_topic: string = "/depth_costmap/clusters"
+
+## 10. スレッド・同期設計
+- アダプタ（ROSノード）と Nav2 Layer 双方が内部 state（GridCostMap, clusters）を参照する可能性があるため、共有データには `std::mutex state_mutex_` を用いる。
+- コールバック内で mutex を短時間占有し、重い処理（法線推定やクラスタ化）は mutex の外で行う。更新時は新しい result を作成してから mutex で入れ替える。
+- publish は mutex のコピー済みデータを用いて行うことでロック時間を最小化する。
+
+## 11. エラー処理とロギング
+- TF取得失敗: WARN ログを出力し、その点群はスキップする（リトライは上限回数まで行う）
+- PCL の処理例外: ERROR ログを出力しそのメッセージをスキップ
+- パラメータ不正: 事前に検証し、閾値が不適切な場合はデフォルトへフォールバックして WARN を出す
+- コストマップ反映失敗: WARN を出力し、次回更新へ委ねる
+
+## 12. テスト設計
+### 12.1 単体テスト（core）
+- processPointCloud に対して複数の合成点群ケースを用意し、期待される cost が割り当てられることを検証する（gtest）
+- clusterCostMap に対して既知のセル集合を与え、期待するクラスタ数・centroid を検証する
+
+### 12.2 統合テスト（adapter）
+- Node を起動し、記録済み PointCloud2 を publish、受信した OccupancyGrid の値が期待と合致することを検証する
+- TF を模擬して transform の異常パスも検証する
+
+### 12.3 性能テスト
+- 異なる点群密度 (e.g. 10k, 50k, 100k points) で処理時間を計測し、目標フレームレート（例: 5Hz）を満たすか確認する
+- メモリ使用量、GC 負荷（C++ならメモリ確保頻度）を測定
+
+## 13. 最適化と拡張案（実装手順に従って導入）
+- 法線推定やセル特徴量計算の並列化（TBB/OpenMP）
+- 大域マップとの差分更新（前回コストとの差分のみ master に送る）
+- GPU アクセラレーション（将来的選択肢）
+- 自動パラメータチューニング用スクリプト
+
+## 14. CI / 品質基準
+- GitHub Actions で以下を実行:
+  - colcon build / cmake build
+  - colcon test / unit tests
+  - static analysis (clang-tidy)
+  - coverage レポート
+- テストしきい値を定義し、性能が下回った場合は regression を fail にする
+
+## 15. 実装フェーズと見積
+- フェーズ1 (core 実装 + unit tests): 1〜2 日
+- フェーズ2 (depth_camera_processor_node): 0.5〜1 日
+- フェーズ3 (costmap_adapter_node / Nav2 統合): 0.5〜1 日
+- フェーズ4 (最適化, CI, docs): 2〜4 日
 
 ---
-### 備考（コストマップ合成・安全設計の補足）
 
-#### レイヤー合成順序と周期
-- costmap_2dのレイヤー合成は「pluginsリストの順番」でupdateされ、後からsetCostした値が有効となる。
-- 周期の違い（例：LIDAR層10Hz、深度カメラ層1Hz）は「最新データの反映頻度」に影響するが、1回のコストマップ更新サイクルでは合成順序が優先される。
-- LIDAR層→深度カメラ層の順で合成し、深度カメラ層で条件付き上書きを行う。
+本設計書に従い、まず core の型定義と `processPointCloud` の最小実装を追加し unit test を作成する。これにより以降の adapter 実装と Nav2 連携を確実に行う準備が整う。
 
-#### 斜面領域の低コスト上書き
-- 深度カメラ層で斜面領域を低コストでsetCostすれば、LIDAR層の誤検知（高コスト）は上書きされる。
-- 深度カメラ層の更新周期が遅い場合でも、前回の判定値が維持され、LIDAR層の高コストで上書きされることはない。
+### コアとアダプタのインタフェース（統一ルール）
 
-#### 障害物の即時反映リスク
-- 深度カメラ層の更新後に新たな障害物が現れ、LIDAR層で検出されても、深度カメラ層の次回更新までコストマップに反映されないリスクがある。
-- このリスクを低減するには、深度カメラ層の更新周期を速くする、または障害物領域はLIDAR層のコストを優先する設計が有効。
+本ドキュメントではコア処理と ROS アダプタ間の受け渡し規則を明確にします。これにより実装の一貫性と将来的な再利用性を確保します。
 
-#### 条件付き上書きの設計
-- updateCosts内で「深度カメラ点群が存在するセルのみsetCostで上書き」「未検出・未更新セルはLIDAR層のコストを維持」するロジックとする。
-- これにより、斜面領域は誤検知を防ぎつつ、障害物の即時反映・安全性も確保できる。
-- 主な運用例：
-  - 斜面領域：深度カメラで走行可能と判定→低コストで上書き
-  - 障害物領域：LIDAR/深度カメラ両方で障害物→高コスト
-  - 深度カメラ未検出領域：LIDARのみ検出→LIDARコスト維持
+- コア出力（convertToOccupancyArray）:
+  - 返却型: `std::vector<uint8_t>`（row-major、サイズ width*height）
+  - 各要素の意味:
+    - 0..254: 正常なコスト値（0 = 通行可能、254 = 最大コスト）
+    - 255: 未知（unknown）
+  - メタ情報: `GridCostMap` または返却構造体に `origin`（x,y,z）、`resolution`、`width`、`height` を含めること。
 
-#### パラメータ設計補足
-- LIDAR/Depth層の合成順序・優先度はyaml/launchで明示的に設定
-- 条件付き上書きの有効/無効をパラメータ化して運用可能
+- アダプタの役割:
+  - コアの生配列を受け取り `nav_msgs::msg::OccupancyGrid` を生成する。
+  - マッピング（確定式）:
+    - core 0..254 -> occupancy 0..100 (線形スケーリング: occupancy = round((core_value / 254.0) * 100.0))
+    - core 255 -> occupancy -1 (unknown)
 
-#### 運用方針
-- 深度カメラと2DLIDARのキャリブレーションを前提とし、両センサの冗長性・安全性を活かす設計とする。
-- パラメータや合成順序はyaml/launchで柔軟に調整可能。
-
----
-## 7. 主要パラメータ一覧
-
-| パラメータ名           | 説明                                 | 例・初期値         |
-|------------------------|--------------------------------------|--------------------|
-| 最大傾斜角             | ロボットが走行可能な最大斜面角度     | 20度               |
-| 最大段差高さ           | 乗り越え可能な段差の最大高さ         | 0.10m              |
-| グリッド解像度         | コストマップのセルサイズ             | 0.10m/セル         |
-| Z_variance閾値         | 路面判定用の高さ分散閾値             | 0.005              |
-| 法線ベクトル角度閾値   | 変曲点判定用の隣接セル法線角度差     | 10度               |
-| コスト値（路面/障害物）| コストマップの割当値                 | 0-255              |
-| 点群ダウンサンプリング | VoxelGridフィルタのリーフサイズ      | 0.05m              |
-| 外れ値除去閾値         | StatisticalOutlierRemovalの閾値      | 1.0                |
-
-※値はロボット仕様や実験により調整してください。
----
-## 8. Navigation2 costmap_2dプラグインとしての実装方法補足
-
-本ノードは、Navigation2のcostmap_2dプラグインとして実装することで、標準ナビゲーションスタック（2D自己位置推定・経路計画等）と連携しやすくなります。
-
-### 実装のポイント
-- costmap_2d::Layerクラスを継承し、独自の点群処理・コストマップ生成ロジックを`updateBounds`・`updateCosts`で実装します。
-- ROS2のpluginlibを用いてプラグイン登録（`PLUGINLIB_EXPORT_CLASS`マクロ）を行います。
-- 点群受信はROS2のサブスクライバ（sensor_msgs/msg/PointCloud2）で行い、必要に応じてTF変換（tf2_ros）を利用します。
-- 生成した2次元コストマップは、costmap_2dのレイヤーとして他レイヤー（障害物・静的地図等）と合成され、2Dナビゲーションシステムの経路計画・障害物回避に利用されます。
-- パラメータ（閾値・解像度等）は、costmap_2dのyaml設定やlaunchファイルから動的に取得できるようにします。
-
-### 参考実装例
-1. `include/your_package/depth_camera_layer.hpp`でLayer継承クラスを定義
-2. `src/depth_camera_layer.cpp`で点群処理・コストマップ生成・レイヤー更新処理を実装
-3. `plugin.xml`でプラグイン登録
-4. `nav2_costmap_2d`の`plugins`パラメータに本プラグインを追加
-
-詳細はNavigation2公式ドキュメント（https://navigation.ros.org/）の「Costmap2D Plugin」セクションを参照してください。
-
----
-## 9. 詳細設計（ノード実装）
-
-### 9.1 構成概要
-本ノードは、ROS2 Humble環境・C++で実装し、Navigation2のcostmap_2dプラグインとして動作する。2D自己位置推定・ナビゲーションシステムと統合され、コストマップ情報をナビゲーションスタックへ提供する。主な構成要素は以下：
-- 点群受信・前処理
-- TF変換による座標系統一
-- グリッドマップ生成・特徴量抽出
-- 地形・障害物判定
-- コストマップ生成・出力（Navigation2/costmap_2dレイヤーとして）
-- 障害物クラスタリング・可視化情報出力
-
-### 9.2 ノード・クラス設計
-- `DepthCameraLayer`（costmap_2d::Layer継承）
-  - 主処理クラス。updateBounds/updateCostsでコストマップ更新。
-- `PointCloudProcessor`
-  - 点群のダウンサンプリング・ノイズ除去・座標変換・特徴量抽出を担当。
-- `TraversabilityEvaluator`
-  - 各セルの走行可否判定・コスト割当。
-- `ObstacleClusterer`
-  - 障害物領域のクラスタリング・visualization_msgs/msg/Marker生成。
-- `ParameterManager`
-  - パラメータ管理（閾値・解像度等の取得・更新）。
-
-### 9.3 トピック・インターフェース設計
-- サブスクライブ：
-  - `/camera/depth/color/points`（sensor_msgs/msg/PointCloud2）
-  - TF（camera_link→base_link, map→base_link）
-- パブリッシュ：
-  - コストマップ（costmap_2d内部で管理、Navigation2へ提供）
-  - 障害物情報（`/detected_obstacles`、visualization_msgs/msg/MarkerArray、RViz等で可視化）
-- サービス/アクション：
-  - パラメータ動的更新（optional, rclcpp::ParameterEvent）
-
-### 9.4 パラメータ設計
-
-| パラメータ名（変数名）                | 型        | 概要・用途                                            | 例・初期値         |
-|--------------------------------------|-----------|------------------------------------------------------|--------------------|
-| max_slope_angle_deg                  | double    | ロボットが走行可能な最大斜面角度（度）                | 20.0               |
-| max_step_height_m                    | double    | 乗り越え可能な段差の最大高さ（m）                     | 0.10               |
-| grid_resolution_m                    | double    | コストマップのセルサイズ（m/セル）                    | 0.10               |
-| z_variance_threshold                 | double    | 路面判定用の高さ分散閾値                             | 0.005              |
-| normal_angle_threshold_deg           | double    | 変曲点判定用の隣接セル法線角度差（度）                | 10.0               |
-| cost_traversable                     | int       | 走行可能セルのコスト値                                | 0-50               |
-| cost_semi_traversable                | int       | 乗り越え可能セルのコスト値                            | 51-127             |
-| cost_obstacle                        | int       | 乗り越え不能セルのコスト値                            | 128-254            |
-| cost_lethal                          | int       | 通行不可セルのコスト値                                | 255                |
-| voxel_leaf_size_m                    | double    | VoxelGridフィルタのリーフサイズ（m）                  | 0.05               |
-| sor_mean_k                           | int       | StatisticalOutlierRemovalの近傍点数                   | 50                 |
-| sor_stddev_mul_thresh                | double    | StatisticalOutlierRemovalの閾値                       | 1.0                |
-| cluster_distance_threshold_m          | double    | 障害物クラスタリングの距離閾値（m）                   | 0.20               |
-| cluster_min_points                   | int       | 障害物クラスタリングの最小点数                        | 10                 |
-
-パラメータはyaml/launchから取得し、rclcpp::Node::declare_parameter/ get_parameterで管理する。
-
-### 9.5 点群処理フロー詳細
-1. sensor_msgs/msg/PointCloud2受信（callback）
-2. pcl::VoxelGridでダウンサンプリング
-3. pcl::StatisticalOutlierRemovalでノイズ除去
-4. tf2_ros::Buffer/Listenerでcamera_link→base_link変換取得
-5. pcl::transformPointCloudで座標変換
-6. XY平面に投影し、グリッドマップ初期化
-7. 各セルごとに点群抽出、特徴量計算：
-   - Z_min, Z_max, Z_variance
-   - Mean_Normal（pcl::NormalEstimation）
-   - Mean_RGB
-
-### 9.6 コストマップ生成・更新処理
-1. 各セルの特徴量から走行可否判定：
-   - Z_variance < 閾値、Mean_Normal傾き < 最大傾斜角 → 走行可能
-   - 隣接セルのMean_Normal角度差 > 閾値 → 変曲点
-   - 変曲点前後のZ_min差 > 最大段差高さ → 段差障害物
-   - 変曲点以降の傾斜 > 最大傾斜角 → 急傾斜障害物
-   - Z_min急変、Z_max高い → 障害物
-2. コスト割当：
-   - 走行可能：低コスト（0-50）
-   - 乗り越え可能：中コスト（51-127）
-   - 乗り越え不能：高コスト（128-254）、通行不可（255）
-3. costmap_2d::Costmap2DのsetCostで反映（条件付き上書き：深度カメラ点群が存在するセルのみ上書き、未検出セルはLIDARコスト維持）
-
-### 9.7 障害物クラスタリング・オブジェクト情報出力
-1. 高コストセル領域をクラスタリング（DBSCAN等）
-2. クラスタごとに位置・形状・分類（急斜面/岩/壁等）を推定
-3. visualization_msgs/msg/MarkerArrayで障害物情報をpublish
-
-### 9.8 エラー処理・例外設計
-- 点群未受信・TF未取得時は処理スキップ/警告ログ
-- pcl/TF変換失敗時は例外キャッチ・エラーログ
-- パラメータ不正値は初期値でフォールバック
-- コストマップ更新失敗時は警告のみ（他レイヤーに影響しない設計）
-
-### 9.9 テスト・デバッグ方針
-- 単体テスト：各クラスごとにgtestでロジック検証
-- 統合テスト：実機/シミュレータで点群→コストマップ変換確認
-- RVizでコストマップ・障害物Marker可視化
-- ログ出力（INFO/WARN/ERROR）で処理状況確認
-- パラメータ変更による挙動確認（launch/yaml切替）
-- 2D自己位置推定・ナビゲーションシステムとの統合テスト（経路計画・障害物回避挙動の確認）
-- 障害物即時反映の検証（LIDARのみ検出時の安全性確認）
+注: これらのルールはコアとアダプタの責務分離を明確にし、コア側が ROS や nav_msgs に依存しない設計を保証します。
 
