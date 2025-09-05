@@ -1,3 +1,10 @@
+// ファイル: point_cloud_processor.cpp
+// 概要: 点群前処理ユーティリティを提供します。
+//       - downsample: VoxelGrid によるダウンサンプリング
+//       - removeOutliers: StatisticalOutlierRemoval による外れ値除去
+//       - transform: Eigen 変換を用いた点群座標変換
+//       - computeGridFeatures: 点群をグリッドに投影し，各セルごとに高さや色，法線などの特徴量を算出
+
 #include "horiokart_depth_camera_costmap/point_cloud_processor.hpp"
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/statistical_outlier_removal.h>
@@ -13,6 +20,7 @@ PointCloudProcessor::PointCloudProcessor() {}
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr PointCloudProcessor::downsample(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, float leaf_size)
 {
+    // VoxelGrid によるダウンサンプリング
     pcl::VoxelGrid<pcl::PointXYZRGB> voxel;
     voxel.setInputCloud(cloud);
     voxel.setLeafSize(leaf_size, leaf_size, leaf_size);
@@ -23,6 +31,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr PointCloudProcessor::downsample(const pcl
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr PointCloudProcessor::removeOutliers(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, int mean_k, double stddev_mul_thresh)
 {
+    // StatisticalOutlierRemoval による外れ値除去
     pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
     sor.setInputCloud(cloud);
     sor.setMeanK(mean_k);
@@ -34,6 +43,7 @@ pcl::PointCloud<pcl::PointXYZRGB>::Ptr PointCloudProcessor::removeOutliers(const
 
 pcl::PointCloud<pcl::PointXYZRGB>::Ptr PointCloudProcessor::transform(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, const Eigen::Affine3f &transform)
 {
+    // Eigen 変換を用いた点群座標変換
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr transformed(new pcl::PointCloud<pcl::PointXYZRGB>());
     pcl::transformPointCloud(*cloud, *transformed, transform);
     return transformed;
@@ -43,6 +53,7 @@ std::map<std::pair<int, int>, GridCellFeature> PointCloudProcessor::computeGridF
     const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud,
     float grid_resolution)
 {
+    // 点群をグリッドに投影し，各セルごとに高さや色，法線などの特徴量を算出
     std::map<std::pair<int, int>, std::vector<pcl::PointXYZRGB>> grid_map;
     for (const auto &pt : cloud->points)
     {

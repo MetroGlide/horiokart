@@ -16,7 +16,7 @@
   <depend>pluginlib</depend>
   <depend>pcl_conversions</depend>
   <depend>pcl_msgs</depend>
-  <depend>PCL</depend>
+  <!-- <depend>PCL</depend> -->
   <depend>nav2_costmap_2d</depend>
   <depend>tf2_eigen</depend>
 

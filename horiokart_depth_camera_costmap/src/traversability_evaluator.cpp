@@ -1,6 +1,14 @@
 #include "horiokart_depth_camera_costmap/traversability_evaluator.hpp"
 #include <cmath>
 
+// ファイル: traversability_evaluator.cpp
+// 概要: グリッドセルの特徴量に基づいて通行可能性コストを評価します。
+//       主な判定ルール:
+//       - 法線角（傾斜）と z 分散が閾値内 -> 通行可能
+//       - z_max - z_min が段差閾値を超える -> 障害物
+//       - 法線角が閾値に近い -> 半通行可能
+//       - 上記に該当しない -> 危険（致命的）
+
 TraversabilityEvaluator::TraversabilityEvaluator(float max_slope_angle_deg, float max_step_height_m, float z_variance_threshold,
                                                  float normal_angle_threshold_deg, int cost_traversable, int cost_semi_traversable,
                                                  int cost_obstacle, int cost_lethal)

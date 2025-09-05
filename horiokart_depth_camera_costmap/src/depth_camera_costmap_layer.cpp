@@ -1,3 +1,10 @@
+// ファイル: depth_camera_costmap_layer.cpp
+// 概要: DepthCameraCostmapLayer は Nav2 のコストマップレイヤとして動作します。
+//       深度カメラからの点群を受信し、前処理（ダウンサンプリング、外れ値除去、座標変換）を行い、
+//       グリッド特徴量を算出してTraversabilityEvaluatorで通過可能性コストを評価します。
+//       高コストセルは ObstacleClusterer によりクラスタ化され、可視化用のマーカーが配信されます。
+//       updateCosts では master costmap に対して条件付き（または強制）上書きを行います。
+
 #include "horiokart_depth_camera_costmap/depth_camera_costmap_layer.hpp"
 #include "horiokart_depth_camera_costmap/point_cloud_processor.hpp"
 #include "horiokart_depth_camera_costmap/traversability_evaluator.hpp"
@@ -13,6 +20,7 @@ namespace horiokart_depth_camera_costmap
 
     DepthCameraCostmapLayer::DepthCameraCostmapLayer() {}
 
+    // reset: 内部に保持しているコストマップやクラスタ情報をクリアします。
     void DepthCameraCostmapLayer::reset()
     {
         // Reset internal maps
@@ -20,6 +28,7 @@ namespace horiokart_depth_camera_costmap
         clusters_.clear();
     }
 
+    // onInitialize: ノードハンドルからパラメータを読み取り、点群購読やTFリスナ、マーカーパブリッシャを初期化します。
     void DepthCameraCostmapLayer::onInitialize()
     {
         auto node = node_.lock();
@@ -38,6 +47,13 @@ namespace horiokart_depth_camera_costmap
         marker_pub_ = node->create_publisher<visualization_msgs::msg::MarkerArray>(params.marker_topic, params.marker_queue_size);
     }
 
+    // pointCloudCallback: 点群を受け取った際のメイン処理パイプライン。
+    // 1) パラメータ取得
+    // 2) 点群のダウンサンプリング、外れ値除去
+    // 3) TF を取得して点群を target_frame に変換（リトライ・バックオフあり）
+    // 4) グリッド特徴量を算出
+    // 5) TraversabilityEvaluator によりコストマップを生成
+    // 6) ObstacleClusterer により障害物クラスタを作成
     void DepthCameraCostmapLayer::pointCloudCallback(sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
         auto node = node_.lock();
@@ -108,6 +124,7 @@ namespace horiokart_depth_camera_costmap
         }
     }
 
+    // updateBounds: コストマップ更新領域を robot の周辺に保守的に設定します。
     void DepthCameraCostmapLayer::updateBounds(double robot_x, double robot_y, double robot_yaw,
                                                double *min_x, double *min_y, double *max_x, double *max_y)
     {
@@ -123,6 +140,9 @@ namespace horiokart_depth_camera_costmap
         *max_y = robot_y + 5.0;
     }
 
+    // updateCosts: master_grid に対して内部で保持している cost_map_ を反映します。
+    // セル座標 -> ロボットローカル -> ワールド座標 に変換し、マスターグリッドの対応セルを更新します。
+    // conditional_overwrite が有効な場合は既存の値より低いコストのみ上書きします。
     void DepthCameraCostmapLayer::updateCosts(nav2_costmap_2d::Costmap2D &master_grid,
                                               int min_i, int min_j, int max_i, int max_j)
     {

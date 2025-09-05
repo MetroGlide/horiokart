@@ -19,6 +19,7 @@ namespace horiokart_depth_camera_costmap
 
         auto declare_and_get = [&](auto *n)
         {
+            // Declare parameters with default values
             n->declare_parameter("grid_resolution_m", params.grid_resolution_m);
             n->declare_parameter("max_step_height_m", params.max_step_height_m);
             n->declare_parameter("max_normal_angle_deg", params.max_normal_angle_deg);
@@ -49,6 +50,7 @@ namespace horiokart_depth_camera_costmap
             n->declare_parameter("tf_retry_count", params.tf_retry_count);
             n->declare_parameter("tf_retry_backoff_ms", params.tf_retry_backoff_ms);
 
+            // Get parameters and assign to struct
             n->get_parameter("grid_resolution_m", params.grid_resolution_m);
             n->get_parameter("max_step_height_m", params.max_step_height_m);
             n->get_parameter("max_normal_angle_deg", params.max_normal_angle_deg);
@@ -93,3 +95,7 @@ namespace horiokart_depth_camera_costmap
     }
 
 } // namespace horiokart_depth_camera_costmap
+
+// ファイル: parameter_manager.cpp
+// 概要: ノード（通常の rclcpp::Node または LifecycleNode）からパラメータを宣言し取得するユーティリティ。
+//       getParams() はすべてのパラメータを宣言し（存在しない場合デフォルトを設定）、その値を構造体に格納して返します。
