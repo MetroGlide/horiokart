@@ -1,11 +1,9 @@
 cmake_minimum_required(VERSION 3.8)
 project(horiokart_depth_camera_costmap)
 
-# Prefer runtime-origin-based RPATH to avoid cycles between system (/opt/ros) and workspace install paths
 set(CMAKE_BUILD_RPATH_USE_ORIGIN TRUE)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
-# Install rpath should point to the library directory relative to the installed binary
 set(CMAKE_INSTALL_RPATH "$ORIGIN")
 
 find_package(ament_cmake REQUIRED)
@@ -29,11 +27,21 @@ include_directories(
 
 add_library(depth_camera_costmap_layer SHARED
   src/depth_camera_costmap_layer.cpp
-  src/point_cloud_processor.cpp
-  src/traversability_evaluator.cpp
-  src/obstacle_clusterer.cpp
-  src/parameter_manager.cpp
 )
+
+add_library(horiokart_depth_camera_core
+  src/core_processor.cpp
+)
+target_include_directories(horiokart_depth_camera_core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+target_link_libraries(horiokart_depth_camera_core PUBLIC Eigen3::Eigen)
+
+find_package(PCL REQUIRED COMPONENTS common kdtree io)
+if(PCL_FOUND)
+  target_include_directories(horiokart_depth_camera_core PUBLIC ${PCL_INCLUDE_DIRS})
+  target_link_libraries(horiokart_depth_camera_core PUBLIC ${PCL_LIBRARIES})
+endif()
 
 target_include_directories(depth_camera_costmap_layer PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -56,7 +64,6 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-# Install sample config so users can load YAML from ros2 launch
 install(DIRECTORY config/
   DESTINATION share/${PROJECT_NAME}/config
 )
@@ -65,7 +72,31 @@ install(FILES plugin.xml
   DESTINATION share/${PROJECT_NAME}
 )
 
-# Simple unit test (sanity) to be expanded: test target source placed in test/
+add_executable(depth_camera_processor_node src/depth_camera_processor_node.cpp)
+ament_target_dependencies(depth_camera_processor_node
+  rclcpp sensor_msgs nav_msgs visualization_msgs tf2_ros pcl_conversions tf2_eigen
+)
+find_package(PCL REQUIRED COMPONENTS common io kdtree)
+if(PCL_FOUND)
+  target_include_directories(depth_camera_processor_node PRIVATE ${PCL_INCLUDE_DIRS})
+  target_link_libraries(depth_camera_processor_node ${PCL_LIBRARIES} horiokart_depth_camera_core)
+endif()
+
+target_include_directories(depth_camera_processor_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+)
+install(TARGETS depth_camera_processor_node
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+
+add_executable(costmap_adapter_node src/costmap_adapter_node.cpp)
+ament_target_dependencies(costmap_adapter_node
+  rclcpp nav_msgs
+)
+install(TARGETS costmap_adapter_node
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_add_gtest(test_coordinate_conversion
   test/test_coordinate_conversion.cpp
 )
@@ -75,7 +106,16 @@ if(TARGET test_coordinate_conversion)
   )
 endif()
 
-# Ensure the built/shared library uses an $ORIGIN-relative rpath to find dependencies at runtime
+ament_add_gtest(test_core_processor
+  test/test_core_processor.cpp
+)
+if(TARGET test_core_processor)
+  target_include_directories(test_core_processor PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+  target_link_libraries(test_core_processor horiokart_depth_camera_core)
+endif()
+
 set_target_properties(depth_camera_costmap_layer PROPERTIES
   BUILD_WITH_INSTALL_RPATH FALSE
   BUILD_RPATH "$ORIGIN/../lib;$ORIGIN"

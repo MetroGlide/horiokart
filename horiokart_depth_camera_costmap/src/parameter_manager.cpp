@@ -95,7 +95,3 @@ namespace horiokart_depth_camera_costmap
     }
 
 } // namespace horiokart_depth_camera_costmap
-
-// ファイル: parameter_manager.cpp
-// 概要: ノード（通常の rclcpp::Node または LifecycleNode）からパラメータを宣言し取得するユーティリティ。
-//       getParams() はすべてのパラメータを宣言し（存在しない場合デフォルトを設定）、その値を構造体に格納して返します。

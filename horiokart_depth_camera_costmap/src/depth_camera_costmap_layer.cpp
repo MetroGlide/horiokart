@@ -10,8 +10,10 @@
 #include "horiokart_depth_camera_costmap/traversability_evaluator.hpp"
 #include "horiokart_depth_camera_costmap/obstacle_clusterer.hpp"
 #include "horiokart_depth_camera_costmap/parameter_manager.hpp"
+#include "horiokart_depth_camera_costmap/core_processor.hpp"
 #include <pluginlib/class_list_macros.hpp>
 #include <pcl_conversions/pcl_conversions.h>
+#include <pcl/common/transforms.h>
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <cmath>
 
@@ -24,7 +26,8 @@ namespace horiokart_depth_camera_costmap
     void DepthCameraCostmapLayer::reset()
     {
         // Reset internal maps
-        cost_map_.clear();
+        // GridCostMap stores costs in .costs
+        cost_map_.costs.clear();
         clusters_.clear();
     }
 
@@ -48,12 +51,6 @@ namespace horiokart_depth_camera_costmap
     }
 
     // pointCloudCallback: 点群を受け取った際のメイン処理パイプライン。
-    // 1) パラメータ取得
-    // 2) 点群のダウンサンプリング、外れ値除去
-    // 3) TF を取得して点群を target_frame に変換（リトライ・バックオフあり）
-    // 4) グリッド特徴量を算出
-    // 5) TraversabilityEvaluator によりコストマップを生成
-    // 6) ObstacleClusterer により障害物クラスタを作成
     void DepthCameraCostmapLayer::pointCloudCallback(sensor_msgs::msg::PointCloud2::SharedPtr msg)
     {
         auto node = node_.lock();
@@ -64,12 +61,12 @@ namespace horiokart_depth_camera_costmap
             // Use rclcpp::Node* for ParameterManager
             ParameterManager param_mgr(node.get());
             auto params = param_mgr.getParams();
-            PointCloudProcessor pc_proc;
+
+            // Convert incoming ROS PointCloud2 to PCL and transform to target frame
             pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
             pcl::fromROSMsg(*msg, *pcl_cloud);
-            auto cloud_ds = pc_proc.downsample(pcl_cloud, static_cast<float>(params.voxel_leaf_size_m));
-            auto cloud_filtered = pc_proc.removeOutliers(cloud_ds, params.sor_mean_k, params.sor_stddev_mul_thresh);
-            geometry_msgs::msg::TransformStamped tf;
+
+            geometry_msgs::msg::TransformStamped tfst;
             bool tf_ok = false;
             rclcpp::Duration timeout = rclcpp::Duration::from_seconds(static_cast<double>(params.tf_lookup_timeout_ms) / 1000.0);
             for (int attempt = 0; attempt < params.tf_retry_count && !tf_ok; ++attempt)
@@ -78,13 +75,13 @@ namespace horiokart_depth_camera_costmap
                 {
                     if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, msg->header.stamp, timeout))
                     {
-                        tf = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, msg->header.stamp);
+                        tfst = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, msg->header.stamp);
                         tf_ok = true;
                         break;
                     }
                     if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0), timeout))
                     {
-                        tf = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0));
+                        tfst = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0));
                         tf_ok = true;
                         RCLCPP_WARN(node->get_logger(), "TF lookup with message time not available; fell back to latest transform (attempt %d).", attempt + 1);
                         break;
@@ -94,8 +91,6 @@ namespace horiokart_depth_camera_costmap
                 {
                     RCLCPP_DEBUG(node->get_logger(), "TF lookup attempt %d failed: %s", attempt + 1, e.what());
                 }
-
-                // exponential backoff
                 if (attempt + 1 < params.tf_retry_count)
                 {
                     int backoff = params.tf_retry_backoff_ms * (1 << attempt);
@@ -108,15 +103,57 @@ namespace horiokart_depth_camera_costmap
                 return;
             }
 
-            Eigen::Affine3f tf_eigen = tf2::transformToEigen(tf.transform).cast<float>();
-            auto cloud_trans = pc_proc.transform(cloud_filtered, tf_eigen);
-            auto grid_features = pc_proc.computeGridFeatures(cloud_trans, static_cast<float>(params.grid_resolution_m));
-            TraversabilityEvaluator evaluator(static_cast<float>(params.max_normal_angle_deg), static_cast<float>(params.max_step_height_m), static_cast<float>(params.z_variance_threshold),
-                                              static_cast<float>(params.normal_angle_threshold_deg), params.cost_traversable, params.cost_semi_traversable,
-                                              params.cost_obstacle, params.cost_lethal);
-            cost_map_ = evaluator.evaluate(grid_features);
-            ObstacleClusterer clusterer(params.cluster_distance_threshold_m, params.cluster_min_points, params.grid_resolution_m);
-            clusters_ = clusterer.cluster(cost_map_, params.cost_obstacle);
+            Eigen::Affine3f T = tf2::transformToEigen(tfst.transform).cast<float>();
+            pcl::transformPointCloud(*pcl_cloud, *pcl_cloud, T);
+
+            // convert to core Point3D vector
+            std::vector<horiokart::depth_camera_costmap::Point3D> pts;
+            pts.reserve(pcl_cloud->size());
+            for (const auto &p : *pcl_cloud)
+            {
+                horiokart::depth_camera_costmap::Point3D cp;
+                cp.x = p.x;
+                cp.y = p.y;
+                cp.z = p.z;
+                cp.r = p.r;
+                cp.g = p.g;
+                cp.b = p.b;
+                pts.push_back(cp);
+            }
+
+            // map params to core CoreParams
+            horiokart::depth_camera_costmap::CoreParams core_params;
+            core_params.grid_resolution_m = params.grid_resolution_m;
+            core_params.voxel_leaf_size_m = params.voxel_leaf_size_m;
+            core_params.sor_mean_k = params.sor_mean_k;
+            core_params.sor_stddev_mul_thresh = params.sor_stddev_mul_thresh;
+            core_params.normal_k = params.normal_angle_threshold_deg > 0 ? params.normal_angle_threshold_deg : core_params.normal_k;
+            core_params.max_slope_angle_deg = params.max_slope_angle_deg;
+            core_params.normal_angle_threshold_deg = params.normal_angle_threshold_deg;
+            core_params.max_step_height_m = params.max_step_height_m;
+            core_params.z_variance_threshold = params.z_variance_threshold;
+            core_params.cost_traversable = static_cast<uint8_t>(params.cost_traversable);
+            core_params.cost_semi_traversable = static_cast<uint8_t>(params.cost_semi_traversable);
+            core_params.cost_obstacle = static_cast<uint8_t>(params.cost_obstacle);
+            core_params.cost_lethal = static_cast<uint8_t>(params.cost_lethal);
+
+            try
+            {
+                // call core processing
+                auto core_grid = horiokart::depth_camera_costmap::processPointCloud(pts, core_params);
+                cost_map_ = core_grid;
+
+                // clustering
+                horiokart::depth_camera_costmap::ClusterParams cparams;
+                cparams.cluster_distance_threshold_m = params.cluster_distance_threshold_m;
+                cparams.cluster_min_points = params.cluster_min_points;
+                cparams.cost_threshold = params.cost_obstacle;
+                clusters_ = horiokart::depth_camera_costmap::clusterCostMap(cost_map_, cparams);
+            }
+            catch (const std::exception &e)
+            {
+                RCLCPP_ERROR(node->get_logger(), "core processing failed: %s", e.what());
+            }
         }
         catch (const std::exception &e)
         {
@@ -128,7 +165,7 @@ namespace horiokart_depth_camera_costmap
     void DepthCameraCostmapLayer::updateBounds(double robot_x, double robot_y, double robot_yaw,
                                                double *min_x, double *min_y, double *max_x, double *max_y)
     {
-        // store robot pose for use in updateCosts when converting local grid indices to world coords
+        // store robot pose for use in updateCosts when converting local cell coords to world coords
         last_robot_x_ = robot_x;
         last_robot_y_ = robot_y;
         last_robot_yaw_ = robot_yaw;
@@ -141,8 +178,6 @@ namespace horiokart_depth_camera_costmap
     }
 
     // updateCosts: master_grid に対して内部で保持している cost_map_ を反映します。
-    // セル座標 -> ロボットローカル -> ワールド座標 に変換し、マスターグリッドの対応セルを更新します。
-    // conditional_overwrite が有効な場合は既存の値より低いコストのみ上書きします。
     void DepthCameraCostmapLayer::updateCosts(nav2_costmap_2d::Costmap2D &master_grid,
                                               int min_i, int min_j, int max_i, int max_j)
     {
@@ -153,16 +188,18 @@ namespace horiokart_depth_camera_costmap
         ParameterManager param_mgr(node.get());
         auto params = param_mgr.getParams();
 
+        const double res = (cost_map_.resolution_m > 0.0) ? cost_map_.resolution_m : params.grid_resolution_m;
+
         // Iterate through stored cost_map_ whose keys are grid cell indices in base_link frame
-        for (const auto &kv : cost_map_)
+        for (const auto &kv : cost_map_.costs)
         {
             int ix = kv.first.first;
             int iy = kv.first.second;
             int cost = kv.second;
 
             // convert cell index to local (base_link) coordinates (cell center)
-            float cell_x = (static_cast<float>(ix) + 0.5f) * static_cast<float>(params.grid_resolution_m);
-            float cell_y = (static_cast<float>(iy) + 0.5f) * static_cast<float>(params.grid_resolution_m);
+            float cell_x = (static_cast<float>(ix) + 0.5f) * static_cast<float>(res);
+            float cell_y = (static_cast<float>(iy) + 0.5f) * static_cast<float>(res);
 
             // rotate by robot yaw and translate by robot world pose to get world coordinates
             float cy = std::cos(static_cast<float>(last_robot_yaw_));
@@ -183,7 +220,6 @@ namespace horiokart_depth_camera_costmap
             if (params.conditional_overwrite)
             {
                 unsigned char existing = master_grid.getCost(mx, my);
-                // overwrite only if depth camera suggests a lower cost (e.g., correct LIDAR false positives)
                 if (clamped < static_cast<int>(existing))
                 {
                     master_grid.setCost(mx, my, static_cast<unsigned char>(clamped));
@@ -206,9 +242,9 @@ namespace horiokart_depth_camera_costmap
             m.id = id++;
             m.type = visualization_msgs::msg::Marker::CUBE;
             m.action = visualization_msgs::msg::Marker::ADD;
-            // centroid is in cell coordinates; convert to meters using grid resolution from parameters
-            float gx = cluster.centroid.x() * static_cast<float>(params.grid_resolution_m);
-            float gy = cluster.centroid.y() * static_cast<float>(params.grid_resolution_m);
+            // centroid is in cell coordinates; convert to meters using grid resolution from core grid
+            float gx = static_cast<float>(cost_map_.origin.x) + (cluster.centroid.x() + 0.5f) * static_cast<float>(res);
+            float gy = static_cast<float>(cost_map_.origin.y) + (cluster.centroid.y() + 0.5f) * static_cast<float>(res);
             // convert local base_link coords to world using last_robot pose
             float cy = std::cos(static_cast<float>(last_robot_yaw_));
             float sy = std::sin(static_cast<float>(last_robot_yaw_));
@@ -217,17 +253,18 @@ namespace horiokart_depth_camera_costmap
             m.pose.position.x = world_gx;
             m.pose.position.y = world_gy;
             m.pose.position.z = 0.5; // arbitrary height for visualization
-            m.scale.x = params.grid_resolution_m * 1.0f * static_cast<float>(cluster.cells.size());
-            m.scale.y = params.grid_resolution_m * 1.0f * static_cast<float>(cluster.cells.size());
+            m.scale.x = static_cast<float>(res) * 1.0f * static_cast<float>(cluster.cells.size());
+            m.scale.y = static_cast<float>(res) * 1.0f * static_cast<float>(cluster.cells.size());
             m.scale.z = 1.0;
-            if (cluster.type == "wall")
+            // set color based on cluster type
+            if (cluster.type == horiokart::depth_camera_costmap::ObstacleCluster::Type::WALL)
             {
                 m.color.r = 1.0;
                 m.color.g = 0.0;
                 m.color.b = 0.0;
                 m.color.a = 0.8;
             }
-            else if (cluster.type == "rock")
+            else if (cluster.type == horiokart::depth_camera_costmap::ObstacleCluster::Type::ROCK)
             {
                 m.color.r = 0.5;
                 m.color.g = 0.5;

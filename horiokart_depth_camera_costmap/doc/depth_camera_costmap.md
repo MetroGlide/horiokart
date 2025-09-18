@@ -211,3 +211,8 @@ GridCostMap を nav_msgs/OccupancyGrid もしくはカスタム msg へ変換す
 
 注: これらのルールはコアとアダプタの責務分離を明確にし、コア側が ROS や nav_msgs に依存しない設計を保証します。
 
+
++ 追加: SOR の高速化
++ - 現在の設計では SOR（StatisticalOutlierRemoval）を kNN ベースで実装しますが、単純な O(N^2) 実装は大規模点群では不適切です。
++ - 実装では k-d tree（例: PCL::KdTreeFLANN、nanoflann、flann）を用いた近傍検索を利用することで平均距離計算を O(N log N) に改善できます（本リポジトリでは PCL の KdTreeFLANN を利用する実装例を追加しました）。
++ - 今後の最適化案: k-d tree 構築と検索の並列化、KD-tree ライブラリのプロファイルに応じた選択（nanoflann はヘッダのみで軽量、PCL は追加機能が豊富）。

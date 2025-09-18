@@ -11,13 +11,14 @@
 #include <memory>
 #include <map>
 #include <vector>
-#include "horiokart_depth_camera_costmap/point_cloud_processor.hpp"
-#include "horiokart_depth_camera_costmap/traversability_evaluator.hpp"
-#include "horiokart_depth_camera_costmap/obstacle_clusterer.hpp"
 #include "horiokart_depth_camera_costmap/parameter_manager.hpp"
+#include "horiokart_depth_camera_costmap/core_types.hpp"
 
 namespace horiokart_depth_camera_costmap
 {
+
+    // alias to core namespace
+    namespace core = ::horiokart::depth_camera_costmap;
 
     class DepthCameraCostmapLayer : public nav2_costmap_2d::Layer
     {
@@ -38,8 +39,9 @@ namespace horiokart_depth_camera_costmap
         std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
         std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
         rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
-        std::map<std::pair<int, int>, int> cost_map_;
-        std::vector<ObstacleCluster> clusters_;
+        // Use core types for stored state
+        horiokart::depth_camera_costmap::GridCostMap cost_map_;
+        std::vector<horiokart::depth_camera_costmap::ObstacleCluster> clusters_;
 
         // store last robot pose received in updateBounds so updateCosts can convert local cell coords to world coords
         double last_robot_x_ = 0.0;
