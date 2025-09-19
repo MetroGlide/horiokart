@@ -17,10 +17,12 @@ def generate_launch_description():
     launch_argument_creator = LaunchArgumentCreator()
 
     # Launch arguments
-    use_rs_d435_arg = launch_argument_creator.create(
-        "use_rs_d435", default="false")
+    use_rs_d415_arg = launch_argument_creator.create(
+        # "use_rs_d415", default="false")
+        "use_rs_d415", default="true")
     use_rs_d435i_arg = launch_argument_creator.create(
-        "use_rs_d435i", default="true")
+        # "use_rs_d435i", default="true")
+        "use_rs_d435i", default="false")
 
     pkg_name = "horiokart_drivers"
     pkg_share = get_package_share_directory(pkg_name)
@@ -63,22 +65,42 @@ def generate_launch_description():
             #     # condition=launch.conditions.IfCondition(
             #     #     use_rs_d435i_arg.launch_config),
             # ),
+
+
+            # Node(
+            #     package="realsense2_camera",
+            #     namespace="rs_d435i",
+            #     name="rs_d435i_node",
+            #     executable="realsense2_camera_node",
+            #     parameters=[{
+            #         "use_sim_time": True,
+            #     },
+            #         os.path.join(pkg_share, "params", "rs_d435i.yaml"),
+            #     ],
+            #     output="screen",
+            #     remappings=[
+            #         ("/rs_d435i/depth/color/points", "/rs_d435i/depth/color/points/raw"),
+            #     ],
+            #     condition=launch.conditions.IfCondition(
+            #         use_rs_d435i_arg.launch_config),
+            # ),
             Node(
                 package="realsense2_camera",
-                namespace="rs_d435i",
-                name="rs_d435i_node",
+                namespace="rs_d415",
+                name="rs_d415_node",
                 executable="realsense2_camera_node",
                 parameters=[{
                     "use_sim_time": True,
                 },
-                    os.path.join(pkg_share, "params", "rs_d435i.yaml"),
+                    os.path.join(pkg_share, "params", "rs_d415.yaml"),
                 ],
                 output="screen",
                 remappings=[
-                    ("/rs_d435i/depth/color/points", "/rs_d435i/depth/color/points/raw"),
+                    ("/rs_d415/depth/color/points",
+                     "/rs_d415/depth/color/points/raw"),
                 ],
                 condition=launch.conditions.IfCondition(
-                    use_rs_d435i_arg.launch_config),
+                    use_rs_d415_arg.launch_config),
             ),
         ],
     )
