@@ -1,3 +1,4 @@
+#include "horiokart_depth_camera_costmap/core_types.hpp"
 #include "horiokart_depth_camera_costmap/obstacle_clusterer.hpp"
 #include <cmath>
 #include <vector>
@@ -6,7 +7,7 @@
 #include <Eigen/Dense>
 #include <algorithm>
 
-namespace horiokart_depth_camera_costmap
+namespace horiokart::depth_camera_costmap
 {
 
     ObstacleClusterer::ObstacleClusterer(float cluster_distance_threshold, int cluster_min_points, float grid_resolution_m)
@@ -27,8 +28,6 @@ namespace horiokart_depth_camera_costmap
         if (points.empty())
             return clusters;
 
-        // Convert eps from meters to cell units
-        // eps をメートル単位からセル単位に変換
         const float eps = cluster_distance_threshold_ / grid_resolution_m_;
         const int n = static_cast<int>(points.size());
         std::vector<int> labels(n, -1);
@@ -37,8 +36,6 @@ namespace horiokart_depth_camera_costmap
         {
             if (labels[i] != -1)
                 continue;
-            // find neighbors
-            // 近傍を探す
             std::vector<int> neighbors;
             for (int j = 0; j < n; ++j)
             {
@@ -53,8 +50,6 @@ namespace horiokart_depth_camera_costmap
                 labels[i] = -2; // noise
                 continue;
             }
-            // expand cluster
-            // クラスタを拡張
             std::vector<int> stack = neighbors;
             for (int idx = 0; idx < static_cast<int>(stack.size()); ++idx)
             {
@@ -64,8 +59,6 @@ namespace horiokart_depth_camera_costmap
                 if (labels[sidx] != -1)
                     continue;
                 labels[sidx] = cid;
-                // find neighbors of sidx
-                // sidx の近傍を探す
                 for (int j = 0; j < n; ++j)
                 {
                     float dx = static_cast<float>(points[sidx].first - points[j].first);
@@ -81,7 +74,6 @@ namespace horiokart_depth_camera_costmap
             cid++;
         }
         // collect clusters
-        // クラスタを収集
         std::map<int, std::vector<std::pair<int, int>>> cluster_cells;
         for (int i = 0; i < n; ++i)
         {
@@ -95,8 +87,6 @@ namespace horiokart_depth_camera_costmap
                 continue;
             ObstacleCluster oc;
             oc.cells = cells;
-            // compute centroid in cell coordinates
-            // セル座標系でセントロイドを計算
             float sx = 0, sy = 0;
             for (const auto &c : cells)
             {
@@ -104,17 +94,15 @@ namespace horiokart_depth_camera_costmap
                 sy += static_cast<float>(c.second);
             }
             oc.centroid = Eigen::Vector2f(sx / cells.size(), sy / cells.size());
-            // rudimentary type classification based on cluster shape
-            // クラスタの形状に基づく初歩的な型分類
             if (cells.size() > 50)
-                oc.type = "wall";
+                oc.type = ObstacleCluster::Type::WALL;
             else if (cells.size() > 10)
-                oc.type = "rock";
+                oc.type = ObstacleCluster::Type::ROCK;
             else
-                oc.type = "unknown";
+                oc.type = ObstacleCluster::Type::UNKNOWN;
             clusters.push_back(oc);
         }
         return clusters;
     }
 
-} // namespace horiokart_depth_camera_costmap
+} // namespace horiokart::depth_camera_costmap

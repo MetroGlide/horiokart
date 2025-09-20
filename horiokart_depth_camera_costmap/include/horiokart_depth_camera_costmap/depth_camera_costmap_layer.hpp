@@ -14,12 +14,8 @@
 #include "horiokart_depth_camera_costmap/parameter_manager.hpp"
 #include "horiokart_depth_camera_costmap/core_types.hpp"
 
-namespace horiokart_depth_camera_costmap
+namespace horiokart::depth_camera_costmap
 {
-
-    // alias to core namespace
-    namespace core = ::horiokart::depth_camera_costmap;
-
     class DepthCameraCostmapLayer : public nav2_costmap_2d::Layer
     {
     public:
@@ -49,6 +45,6 @@ namespace horiokart_depth_camera_costmap
         double last_robot_yaw_ = 0.0;
     };
 
-} // namespace horiokart_depth_camera_costmap
+} // namespace horiokart::depth_camera_costmap
 
 // Note: PLUGINLIB_EXPORT_CLASS must be placed in a single .cpp implementation file, not in headers.

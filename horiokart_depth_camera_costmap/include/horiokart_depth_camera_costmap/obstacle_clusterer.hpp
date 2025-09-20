@@ -1,18 +1,12 @@
 #pragma once
+#include "horiokart_depth_camera_costmap/core_types.hpp"
 #include <vector>
 #include <map>
 #include <utility>
 #include <Eigen/Dense>
 
-namespace horiokart_depth_camera_costmap
+namespace horiokart::depth_camera_costmap
 {
-
-    struct ObstacleCluster
-    {
-        std::vector<std::pair<int, int>> cells;
-        Eigen::Vector2f centroid;
-        std::string type;
-    };
 
     class ObstacleClusterer
     {
@@ -26,4 +20,4 @@ namespace horiokart_depth_camera_costmap
         float grid_resolution_m_;
     };
 
-} // namespace horiokart_depth_camera_costmap
+} // namespace horiokart::depth_camera_costmap

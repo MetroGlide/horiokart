@@ -5,59 +5,62 @@
 #include <vector>
 #include <rclcpp_lifecycle/lifecycle_node.hpp>
 
-namespace horiokart_depth_camera_costmap
+namespace horiokart
 {
-
-    struct DepthCameraCostmapParams
+    namespace depth_camera_costmap
     {
-        float grid_resolution_m = 0.05f;
-        float max_step_height_m = 0.1f;
-        float max_normal_angle_deg = 30.0f;
-        float normal_angle_threshold_deg = 10.0f;
-        float variance_threshold = 0.02f;
-        float cluster_distance_threshold_m = 0.2f;
-        int cluster_min_points = 3;
-        bool conditional_overwrite = true;
 
-        // Additional params used by implementation
-        float voxel_leaf_size_m = 0.02f;
-        int sor_mean_k = 50;
-        float sor_stddev_mul_thresh = 1.0f;
-        float max_slope_angle_deg = 30.0f;
-        float z_variance_threshold = 0.02f;
+        struct DepthCameraCostmapParams
+        {
+            float grid_resolution = 0.05f;
+            float max_step_height_m = 0.1f;
+            float max_normal_angle_deg = 30.0f;
+            float normal_angle_threshold_deg = 10.0f;
+            float z_variance_threshold = 0.02f; // unified name
+            float cluster_distance_threshold_m = 0.2f;
+            int cluster_min_points = 3;
+            bool conditional_overwrite = true;
 
-        int cost_traversable = 0;
-        int cost_semi_traversable = 50;
-        int cost_obstacle = 150;
-        int cost_lethal = 255;
+            // Additional params used by implementation
+            float voxel_size = 0.02f;
+            int sor_mean_k = 50;
+            float sor_stddev_mul_thresh = 1.0f;
+            int normal_k = 10; // added
+            float max_slope_angle_deg = 30.0f;
 
-        // Topic / frame parameters
-        std::string pointcloud_topic = "pointcloud";
-        std::string marker_topic = "costmap_markers";
-        std::string target_frame = "base_link";
+            int cost_traversable = 0;
+            int cost_semi_traversable = 50;
+            int cost_obstacle = 150;
+            int cost_lethal = 254;
 
-        // Queue sizes and TF timeout
-        int pointcloud_queue_size = 10;
-        int marker_queue_size = 10;
-        int tf_lookup_timeout_ms = 100;
-        // TF retry policy
-        int tf_retry_count = 3;       // number of attempts to try TF lookup
-        int tf_retry_backoff_ms = 50; // base backoff in ms (exponential)
+            // Topic / frame parameters
+            std::string pointcloud_topic = "pointcloud";
+            std::string marker_topic = "costmap_markers";
+            std::string target_frame = "base_link";
 
-        // ... add other params as needed
-    };
+            // Queue sizes and TF timeout
+            int pointcloud_queue_size = 10;
+            int marker_queue_size = 10;
+            int tf_lookup_timeout_ms = 100;
+            // TF retry policy
+            int tf_retry_count = 3;       // number of attempts to try TF lookup
+            int tf_retry_backoff_ms = 50; // base backoff in ms (exponential)
 
-    class ParameterManager
-    {
-    public:
-        ParameterManager(rclcpp::Node *node);
-        ParameterManager(rclcpp_lifecycle::LifecycleNode *lifecycle_node);
+            // ... add other params as needed
+        };
 
-        DepthCameraCostmapParams getParams();
+        class ParameterManager
+        {
+        public:
+            ParameterManager(rclcpp::Node *node);
+            ParameterManager(rclcpp_lifecycle::LifecycleNode *lifecycle_node);
 
-    private:
-        rclcpp::Node *node_ = nullptr;
-        rclcpp_lifecycle::LifecycleNode *lifecycle_node_ = nullptr;
-    };
+            DepthCameraCostmapParams getParams();
 
-} // namespace horiokart_depth_camera_costmap
+        private:
+            rclcpp::Node *node_ = nullptr;
+            rclcpp_lifecycle::LifecycleNode *lifecycle_node_ = nullptr;
+        };
+
+    } // namespace depth_camera_costmap
+} // namespace horiokart

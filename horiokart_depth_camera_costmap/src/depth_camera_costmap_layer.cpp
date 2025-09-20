@@ -6,18 +6,17 @@
 //       updateCosts では master costmap に対して条件付き（または強制）上書きを行います。
 
 #include "horiokart_depth_camera_costmap/depth_camera_costmap_layer.hpp"
-#include "horiokart_depth_camera_costmap/point_cloud_processor.hpp"
-#include "horiokart_depth_camera_costmap/traversability_evaluator.hpp"
-#include "horiokart_depth_camera_costmap/obstacle_clusterer.hpp"
 #include "horiokart_depth_camera_costmap/parameter_manager.hpp"
 #include "horiokart_depth_camera_costmap/core_processor.hpp"
+#include "horiokart_depth_camera_costmap/core_types.hpp"
 #include <pluginlib/class_list_macros.hpp>
-#include <pcl_conversions/pcl_conversions.h>
-#include <pcl/common/transforms.h>
-#include <tf2_eigen/tf2_eigen.hpp>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_eigen/tf2_eigen.h>
+#include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <cmath>
 
-namespace horiokart_depth_camera_costmap
+namespace horiokart::depth_camera_costmap
 {
 
     DepthCameraCostmapLayer::DepthCameraCostmapLayer() {}
@@ -27,7 +26,7 @@ namespace horiokart_depth_camera_costmap
     {
         // Reset internal maps
         // GridCostMap stores costs in .costs
-        cost_map_.costs.clear();
+        cost_map_ = GridCostMap();
         clusters_.clear();
     }
 
@@ -45,6 +44,7 @@ namespace horiokart_depth_camera_costmap
         pointcloud_sub_ = node->create_subscription<sensor_msgs::msg::PointCloud2>(
             params.pointcloud_topic, params.pointcloud_queue_size,
             std::bind(&DepthCameraCostmapLayer::pointCloudCallback, this, std::placeholders::_1));
+
         tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node->get_clock());
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
         marker_pub_ = node->create_publisher<visualization_msgs::msg::MarkerArray>(params.marker_topic, params.marker_queue_size);
@@ -62,93 +62,90 @@ namespace horiokart_depth_camera_costmap
             ParameterManager param_mgr(node.get());
             auto params = param_mgr.getParams();
 
-            // Convert incoming ROS PointCloud2 to PCL and transform to target frame
-            pcl::PointCloud<pcl::PointXYZRGB>::Ptr pcl_cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-            pcl::fromROSMsg(*msg, *pcl_cloud);
+            // convert PointCloud2 to core Point3D vector
+            std::vector<Point3D> pts;
+            pts.reserve(static_cast<size_t>(msg->width) * static_cast<size_t>(msg->height));
+            sensor_msgs::PointCloud2ConstIterator<float> it_x(*msg, "x");
+            sensor_msgs::PointCloud2ConstIterator<float> it_y(*msg, "y");
+            sensor_msgs::PointCloud2ConstIterator<float> it_z(*msg, "z");
+            for (size_t i = 0; i < static_cast<size_t>(msg->width) * static_cast<size_t>(msg->height); ++i, ++it_x, ++it_y, ++it_z)
+            {
+                float x = *it_x;
+                float y = *it_y;
+                float z = *it_z;
+                if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
+                    continue;
+                pts.push_back(Point3D{x, y, z});
+            }
 
+            // TF lookup and transform points to target_frame if requested
             geometry_msgs::msg::TransformStamped tfst;
             bool tf_ok = false;
-            rclcpp::Duration timeout = rclcpp::Duration::from_seconds(static_cast<double>(params.tf_lookup_timeout_ms) / 1000.0);
-            for (int attempt = 0; attempt < params.tf_retry_count && !tf_ok; ++attempt)
+            if (!params.target_frame.empty())
             {
-                try
+                rclcpp::Duration timeout = rclcpp::Duration::from_seconds(static_cast<double>(params.tf_lookup_timeout_ms) / 1000.0);
+                for (int attempt = 0; attempt < params.tf_retry_count && !tf_ok; ++attempt)
                 {
-                    if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, msg->header.stamp, timeout))
+                    try
                     {
-                        tfst = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, msg->header.stamp);
-                        tf_ok = true;
-                        break;
+                        if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, msg->header.stamp, timeout))
+                        {
+                            tfst = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, msg->header.stamp);
+                            tf_ok = true;
+                            break;
+                        }
+                        if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0), timeout))
+                        {
+                            tfst = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0));
+                            tf_ok = true;
+                            break;
+                        }
                     }
-                    if (tf_buffer_->canTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0), timeout))
+                    catch (const std::exception &e)
                     {
-                        tfst = tf_buffer_->lookupTransform(params.target_frame, msg->header.frame_id, rclcpp::Time(0));
-                        tf_ok = true;
-                        RCLCPP_WARN(node->get_logger(), "TF lookup with message time not available; fell back to latest transform (attempt %d).", attempt + 1);
-                        break;
+                        RCLCPP_DEBUG(node->get_logger(), "TF lookup attempt %d failed: %s", attempt + 1, e.what());
                     }
-                }
-                catch (const std::exception &e)
-                {
-                    RCLCPP_DEBUG(node->get_logger(), "TF lookup attempt %d failed: %s", attempt + 1, e.what());
-                }
-                if (attempt + 1 < params.tf_retry_count)
-                {
-                    int backoff = params.tf_retry_backoff_ms * (1 << attempt);
-                    rclcpp::sleep_for(std::chrono::milliseconds(backoff));
+                    if (attempt + 1 < params.tf_retry_count)
+                        rclcpp::sleep_for(std::chrono::milliseconds(params.tf_retry_backoff_ms * (1 << attempt)));
                 }
             }
-            if (!tf_ok)
+            // if target_frame empty or TF not available, we keep points in input frame
+            if (tf_ok)
             {
-                RCLCPP_WARN(node->get_logger(), "TF not available for transform from %s to %s after %d attempts", msg->header.frame_id.c_str(), params.target_frame.c_str(), params.tf_retry_count);
-                return;
-            }
-
-            Eigen::Affine3f T = tf2::transformToEigen(tfst.transform).cast<float>();
-            pcl::transformPointCloud(*pcl_cloud, *pcl_cloud, T);
-
-            // convert to core Point3D vector
-            std::vector<horiokart::depth_camera_costmap::Point3D> pts;
-            pts.reserve(pcl_cloud->size());
-            for (const auto &p : *pcl_cloud)
-            {
-                horiokart::depth_camera_costmap::Point3D cp;
-                cp.x = p.x;
-                cp.y = p.y;
-                cp.z = p.z;
-                cp.r = p.r;
-                cp.g = p.g;
-                cp.b = p.b;
-                pts.push_back(cp);
+                Eigen::Affine3d T = tf2::transformToEigen(tfst.transform);
+                for (auto &p : pts)
+                {
+                    Eigen::Vector3d v(p.x, p.y, p.z);
+                    Eigen::Vector3d vt = T * v;
+                    p.x = static_cast<float>(vt.x());
+                    p.y = static_cast<float>(vt.y());
+                    p.z = static_cast<float>(vt.z());
+                }
             }
 
             // map params to core CoreParams
-            horiokart::depth_camera_costmap::CoreParams core_params;
-            core_params.grid_resolution_m = params.grid_resolution_m;
-            core_params.voxel_leaf_size_m = params.voxel_leaf_size_m;
+            CoreParams core_params;
+            core_params.grid_resolution = params.grid_resolution;
+            core_params.voxel_size = params.voxel_size;
             core_params.sor_mean_k = params.sor_mean_k;
             core_params.sor_stddev_mul_thresh = params.sor_stddev_mul_thresh;
-            core_params.normal_k = params.normal_angle_threshold_deg > 0 ? params.normal_angle_threshold_deg : core_params.normal_k;
-            core_params.max_slope_angle_deg = params.max_slope_angle_deg;
+            core_params.normal_k = params.normal_k;
             core_params.normal_angle_threshold_deg = params.normal_angle_threshold_deg;
-            core_params.max_step_height_m = params.max_step_height_m;
             core_params.z_variance_threshold = params.z_variance_threshold;
-            core_params.cost_traversable = static_cast<uint8_t>(params.cost_traversable);
-            core_params.cost_semi_traversable = static_cast<uint8_t>(params.cost_semi_traversable);
-            core_params.cost_obstacle = static_cast<uint8_t>(params.cost_obstacle);
-            core_params.cost_lethal = static_cast<uint8_t>(params.cost_lethal);
+            core_params.cost_lethal = static_cast<std::uint8_t>(params.cost_lethal);
 
             try
             {
                 // call core processing
-                auto core_grid = horiokart::depth_camera_costmap::processPointCloud(pts, core_params);
+                auto core_grid = processPointCloud(pts, core_params);
                 cost_map_ = core_grid;
 
                 // clustering
-                horiokart::depth_camera_costmap::ClusterParams cparams;
-                cparams.cluster_distance_threshold_m = params.cluster_distance_threshold_m;
-                cparams.cluster_min_points = params.cluster_min_points;
-                cparams.cost_threshold = params.cost_obstacle;
-                clusters_ = horiokart::depth_camera_costmap::clusterCostMap(cost_map_, cparams);
+                ClusterParams cparams;
+                cparams.cluster_tolerance = params.cluster_distance_threshold_m;
+                cparams.min_cluster_size = static_cast<std::size_t>(params.cluster_min_points);
+                cparams.merge_distance = 0.1f;
+                clusters_ = clusterCostMap(cost_map_, cparams);
             }
             catch (const std::exception &e)
             {
@@ -188,49 +185,54 @@ namespace horiokart_depth_camera_costmap
         ParameterManager param_mgr(node.get());
         auto params = param_mgr.getParams();
 
-        const double res = (cost_map_.resolution_m > 0.0) ? cost_map_.resolution_m : params.grid_resolution_m;
+        const double res = (cost_map_.resolution > 0.0f) ? cost_map_.resolution : params.grid_resolution;
 
-        // Iterate through stored cost_map_ whose keys are grid cell indices in base_link frame
-        for (const auto &kv : cost_map_.costs)
+        // iterate over dense grid cells
+        for (uint32_t iy = 0; iy < cost_map_.height; ++iy)
         {
-            int ix = kv.first.first;
-            int iy = kv.first.second;
-            int cost = kv.second;
-
-            // convert cell index to local (base_link) coordinates (cell center)
-            float cell_x = (static_cast<float>(ix) + 0.5f) * static_cast<float>(res);
-            float cell_y = (static_cast<float>(iy) + 0.5f) * static_cast<float>(res);
-
-            // rotate by robot yaw and translate by robot world pose to get world coordinates
-            float cy = std::cos(static_cast<float>(last_robot_yaw_));
-            float sy = std::sin(static_cast<float>(last_robot_yaw_));
-            float world_x = static_cast<float>(last_robot_x_) + cy * cell_x - sy * cell_y;
-            float world_y = static_cast<float>(last_robot_y_) + sy * cell_x + cy * cell_y;
-
-            unsigned int mx, my;
-            if (!master_grid.worldToMap(world_x, world_y, mx, my))
-                continue; // outside master grid
-
-            // check update window (map indices)
-            if (static_cast<int>(mx) < min_i || static_cast<int>(mx) >= max_i || static_cast<int>(my) < min_j || static_cast<int>(my) >= max_j)
-                continue;
-
-            // clamp cost to valid range
-            int clamped = std::min(255, std::max(0, cost));
-            if (params.conditional_overwrite)
+            for (uint32_t ix = 0; ix < cost_map_.width; ++ix)
             {
-                unsigned char existing = master_grid.getCost(mx, my);
-                if (clamped < static_cast<int>(existing))
+                const GridCellFeature &cell = cost_map_.cells[cost_map_.index(ix, iy)];
+                if (cell.cost == 255)
+                    continue; // unknown
+                int cost = static_cast<int>(cell.cost);
+
+                // local cell center in layer frame
+                float cell_x = cost_map_.origin.x + (static_cast<float>(ix) + 0.5f) * static_cast<float>(res);
+                float cell_y = cost_map_.origin.y + (static_cast<float>(iy) + 0.5f) * static_cast<float>(res);
+
+                // rotate by robot yaw and translate by robot world pose to get world coordinates
+                float cy = std::cos(static_cast<float>(last_robot_yaw_));
+                float sy = std::sin(static_cast<float>(last_robot_yaw_));
+                float world_x = static_cast<float>(last_robot_x_) + cy * cell_x - sy * cell_y;
+                float world_y = static_cast<float>(last_robot_y_) + sy * cell_x + cy * cell_y;
+
+                unsigned int mx, my;
+                if (!master_grid.worldToMap(world_x, world_y, mx, my))
+                    continue; // outside master grid
+
+                // check update window (map indices)
+                if (static_cast<int>(mx) < min_i || static_cast<int>(mx) >= max_i || static_cast<int>(my) < min_j || static_cast<int>(my) >= max_j)
+                    continue;
+
+                // clamp cost to valid range
+                int clamped = std::min(255, std::max(0, cost));
+                if (params.conditional_overwrite)
+                {
+                    unsigned char existing = master_grid.getCost(mx, my);
+                    if (clamped < static_cast<int>(existing))
+                    {
+                        master_grid.setCost(mx, my, static_cast<unsigned char>(clamped));
+                    }
+                }
+                else
                 {
                     master_grid.setCost(mx, my, static_cast<unsigned char>(clamped));
                 }
             }
-            else
-            {
-                master_grid.setCost(mx, my, static_cast<unsigned char>(clamped));
-            }
         }
 
+        // publish cluster markers
         visualization_msgs::msg::MarkerArray marker_array;
         int id = 0;
         for (const auto &cluster : clusters_)
@@ -242,29 +244,31 @@ namespace horiokart_depth_camera_costmap
             m.id = id++;
             m.type = visualization_msgs::msg::Marker::CUBE;
             m.action = visualization_msgs::msg::Marker::ADD;
-            // centroid is in cell coordinates; convert to meters using grid resolution from core grid
-            float gx = static_cast<float>(cost_map_.origin.x) + (cluster.centroid.x() + 0.5f) * static_cast<float>(res);
-            float gy = static_cast<float>(cost_map_.origin.y) + (cluster.centroid.y() + 0.5f) * static_cast<float>(res);
-            // convert local base_link coords to world using last_robot pose
-            float cy = std::cos(static_cast<float>(last_robot_yaw_));
-            float sy = std::sin(static_cast<float>(last_robot_yaw_));
-            float world_gx = static_cast<float>(last_robot_x_) + cy * gx - sy * gy;
-            float world_gy = static_cast<float>(last_robot_y_) + sy * gx + cy * gy;
+
+            // cluster.centroid is in layer-local coordinates; convert to world
+            float cx = cluster.centroid.x;
+            float cy0 = cluster.centroid.y;
+            float cy_sin = std::sin(static_cast<float>(last_robot_yaw_));
+            float cy_cos = std::cos(static_cast<float>(last_robot_yaw_));
+            float world_gx = static_cast<float>(last_robot_x_) + cy_cos * cx - cy_sin * cy0;
+            float world_gy = static_cast<float>(last_robot_y_) + cy_sin * cx + cy_cos * cy0;
+
             m.pose.position.x = world_gx;
             m.pose.position.y = world_gy;
-            m.pose.position.z = 0.5; // arbitrary height for visualization
+            m.pose.position.z = cluster.centroid.z;
             m.scale.x = static_cast<float>(res) * 1.0f * static_cast<float>(cluster.cells.size());
             m.scale.y = static_cast<float>(res) * 1.0f * static_cast<float>(cluster.cells.size());
             m.scale.z = 1.0;
-            // set color based on cluster type
-            if (cluster.type == horiokart::depth_camera_costmap::ObstacleCluster::Type::WALL)
+
+            // set color based on ObstacleType
+            if (cluster.type == ObstacleType::WALL)
             {
                 m.color.r = 1.0;
                 m.color.g = 0.0;
                 m.color.b = 0.0;
                 m.color.a = 0.8;
             }
-            else if (cluster.type == horiokart::depth_camera_costmap::ObstacleCluster::Type::ROCK)
+            else if (cluster.type == ObstacleType::POINT)
             {
                 m.color.r = 0.5;
                 m.color.g = 0.5;
@@ -283,6 +287,6 @@ namespace horiokart_depth_camera_costmap
         marker_pub_->publish(marker_array);
     }
 
-    PLUGINLIB_EXPORT_CLASS(horiokart_depth_camera_costmap::DepthCameraCostmapLayer, nav2_costmap_2d::Layer)
+    PLUGINLIB_EXPORT_CLASS(horiokart::depth_camera_costmap::DepthCameraCostmapLayer, nav2_costmap_2d::Layer)
 
-} // namespace horiokart_depth_camera_costmap
+} // namespace horiokart::depth_camera_costmap

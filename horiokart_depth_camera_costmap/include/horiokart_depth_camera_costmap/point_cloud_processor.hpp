@@ -1,25 +1,30 @@
 #pragma once
-#include <pcl/point_cloud.h>
-#include <pcl/point_types.h>
-#include <Eigen/Dense>
+
+#include "horiokart_depth_camera_costmap/core_types.hpp"
+#include <vector>
 #include <map>
 #include <utility>
 
-struct GridCellFeature
+namespace horiokart
 {
-    float z_min;
-    float z_max;
-    float z_variance;
-    Eigen::Vector3f mean_normal;
-    Eigen::Vector3f mean_rgb;
-};
+    namespace depth_camera_costmap
+    {
 
-class PointCloudProcessor
-{
-public:
-    PointCloudProcessor();
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr downsample(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, float leaf_size);
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr removeOutliers(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, int mean_k, double stddev_mul_thresh);
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr transform(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, const Eigen::Affine3f &transform);
-    std::map<std::pair<int, int>, GridCellFeature> computeGridFeatures(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr &cloud, float grid_resolution);
-};
+        // Minimal, ROS/core-independent point cloud utilities interface.
+        class PointCloudProcessor
+        {
+        public:
+            PointCloudProcessor();
+
+            // downsample points using voxel grid (simple CPU implementation)
+            std::vector<Point3D> downsample(const std::vector<Point3D> &points, float leaf_size);
+
+            // remove statistical outliers (naive implementation)
+            std::vector<Point3D> removeOutliers(const std::vector<Point3D> &points, int mean_k, double stddev_mul_thresh);
+
+            // compute per-cell features
+            std::map<std::pair<int, int>, GridCellFeature> computeGridFeatures(const std::vector<Point3D> &points, float grid_resolution);
+        };
+
+    } // namespace depth_camera_costmap
+} // namespace horiokart
