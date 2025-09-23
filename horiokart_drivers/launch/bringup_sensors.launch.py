@@ -153,9 +153,14 @@ def generate_launch_description():
                     "serial_no": "",
                     "align_depth.enable": "true",
                     "pointcloud.enable": "true",
-                    "enable_gyro": "true",
-                    "enable_accel": "true",
+
+                    "enable_gyro": "false",
+                    "enable_accel": "false",
                     "unite_imu_method": "1",
+
+                    "depth_module.depth_profile": "848x480x6",
+                    "rgb_camera.color_profile": "1280x720x6",
+
                 }.items(),
                 condition=launch.conditions.IfCondition(
                     use_rs_d435i_arg.launch_config),
