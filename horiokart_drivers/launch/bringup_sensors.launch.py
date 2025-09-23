@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 import launch
 
 from launch import LaunchDescription
@@ -34,6 +35,8 @@ def generate_launch_description():
         "use_gps", default="true")
     gps_port_arg = launch_argument_creator.create(
         "gps_port", default="/dev/ttyHoriokart-gps")
+    use_ubx_protocol_arg = launch_argument_creator.create(
+        "use_ubx_protocol", default="true")
 
     use_rs_d435i_arg = launch_argument_creator.create(
         "use_rs_d435i", default="false")
@@ -129,6 +132,7 @@ def generate_launch_description():
             ),
 
             # GNSS
+            # if use nmea protocol
             Node(
                 package="nmea_navsat_driver",
                 executable="nmea_topic_serial_reader",
@@ -140,7 +144,31 @@ def generate_launch_description():
                     "frame_id": "gps_link",
                 }],
                 condition=launch.conditions.IfCondition(
-                    use_gps_arg.launch_config),
+                    launch.substitutions.AndSubstitution(
+                        use_gps_arg.launch_config,
+                        launch.substitutions.NotSubstitution(
+                            use_ubx_protocol_arg.launch_config),
+                    )
+                ),
+            ),
+            # if use ubx protocol
+            Node(
+                package="ublox_gps",
+                executable="ublox_gps_node",
+                name="ublox_gps_node",
+                output="screen",
+                parameters=[{
+                    "device": gps_port_arg.launch_config,
+                    "frame_id": "gps_link",
+                },
+                    os.path.join(pkg_share, "params", "ublox_ubx_gps.yaml"),
+                ],
+                condition=launch.conditions.IfCondition(
+                    launch.substitutions.AndSubstitution(
+                        use_gps_arg.launch_config,
+                        use_ubx_protocol_arg.launch_config,
+                    )
+                ),
             ),
 
             # RealSense D435i
