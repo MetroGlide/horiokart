@@ -3,22 +3,45 @@
 このドキュメントは、ROS 2 Humble をベースに屋外差動二輪ロボットの前方障害物検知パッケージ `horiokart_obstacle_detector_3d` の実装設計をまとめたものです。
 
 目的:
-- Realsense D415（斜め下向きに正面取付）から得られる PointCloud2 を用いて、走行中の路面（base_linkのある平面）と障害物を区別し、障害物点群を PointCloud2 と 2D 投影（LaserScan 相当）で配信する。
+- Depth カメラや 3D LiDAR 等の PointCloud2 ソースから得られる点群を用いて、走行中の路面（base_link 周辺）と障害物を区別し、障害物点群を PointCloud2 と 2D 投影（LaserScan 相当）で配信する。
 - 屋外の凹凸や傾斜を考慮し、走行可能な傾斜面を誤って障害物扱いしないこと。
 - 入出力周波数 10Hz 以上を目指す（処理最適化を前提）。
 
+# horiokart_obstacle_detector_3d — 実装設計
+
+このドキュメントは、ROS 2 Humble をベースに屋外差動二輪ロボットの前方障害物検知パッケージ `horiokart_obstacle_detector_3d` の実装設計をまとめたものです。
+
+目的:
+- Depth カメラや 3D LiDAR 等の PointCloud2 ソースから得られる点群を用いて、走行中の路面（base_link 周辺）と障害物を区別し、障害物点群を PointCloud2 と 2D 投影（LaserScan 相当）で配信する。
+- 屋外の凹凸や傾斜を考慮し、走行可能な傾斜面を誤って障害物扱いしないこと。
+- 入出力周波数 10Hz 以上を目指す（処理最適化を前提）。
+
+## 目次
+- 要件（要約）
+- 成功基準
+- パッケージ構成
+- データフロー（高レベル）
+- 主要アルゴリズム詳細
+  - 前処理（ROI / ダウンサンプル）
+  - GridHeightMap（高さマップ）と欠損補間
+  - 地面判定（複合指標・EMA）
+  - 地面除去・クラスタリング・Scan 投影
+- ROS トピック・パラメータ
+- パフォーマンス設計
+- テスト計画
+- 拡張案・参考式
 ## 要件（要約）
 - ROS 2 Humble
-- 入力: sensor_msgs/PointCloud2（Realsense D415）
+- 入力: sensor_msgs/PointCloud2（Depth カメラ / 3D LiDAR 等）
 - 出力: sensor_msgs/PointCloud2（障害物点群）, sensor_msgs/LaserScan（障害物の2D投影）
-- Realsense の取り付け姿勢は既知（TF で base_link へ変換）
+- センサの取り付け姿勢は既知（TF で base_link へ変換）
 - 屋外の路面は完全な平面ではないため、局所的凹凸を許容する地面モデルを採用
 - 走行可能な傾斜は地面と判定（誤検知の回避）
 - コア処理（ヘッドレス）と ROS インターフェイス（ノード）を分離
 
 ## 成功基準
 - 正常な屋外シーン（小さな段差、坂、草地、石が散在）で地面と障害物が妥当に分離できる
-- 入出力周波数 >= 10Hz（D415 のデータ量を想定）
+- 入出力周波数 >= 10Hz（典型的な PointCloud2 データ量を想定）
 - 障害物検出の偽陽性（地面を障害物と判定）を低く抑える
 
 ## パッケージ構成（提案）
@@ -117,7 +140,7 @@ h_ij = mean({ h_mn | (m,n) in N(i,j) and cell not empty })
 - メモリ: グリッド行数 = ceil((x_max-x_min)/s)、列数 = ceil((y_max-y_min)/s)。過度に小さい s はメモリと計算を増やす。
 
 ### GridHeightMap の欠損補間と信頼度（confidence）設計
-Depth カメラ（Realsense D415 等）では観測欠損（穴）や視野角依存のノイズが頻発するため、単純な欠損補間は危険です。以下は実装指針で、実装者がそのまま使えるデータ構造、アルゴリズム、パラメータ例、疑似コードを示します。
+Depth カメラ（Realsense等）では観測欠損（穴）や視野角依存のノイズが頻発するため、単純な欠損補間は危険です。以下は実装指針で、実装者がそのまま使えるデータ構造、アルゴリズム、パラメータ例、疑似コードを示します。
 
 1) セル構造（推奨）
 - 各セルに保持する情報:
@@ -232,6 +255,75 @@ use_grid_for_ground_removal(cloud):
 13) 実装トレードオフ注意
 - 中央値は堅牢だが計算負荷が高い。セルあたり点数が多い場合は trimmed-mean を検討。
 - 補間は小穴のみ許容し、大穴は unknown として安全優先で扱う。
+
+### オプション：色（RGB）・強度（intensity）を利用したフィルタリングと信頼度改善
+PointCloud2 に color (RGB) や LiDAR の intensity（反射強度）が含まれる場合、それらを追加特徴量として使うことで地面/非地面の判定精度やクラスタの精度を向上できます。以下は実装指針です（オプション機能）。
+
+1) 適用要件と注意点
+- 入力点群に `rgb` / `rgba` フィールド、または `intensity` フィールドが存在することを確認する（センサに依存）。存在しない場合はこの機能をスキップする。
+- 色はカメラのキャリブレーション・露出・照明に影響を受ける。屋外直射日光下では色情報が信用できない場合がある。
+- LiDAR の `intensity` は機種やレンジでスケールが異なるため正規化が必要。
+
+2) 利用ケース
+- 草地 / 葉（vegetation）やアスファルトと金属などの材質差を利用してノイズを除去・クラスタ分類する。
+- 反射強度の低い点（吸収材）や極めて高反射点（反射板や鏡面）をフラグし、confidence を下げる／外す。
+- 色ベースのセグメンテーションで人/路面/草の粗分類を行い、地面推定に利用（例: 明るいグレー = アスファルト、緑 = 草地）
+
+3) アルゴリズム例
+- 色ベースの vegetation フィルタ（RGB→HSV に変換して H,S,V の範囲で検出）:
+  - p.rgb -> convert to HSV
+  - if H in [H_min,H_max] and S> S_min and V>V_min -> mark likely_vegetation
+  - vegetation 点は小クラスタ化して除外 or マスクしてクラスタ閾値を厳格化
+
+- intensity を用いた信頼度補正:
+  - intensity_normalized = (intensity - i_min) / (i_max - i_min)
+  - intensity_score = clamp((intensity_normalized - i_low) / (i_high - i_low), 0,1)
+  - cell.confidence = blend(cell.confidence, intensity_score, w_intensity)
+
+4) セル／点レベルでの処理フロー（疑似コード）
+```
+for p in cloud:
+  if has_rgb:
+    hsv = rgb_to_hsv(p.rgb)
+    p.is_vegetation = (H_min<=hsv.h<=H_max and hsv.s>=S_min and hsv.v>=V_min)
+  if has_intensity:
+    p.int_score = normalize_intensity(p.intensity)
+
+  if p.is_vegetation:
+    mark p as low_confidence or remove from ground candidate set
+
+# 集約時に cell.confidence に色/強度に基づく補正を適用
+for each cell:
+  if has_intensity:
+    cell.confidence = mix(cell.confidence, mean_int_score_of_cell, w_intensity)
+  if has_rgb:
+    reduce confidence for cells with high fraction of vegetation points
+```
+
+5) パラメータ例
+- use_color: true/false
+- color_mode: rgb|hsv
+- vegetation_h_range: [H_min,H_max]
+- vegetation_s_min, vegetation_v_min
+- use_intensity: true/false
+- intensity_normalize_range: [i_min,i_max]
+- intensity_thresholds: i_low,i_high
+- w_intensity: 0.2 (confidence の混合比率)
+
+6) LiDAR intensity 特有の考慮事項
+- LiDAR の intensity は距離・反射係数・受信角度で変動する。可能なら距離補正や観測角補正（view_angle）を行って正規化する。
+- 一部 LiDAR は intensity が飽和・非線形なので、事前のスケーリング関数（ガンマ補正等）を用いる。
+
+7) 利用上の注意と評価
+- 屋外で色を使う場合は照明変動に弱いため、色ベース判定は補助的に用いる（confidence 補正や後段フィルタとして）。
+- intensity はセンサ依存だが、材質差を活用できる場面では有効。必ず正規化と閾値調整を行う。
+- テスト: 色・強度を含む rosbag を用意し、vegetation フィルタと intensity 補正が false_positive / false_negative に与える影響を評価する。
+
+8) 可視化
+- RViz に vegetation mask（ポイント色の変更）と intensity heatmap（coloring by intensity）を追加してチューニングを行う。
+
+まとめ: 色 / intensity 情報は適切に正規化・評価すれば地面推定やノイズ除去に有効だが、センサ固有の特性（照明依存・距離依存）を必ず考慮し、保守的に運用すること。
+
 
 
 ### 4) ローカル法線・傾斜算出
