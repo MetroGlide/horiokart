@@ -38,7 +38,12 @@ set(AMENT_LINT_AUTO_EXCLUDE
 # uncrustify test won't be auto-added.
 set(ament_uncrustify_FOUND FALSE)
 
-add_executable(obstacle_detector_node src/obstacle_detector_node.cpp)
+add_executable(obstacle_detector_node
+  src/obstacle_detector_node.cpp
+  src/node_helpers/point_extractor.cpp
+  src/node_helpers/grid_utils.cpp
+  src/node_helpers/publish_utils.cpp
+)
 target_include_directories(obstacle_detector_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
@@ -66,6 +71,8 @@ add_library(horiokart_obstacle_detector_3d_core
   src/core/scan_projector.cpp
   src/core/pca_slope_estimator.cpp
   src/core/intensity_utils.cpp
+  src/core/color_utils.cpp
+  src/core/cloud_processor.cpp
 )
 target_include_directories(horiokart_obstacle_detector_3d_core PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -233,6 +240,7 @@ if(BUILD_TESTING)
   if(TARGET test_vegetation_logic)
     target_include_directories(test_vegetation_logic PUBLIC
       $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+    target_link_libraries(test_vegetation_logic horiokart_obstacle_detector_3d_core)
   endif()
   ament_add_gtest(test_publish_empty_scan test/test_publish_empty_scan_unit.cpp)
   if(TARGET test_publish_empty_scan)

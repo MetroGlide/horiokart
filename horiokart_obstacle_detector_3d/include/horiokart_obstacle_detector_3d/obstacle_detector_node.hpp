@@ -20,6 +20,8 @@
 #include <vector>
 #include <visualization_msgs/msg/marker_array.hpp>
 
+#include "horiokart_obstacle_detector_3d/core/cloud_processor.hpp"
+
 // forward declare tf2_ros types to avoid including heavy headers in the public header
 namespace tf2_ros
 {
@@ -34,6 +36,7 @@ class ClusterDetector;
 class GroundSeparator;
 struct PointXYZ;
 class GridHeightMap;
+class CloudProcessor;
 }  // namespace obstacle_detector
 
 class ObstacleDetectorNode : public rclcpp::Node
@@ -139,13 +142,7 @@ private:
 
   bool enable_markers_;
   // metadata for original point colors/intensity used during re-publish
-  struct ColorInfo
-  {
-    bool has_rgb{false};
-    float rgb{0.0f};
-    bool has_intensity{false};
-    float intensity{0.0f};
-  };
+  using ColorInfo = obstacle_detector::ColorInfo;
 
   // helper methods extracted from processCloud for readability and testing
   sensor_msgs::msg::PointCloud2::SharedPtr transformCloud(
@@ -170,6 +167,9 @@ private:
     const std::vector<obstacle_detector::PointXYZ> & obstacle_pts,
     const std::unordered_map<std::string, ColorInfo> & point_meta,
     const sensor_msgs::msg::PointCloud2::SharedPtr & cloud_in_tf);
+
+  // core CloudProcessor instance (headless) used by the node wrapper
+  std::unique_ptr<obstacle_detector::CloudProcessor> cloud_processor_;
 };
 
 #endif  // HORIOKART_OBSTACLE_DETECTOR_3D_OBSTACLE_DETECTOR_NODE_HPP_
