@@ -1,0 +1,175 @@
+/**:
+  ros__parameters:
+    #################################################################
+    # I/O (入出力トピックと処理レート)
+    #################################################################
+    # ノード内部の処理ループ目標周波数 (Hz)。実際の処理時間により下振れする可能性あり
+    processing_rate: 15.0
+    # 入力点群トピック（センサが publish する PointCloud2）
+    input_cloud_topic: "/camera/depth/points"
+    # 出力: 検出した障害物点群（base_link フレームで publish）
+    output_cloud_topic: "/obstacle_points"
+    # 出力: 障害物を 2D レーザースキャン風に投影した topic
+    output_scan_topic: "/obstacle_scan"
+    # diagnostics 用トピック（処理時間・レート等を流す）
+    diagnostics_topic: "/diagnostics"
+
+    #################################################################
+    # Frames（フレーム名）
+    #################################################################
+    # センサ点群が表現されているフレーム名。TF lookup に使用
+    sensor_frame: "camera_link"
+    # 処理基準フレーム（通常は base_link）
+    fixed_frame: "base_link"
+
+    #################################################################
+    # ROI（処理領域、メートル単位）
+    # x: 前方向、y: 横方向、z: 高さ
+    #################################################################
+    roi:
+      # 前方最小距離（車体直下の不要点を除くため）
+      x_min: 0.1
+      # 前方最大距離（処理負荷・有用範囲のトリミング）
+      x_max: 5.0
+      y_min: -1.5
+      y_max: 1.5
+      z_min: -1.0
+      z_max: 2.0
+
+    #################################################################
+    # 前処理（ダウンサンプル・外れ値除去）
+    #################################################################
+    # VoxelGrid の格子サイズ（m）。小さいほど解像度は上がるが計算増
+    voxel_leaf_size: 0.03
+    # Radius outlier removal の半径（m）
+    outlier_radius: 0.05
+    # 半径内で必要な最小近傍点数。これを下回る点は孤立点として削除
+    outlier_min_neighbors: 2
+
+    #################################################################
+    # GridHeightMap（高さマップ）関連設定
+    #################################################################
+    # グリッドセル径（m）。セル単位で高さを集約する解像度
+    grid_cell_size: 0.05
+    # セルの中央値（median）を信頼できると判断するために最低必要な観測点数
+    min_obs_per_cell_for_confident_median: 3
+    # 補間に使う近傍セルの半径（セル単位）
+    radius_interp_cells: 3
+    # 補間重みの逆距離べき乗 p
+    interp_power_p: 2.0
+    # 補間後の信頼度を neighbor の平均と混合する比率（0..1）
+    interp_alpha: 0.6
+    # 補間を許容する最大穴面積（m^2）。これ以上の穴は補間しない（安全優先）
+    max_interp_area_m2: 0.5
+    # 地面判定に使う最低信頼度（0..1）
+    conf_min_for_ground: 0.5
+    # 時間的融合（高さ）の指数移動平均係数（0..1）
+    temporal_alpha_height: 0.3
+    # 時間的融合（信頼度）の EMA 係数
+    temporal_alpha_conf: 0.4
+    # 観測のタイムアウト（秒）。この時間を超えると古い観測は無効化
+    observation_timeout: 0.5
+
+    #################################################################
+    # 地面判定（傾斜・変動）
+    #################################################################
+    # 傾斜閾値（度）。これより緩ければ地面候補
+    slope_threshold_deg: 15.0
+    # セルの高さ変動許容（m）
+    height_var_threshold: 0.12
+    # 点とセル高さの差がこの値以下なら地面として扱う（m）
+    ground_max_distance: 0.08
+
+    #################################################################
+    # クラスタリング / 障害物フィルタ
+    #################################################################
+    # Euclidean クラスタの近傍許容距離（m）
+    cluster_tolerance: 0.1
+    # 最小クラスタサイズ（点数）。小さいクラスタはノイズとして除外
+    min_cluster_size: 30
+    # 最大クラスタサイズ（点数） — 実用上ほぼ無制限
+    max_cluster_size: 1000000
+    # 障害物と判断する最低高さ（m）
+    min_obstacle_height: 0.08
+    # 障害物と判断する最低体積（m^3）
+    min_obstacle_volume: 0.002
+
+    #################################################################
+    # 2D 投影（ScanProjector）設定
+    #################################################################
+    scan_angle_min: -1.57
+    scan_angle_max: 1.57
+    # LaserScan 相当の角分解能（rad）
+    scan_angle_increment: 0.01745
+    scan_range_max: 10.0
+
+    #################################################################
+    # 色（RGB） / intensity オプション（センサに依存）
+    # 有効にすると点単位の color/intensity を地面判定やフィルタに利用
+    #################################################################
+    use_color: false
+    # color_mode: 'rgb' か 'hsv'。HSV の方が色判定は安定しやすい
+    color_mode: "hsv"  # rgb|hsv
+    # HSV を使う場合の vegetation 判定の Hue 範囲（度）
+    vegetation_h_range: [35, 85]
+    vegetation_s_min: 0.3
+    vegetation_v_min: 0.2
+
+    use_intensity: false
+    # intensity の正規化レンジ。実機に合わせて調整
+    intensity_normalize_range: [0.0, 1.0]
+    # [i_low, i_high]：スコアリング用しきい値
+    intensity_thresholds: [0.2, 0.8]
+    # intensity スコアを全体の confidence に混合する重み
+    w_intensity: 0.2
+
+    #################################################################
+    # パフォーマンス / 動作モード
+    #################################################################
+    # 軽量モード（true の場合はより粗い設定でリアルタイム性を優先）
+    light_mode: false
+    # 入力密度に応じて leaf_size を自動スケーリングするか
+    dynamic_leaf_size: true
+    # dynamic_leaf_size=true の際に目標とするダウンサンプル後の点数
+    target_points: 50000
+    # 1 フレーム当たりの最大許容処理時間（ms）を目安に動的調整
+    max_processing_time_ms: 100
+
+    #################################################################
+    # Diagnostics / QoS / その他
+    #################################################################
+    diagnostics_publish_rate: 1.0
+    # QoS のヒント（購読・公開時にノード内で変換する等）
+    subscription_qos: "best_effort"
+    publisher_qos: "best_effort"
+
+    # 補間セルを ground 判定に使う最小信頼度（安全性目的）
+    conf_min_for_using_interpolated_cell: 0.3
+    # median に使う最小観測数（同義のヘルパー）
+    min_obs_for_median: 3
+
+    # 空の scan を publish するか（安全上の配慮で true 推奨）
+    publish_empty_scan: true
+    # RViz 用マーカーを有効にするか（可視化が必要な場合 true）
+    enable_visualization_markers: true
+
+  #################################################################
+  # GroundSeparator: composite score / hysteresis weighting
+  #################################################################
+  # ground score weights (w_s: slope, w_v: variance, w_c: confidence)
+  ground_score_weights: [0.45, 0.35, 0.20]
+  # EMA alpha for ground score smoothing
+  ground_ema_alpha: 0.3
+  # hysteresis thresholds for ground decision (high, low)
+  ground_high_threshold: 0.7
+  ground_low_threshold: 0.4
+
+  #################################################################
+  # Footprint / traversability check
+  #################################################################
+  # footprint width to check (meters)
+  footprint_width: 0.6
+  # lookahead length (meters) to evaluate traversability
+  footprint_lookahead: 1.0
+  # required fraction of cells within footprint that must be ground
+  footprint_ground_fraction: 0.8

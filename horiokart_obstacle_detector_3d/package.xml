@@ -14,13 +14,16 @@
   <depend>std_msgs</depend>
   <depend>pcl_conversions</depend>
   <depend>pcl_msgs</depend>
+  <depend>eigen3_cmake_module</depend>
   <depend>tf2_ros</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>diagnostic_msgs</depend>
+  <depend>visualization_msgs</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>ament_clang_format</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
