@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.8)
 project(horiokart_obstacle_detector_3d)
 
-# Prevent ament_uncrustify from running by clearing its executable path early.
-# This is a defensive measure to ensure the older uncrustify-based test is not
-# executed when ament_lint_auto auto-adds it.
-set(ENV{AMENT_UNCRUSTIFY_EXECUTABLE} "")
+# フォーマッタ方針:
+# - 本パッケージでは uncrustify ベースの自動フォーマッタを使用しません。
+# - CI/ローカルで clang-format (ament_clang_format) を使うことを前提とし、
+#   uncrustify の自動追加を抑止します（明示的に uncrustify 実行バイナリを
+#   変更するような環境変数ハックは避けます）。
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -30,12 +31,11 @@ find_package(Eigen3 REQUIRED)
 # Set these before ament_lint_auto is found so the exclusion is respected.
 # This is defensive: the environment variable was cleared earlier, but set the
 # CMake variables too so ament_lint_auto doesn't create the uncrustify target.
+## ament_lint_auto が自動で追加する uncrustify テストを除外します。
+## これにより clang-format を主要なフォーマッタとして扱えます。
 set(AMENT_LINT_AUTO_EXCLUDE
-  "build;install;ament_cmake_uncrustify;uncrustify;clang_format;"
+  "build;install;uncrustify;ament_cmake_uncrustify;clang_format;"
   "ament_clang_format;ament_cmake_clang_format")
-# Also mark ament_uncrustify as not found to be defensive in case the find_package
-# logic looks for the wrapper; keeping both approaches increases the chance the
-# uncrustify test won't be auto-added.
 set(ament_uncrustify_FOUND FALSE)
 
 add_executable(obstacle_detector_node
@@ -107,36 +107,12 @@ install(TARGETS obstacle_detector_node
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
   find_package(ament_cmake_gtest REQUIRED)
-  # Prevent ament_lint_auto from auto-adding the 'uncrustify' test: mark it as not found.
-  set(ament_uncrustify_FOUND FALSE)
-  # prefer clang-format for C/C++ formatting checks; keep find_package QUIET so
-  # configuration does not fail in environments where the CMake package config
-  # for ament_clang_format is not installed (the ROS wrapper executable may
-  # still exist). This keeps builds working while allowing CI to enable the
-  # stricter REQUIRED check when the environment provides the package.
-  # The package installed via apt is named ament_cmake_clang_format which
-  # provides the ament_clang_format macro. Find that package instead.
+  # clang-format を主要フォーマッタとして使用します（CI で実行される想定）。
+  # ament_clang_format が見つからない環境では警告でスキップされます。
   find_package(ament_cmake_clang_format REQUIRED)
-  # Exclude generated build/install directories from lint checks to avoid
-  # reporting style issues on CMake-generated files under the workspace build dir.
-  # This prevents lint_cmake from scanning the build/ and install/ folders.
-  # Exclude build/install, uncrustify and clang-format related auto-added tests
-  # from automatic execution by ament_lint_auto. This prevents duplicate
-  # 'clang_format' and 'uncrustify' test/targets from being created.
-  set(AMENT_LINT_AUTO_EXCLUDE
-    "build;install;ament_cmake_uncrustify;uncrustify;clang_format;"
-    "ament_clang_format;ament_cmake_clang_format" CACHE STRING "Paths to exclude from ament_lint_auto")
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
-  set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
-  set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
-  # ament_lint_auto may add a 'clang_format' test; remove it so the
-  # clang-format package hook can register the test (or vice-versa) without
-  # causing a duplicate add_test NAME error.
+  # ament_lint_auto が自動追加する 'clang_format'/'uncrustify' 対応を整理
+  #（重複テストを防ぐための保護処理）
   if(COMMAND remove_test)
     remove_test(clang_format)
     remove_test(clang-format)

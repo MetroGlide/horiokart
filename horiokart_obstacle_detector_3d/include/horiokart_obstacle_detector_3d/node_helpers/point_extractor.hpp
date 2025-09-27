@@ -1,4 +1,4 @@
-// Lightweight point extractor moved out of obstacle_detector_node
+// 軽量な点抽出ユーティリティ（ノードから切り出したヘルパー）
 #pragma once
 
 #include <tf2/time.h>
@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "horiokart_obstacle_detector_3d/core/grid_height_map.hpp"
-// Need ColorInfo from core
+// ColorInfo は core 側で定義されているため参照します
 #include "horiokart_obstacle_detector_3d/core/cloud_processor.hpp"
 
 namespace obstacle_detector
@@ -24,8 +24,8 @@ namespace obstacle_detector_node_helpers
 {
 using ColorInfo = obstacle_detector::ColorInfo;
 
-// Extract points and per-point metadata from a transformed PointCloud2.
-// The function mirrors the behavior of the previous member function.
+// 変換済み PointCloud2 から点と点ごとのメタデータを抽出します。
+// ノード実装から切り出したヘルパー関数です。
 void extractPointsAndMeta(
   const sensor_msgs::msg::PointCloud2::SharedPtr & cloud_in_tf,
   std::vector<obstacle_detector::PointXYZ> & pts,
@@ -43,5 +43,5 @@ void extractPointsAndMeta(
   const std::function<std::vector<double>(const std::string &, const std::vector<double> &)> &
     get_param_double_vec);
 
-// ColorInfo is defined in core and reused here
+// ColorInfo は core に定義されており、ここでも再利用します
 }  // namespace obstacle_detector_node_helpers

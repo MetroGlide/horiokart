@@ -11,7 +11,7 @@ class GroundSeparator
 public:
   GroundSeparator() = default;
 
-  // params: max height considered ground, max variance allowed
+  // パラメータ: 地面とみなす最大高さ、許容する最大分散
   void setParameters(double max_ground_height, double max_variance)
   {
     std::lock_guard<std::mutex> lk(mutex_);
@@ -19,21 +19,21 @@ public:
     max_variance_ = max_variance;
   }
 
-  // Set slope threshold in degrees. Points with slope <= threshold are considered ground
+  // 傾斜閾値（度）を設定。閾値以下の傾斜は地面と判定されやすい
   void setSlopeThresholdDeg(double deg)
   {
     std::lock_guard<std::mutex> lk(mutex_);
     slope_threshold_deg_ = deg;
   }
 
-  // Simple predicate: low height && low variance => ground
+  // 単純な述語: 低い高さかつ低い分散 => 地面
   bool isGround(double height, double variance) const
   {
     std::lock_guard<std::mutex> lk(mutex_);
     return (height <= max_ground_height_) && (variance <= max_variance_);
   }
 
-  // Overload: include local slope (degrees) in decision
+  // オーバーロード: 局所傾斜（度）も判定に含める
   bool isGround(double height, double variance, double slope_deg) const
   {
     std::lock_guard<std::mutex> lk(mutex_);
@@ -41,13 +41,13 @@ public:
            (slope_deg <= slope_threshold_deg_);
   }
 
-  // Compute composite ground score (0..1) from slope (deg), variance, and cell confidence
+  // 傾斜（度）、分散、セル信頼度から複合的な地面スコア（0..1）を計算
   double computeGroundScore(double slope_deg, double variance, double confidence) const
   {
     std::lock_guard<std::mutex> lk(mutex_);
     double ns = std::min(1.0, slope_deg / slope_threshold_deg_);
     double nv = std::min(1.0, variance / max_variance_);
-    // lower is better for slope and variance; confidence is higher is better
+    // 傾斜と分散は小さいほど良く、confidence は大きいほど良い
     double score = 1.0 - (w_s_ * ns + w_v_ * nv);
     score = score * (w_c_ * confidence + (1.0 - w_c_));
     if (score < 0.0) {
@@ -67,7 +67,7 @@ public:
     w_c_ = w_c;
   }
 
-  // EMA alpha for ground score smoothing and thresholds for hysteresis
+  // 地面スコアの平滑化に用いる EMA の alpha と、ヒステリシス用の高/低しきい値を設定
   void setHysteresisParameters(double ema_alpha, double high_thresh, double low_thresh)
   {
     std::lock_guard<std::mutex> lk(mutex_);
@@ -96,7 +96,7 @@ public:
 
 private:
   mutable std::mutex mutex_;
-  double max_ground_height_ = 0.2;  // meters
+  double max_ground_height_ = 0.2;  // メートル
   double max_variance_ = 0.02;
   double slope_threshold_deg_ = 15.0;
   double w_s_ = 0.45;

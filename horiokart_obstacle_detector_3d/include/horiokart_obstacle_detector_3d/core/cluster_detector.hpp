@@ -21,19 +21,19 @@ public:
 
   void setParameters(double cluster_tolerance, int min_cluster_size, int max_cluster_size);
 
-  /// Optional: enable voxel grid downsampling by specifying a leaf size (meters).
-  /// Set to 0.0 to disable (default).
+  /// 任意: ボクセルグリッドによるダウンサンプリングを有効にする（メートル単位の leaf サイズ）。
+  /// 0.0 を設定すると無効（デフォルト）。
   void setDownsampleLeafSize(double leaf_size);
-  // Radius outlier removal (optional). radius=0 disables.
+  // 半径ベースの外れ値除去（任意）。radius=0 で無効。
   void setOutlierRadius(double radius);
   void setOutlierMinNeighbors(int min_neighbors);
-  // PassThrough filter on Z (optional). Disabled if enable=false
+  // Z 軸に対する PassThrough フィルタ（任意）。enable=false で無効。
   void setPassThroughZ(bool enable, double z_min = -1.0, double z_max = 1.0);
-  // If true, after clustering on downsampled cloud, expand clusters by mapping back to original
-  // cloud
+  // true の場合、ダウンサンプリング後の点群でクラスタリングを行い、元の点群にマッピングして
+  // クラスタを拡張します
   void setExpandToOriginalCloud(bool enable);
 
-  // Minimal API: extract clusters from a vector of points (headless)
+  // 最小限の API: ベクトル化した点集合からクラスタを抽出する（ヘッドレス実装）
   std::vector<Cluster> extractClusters(const std::vector<PointXYZ> & points) const;
 
 private:
@@ -41,14 +41,14 @@ private:
   int min_cluster_size_ = 30;
   int max_cluster_size_ = 1000000;
   double voxel_leaf_size_ = 0.0;
-  // outlier removal
+  // 外れ値除去
   double outlier_radius_ = 0.0;
   int outlier_min_neighbors_ = 1;
-  // passthrough z filter
+  // PassThrough（Z）フィルタ
   bool passthrough_z_enable_ = false;
   double passthrough_z_min_ = -1.0;
   double passthrough_z_max_ = 1.0;
-  // mapping back
+  // 元の点群へマッピングして復元
   bool expand_to_original_cloud_ = false;
 };
 

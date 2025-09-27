@@ -5,11 +5,11 @@
 
 namespace obstacle_detector
 {
-// Unpack a packed float RGB (IEEE 754 representation of a uint32 packed as float)
-// into r,g,b components in the range [0,1].
+// パックされた float (IEEE 754 表現で uint32 を float に詰めた形式) から
+// r,g,b 成分 ([0,1]) を取り出します。
 void unpackFloatRGB(float rgb_float, double & r, double & g, double & b);
 
-// Convert RGB (r,g,b in [0,1]) to HSV. h in degrees [0,360), s and v in [0,1].
+// RGB (r,g,b ∈ [0,1]) を HSV に変換します。h は度単位 [0,360)、s,v は [0,1]。
 void rgbToHsv(double r, double g, double b, double & h, double & s, double & v);
 
 }  // namespace obstacle_detector

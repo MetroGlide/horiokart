@@ -17,24 +17,24 @@ CloudProcessorResult CloudProcessor::process(
 {
   CloudProcessorResult res;
 
-  // 1) build grid
+  // 1) グリッドを構築
   res.grid = std::make_unique<GridHeightMap>(
     cfg_.roi_x_min, cfg_.roi_x_max, cfg_.roi_y_min, cfg_.roi_y_max, cfg_.grid_cell_size);
-  // parameters for grid are still left to caller to set if desired
+  // 必要に応じてグリッドのパラメータは呼び出し側で設定します
   for (const auto & p : pts) {
     res.grid->accumulatePoint(p);
   }
-  // finalize frame with dummy timestamp 0 (caller can set temporal params earlier)
+  // ダミーのタイムスタンプ 0 でフレームを確定（時間関連パラメータは呼び出し側で調整可能）
   res.grid->finalizeFrame(0.0);
 
-  // 2) PCA slopes if requested
+  // 2) PCA 法による傾斜計算（設定により実行）
   if (cfg_.slope_method == "pca") {
     res.pca_results = obstacle_detector::computePcaSlopesAndNormals(
       pts, *res.grid, cfg_.pca_radius_m, cfg_.pca_min_points, cfg_.grid_cell_size, cfg_.roi_x_min,
       cfg_.roi_y_min);
   }
 
-  // 3) classify points into ground / non-ground using ground_separator
+  // 3) ground_separator を使って点を地面 / 非地面に分類
   for (const auto & p : pts) {
     int ix = static_cast<int>(std::floor((p.x - cfg_.roi_x_min) / cfg_.grid_cell_size));
     int iy = static_cast<int>(std::floor((p.y - cfg_.roi_y_min) / cfg_.grid_cell_size));
@@ -75,8 +75,8 @@ CloudProcessorResult CloudProcessor::process(
     res.non_ground_points.push_back(p);
   }
 
-  // 4) clustering & obstacle selection
-  // adjust cluster detector downsample based on pts count
+  // 4) クラスタリングと障害物選択
+  // 点数に応じて cluster_detector のダウンサンプリング設定を調整
   if (cfg_.dynamic_leaf && pts.size() > 0) {
     double scale =
       std::sqrt(static_cast<double>(pts.size()) / static_cast<double>(cfg_.target_points));

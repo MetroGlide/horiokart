@@ -23,26 +23,26 @@ struct ColorInfo
 
 struct CloudProcessorConfig
 {
-  // ROI / grid
+  // ROI / グリッド
   double roi_x_min{0.1}, roi_x_max{5.0}, roi_y_min{-1.5}, roi_y_max{1.5};
   double grid_cell_size{0.05};
 
-  // slope / PCA
+  // 傾斜 / PCA
   std::string slope_method{"finite_difference"};
   double pca_radius_m{0.15};
   int pca_min_points{10};
 
-  // clustering / downsample
+  // クラスタリング / ダウンサンプル
   double voxel_leaf_size{0.03};
   bool dynamic_leaf{true};
   int target_points{50000};
 
-  // ground / obstacle filters
+  // 地面 / 障害物フィルタ
   double ground_max_distance{0.08};
   double min_obstacle_height{0.08};
   double min_obstacle_volume{0.002};
 
-  // color/intensity use
+  // 色 / 強度利用
   bool use_rgb{false};
   bool use_intensity{false};
 };
@@ -54,7 +54,7 @@ struct CloudProcessorResult
   std::vector<PointXYZ> non_ground_points;
   std::vector<Cluster> clusters;
   std::vector<PointXYZ> obstacle_points;
-  // PCA slope / normal results per grid index
+  // グリッドごとの PCA 傾斜 / 法線の結果
   std::unordered_map<int, std::pair<double, Eigen::Vector3d>> pca_results;
 };
 
@@ -63,7 +63,7 @@ class CloudProcessor
 public:
   explicit CloudProcessor(const CloudProcessorConfig & cfg);
 
-  // Process extracted points + metadata and produce grid/clusters/obstacles
+  // 抽出された点とメタデータを処理し、グリッド／クラスタ／障害物を生成します
   CloudProcessorResult process(
     const std::vector<PointXYZ> & pts,
     const std::unordered_map<std::string, ColorInfo> & point_meta,

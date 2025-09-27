@@ -22,7 +22,7 @@
 
 #include "horiokart_obstacle_detector_3d/core/cloud_processor.hpp"
 
-// forward declare tf2_ros types to avoid including heavy headers in the public header
+// 公開ヘッダに重いヘッダを直接含めないため、tf2_ros 型を前方宣言します
 namespace tf2_ros
 {
 class Buffer;
@@ -44,26 +44,26 @@ class ObstacleDetectorNode : public rclcpp::Node
 public:
   ObstacleDetectorNode();
 
-  // Callbacks
+  // コールバック
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
 
 private:
-  // Setup helpers
+  // セットアップ用ヘルパー
   void setupParameters();
   void setupCoreComponents();
   void setupPublishersAndSubscribers();
 
-  // Main processing entry (extracted from cloudCallback)
+  // 主処理エントリ（cloudCallback から切り出したもの）
   void processCloud(const sensor_msgs::msg::PointCloud2::SharedPtr & msg);
 
-  // Utility
+  // ユーティリティ
   std::string make_key(double x, double y, double z) const;
   geometry_msgs::msg::TransformStamped getSensorTransform(const tf2::TimePoint & when);
   Eigen::Vector3d getSensorForward(const tf2::TimePoint & when);
   bool checkFootprintTraversable(const obstacle_detector::GridHeightMap & grid, double lookahead_m);
 
-  // Parameters (kept as public-like members in original; declared here)
+  // パラメータ（元実装の public ライクなメンバをここで管理）
   double publish_rate_;
   std::string input_topic_;
   std::string output_cloud_topic_;
@@ -110,7 +110,7 @@ private:
   bool intensity_compensate_angle_;
   double intensity_angle_min_dot_;
 
-  // publishers / subscribers / core
+  // パブリッシャ / サブスクライバ / core コンポーネント
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_confidence_cloud_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_traversable_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
@@ -129,22 +129,22 @@ private:
   std::string target_frame_;
   std::string sensor_frame_;
 
-  // footprint
+  // フットプリント関連
   double footprint_width_;
   double footprint_lookahead_;
   double footprint_ground_fraction_;
 
-  // TF cache
+  // TF キャッシュ
   std::optional<geometry_msgs::msg::TransformStamped> cached_sensor_tf_;
   rclcpp::Time cached_sensor_tf_time_;
   std::mutex tf_cache_mutex_;
   double tf_cache_timeout_sec_;
 
   bool enable_markers_;
-  // metadata for original point colors/intensity used during re-publish
+  // 再配信時に元点の色/強度を参照するためのメタデータ
   using ColorInfo = obstacle_detector::ColorInfo;
 
-  // helper methods extracted from processCloud for readability and testing
+  // processCloud から読みやすさ・テスト性のために切り出したヘルパメソッド
   sensor_msgs::msg::PointCloud2::SharedPtr transformCloud(
     const sensor_msgs::msg::PointCloud2::SharedPtr & msg);
   void extractPointsAndMeta(
@@ -154,12 +154,6 @@ private:
     bool & has_intensity_field);
   std::unique_ptr<obstacle_detector::GridHeightMap> buildGridFromPoints(
     const std::vector<obstacle_detector::PointXYZ> & pts);
-  void classifyPoints(
-    const std::vector<obstacle_detector::PointXYZ> & pts,
-    const std::unordered_map<std::string, ColorInfo> & point_meta,
-    obstacle_detector::GridHeightMap & grid, std::vector<obstacle_detector::PointXYZ> & ground_pts,
-    std::vector<obstacle_detector::PointXYZ> & non_ground_pts,
-    std::unordered_map<int, std::pair<double, Eigen::Vector3d>> & pca_results);
   void publishConfidenceCloud(
     const obstacle_detector::GridHeightMap & grid,
     const sensor_msgs::msg::PointCloud2::SharedPtr & cloud_in_tf);
@@ -168,7 +162,7 @@ private:
     const std::unordered_map<std::string, ColorInfo> & point_meta,
     const sensor_msgs::msg::PointCloud2::SharedPtr & cloud_in_tf);
 
-  // core CloudProcessor instance (headless) used by the node wrapper
+  // ノードラッパが使用するヘッドレスな core の CloudProcessor インスタンス
   std::unique_ptr<obstacle_detector::CloudProcessor> cloud_processor_;
 };
 
