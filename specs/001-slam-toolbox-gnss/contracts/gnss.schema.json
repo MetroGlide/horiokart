@@ -1,0 +1,40 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "GNSSObservation",
+    "type": "object",
+    "properties": {
+        "timestamp": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "lat": {
+            "type": "number"
+        },
+        "lon": {
+            "type": "number"
+        },
+        "alt": {
+            "type": "number"
+        },
+        "fix_type": {
+            "type": "string"
+        },
+        "hdop": {
+            "type": "number"
+        },
+        "vdop": {
+            "type": "number"
+        },
+        "covariance": {
+            "type": "array",
+            "items": {
+                "type": "number"
+            }
+        }
+    },
+    "required": [
+        "timestamp",
+        "lat",
+        "lon"
+    ]
+}

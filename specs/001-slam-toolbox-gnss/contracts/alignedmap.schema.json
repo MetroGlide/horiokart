@@ -1,0 +1,41 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "AlignedMap",
+    "type": "object",
+    "properties": {
+        "map_pgm": {
+            "type": "string"
+        },
+        "map_yaml": {
+            "type": "string"
+        },
+        "origin_utm": {
+            "type": "object",
+            "properties": {
+                "easting": {
+                    "type": "number"
+                },
+                "northing": {
+                    "type": "number"
+                },
+                "zone": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "easting",
+                "northing",
+                "zone"
+            ]
+        },
+        "resolution": {
+            "type": "number"
+        }
+    },
+    "required": [
+        "map_pgm",
+        "map_yaml",
+        "origin_utm",
+        "resolution"
+    ]
+}

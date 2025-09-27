@@ -24,6 +24,22 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(nlohmann_json REQUIRED)
+find_package(slam_toolbox REQUIRED)
+
+include_directories(include)
+
+add_library(posegraph_adapter STATIC
+  src/posegraph_serializer/service_adapter.cpp
+)
+ament_target_dependencies(posegraph_adapter rclcpp nlohmann_json)
+ament_target_dependencies(posegraph_adapter slam_toolbox)
+
+add_executable(posegraph_service_adapter_node src/posegraph_serializer/service_adapter.cpp)
+target_link_libraries(posegraph_service_adapter_node posegraph_adapter)
+ament_target_dependencies(posegraph_service_adapter_node rclcpp nlohmann_json)
+ament_target_dependencies(posegraph_service_adapter_node slam_toolbox)
 
 ################################################################################
 # Install
