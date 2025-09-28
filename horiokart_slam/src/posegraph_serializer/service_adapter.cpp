@@ -10,6 +10,21 @@ using json = nlohmann::json;
 namespace horiokart_slam
 {
 
+    void ServiceAdapter::SetServiceName(const std::string &service_name)
+    {
+        service_name_ = service_name;
+    }
+
+    std::string ServiceAdapter::GetServiceName() const
+    {
+        return service_name_;
+    }
+
+    ServiceAdapter::ServiceAdapter(const std::string &service_name)
+        : service_name_(service_name)
+    {
+    }
+
     bool ServiceAdapter::LoadFromService(const std::string &service_name, const std::string &filename)
     {
         // Use rclcpp::Client to call SerializePoseGraph service
@@ -69,9 +84,12 @@ int main(int argc, char **argv)
     auto node = rclcpp::Node::make_shared("posegraph_service_adapter");
     RCLCPP_INFO(node->get_logger(), "posegraph_service_adapter started (PoC)");
 
-    horiokart_slam::ServiceAdapter adapter;
+    // allow overriding service name via env or arg in future; use default configured name
     std::string filename = "posegraph_dump";
-    bool ok = adapter.LoadFromService("/slam_toolbox/serialize_pose_graph", filename);
+    horiokart_slam::ServiceAdapter adapter; // default service name set in ctor
+    std::string svc = adapter.GetServiceName();
+    RCLCPP_INFO(node->get_logger(), "Calling service: %s", svc.c_str());
+    bool ok = adapter.LoadFromService(svc, filename);
     if (!ok)
     {
         RCLCPP_ERROR(node->get_logger(), "Failed to call serialize service");
