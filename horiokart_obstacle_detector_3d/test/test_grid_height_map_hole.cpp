@@ -2,21 +2,24 @@
 
 #include "horiokart_obstacle_detector_3d/core/grid_height_map.hpp"
 
-using namespace obstacle_detector;
+using obstacle_detector::GridCell;
+using obstacle_detector::GridHeightMap;
+using obstacle_detector::PointXYZ;
 
 // Verify small hole is interpolated while a large hole is not
-TEST(GridHeightMapHole, SmallVsLargeHole)
-{
+TEST(GridHeightMapHole, SmallVsLargeHole) {
   // Build a 5x1 grid: x [0..0.5) cell_size=0.1, y single row
   GridHeightMap g(0.0, 0.5, 0.0, 0.1, 0.1);
   // parameters: neighborhood, interpolation params: keep defaults
-  // set max_interp_area_m2 small so a 2-cell hole is considered "large" and not interpolated
-  // one cell area = 0.1 * 0.1 = 0.01 m2; set max_interp_area_m2 between 0.01 and 0.02
+  // set max_interp_area_m2 small so a 2-cell hole is considered "large" and not
+  // interpolated one cell area = 0.1 * 0.1 = 0.01 m2; set max_interp_area_m2
+  // between 0.01 and 0.02
   g.setParameters(3, 3, 2.0, 0.6, 0.015, 0.3, 0.4, 0.5);
 
-  // Fill cells 0 and 2 (leaving cell 1 as small hole), and leave cells 3,4 as a large hole
-  g.accumulatePoint(PointXYZ{0.05f, 0.05f, 0.0f});  // cell 0
-  g.accumulatePoint(PointXYZ{0.25f, 0.05f, 0.0f});  // cell 2
+  // Fill cells 0 and 2 (leaving cell 1 as small hole), and leave cells 3,4 as a
+  // large hole
+  g.accumulatePoint(PointXYZ{0.05f, 0.05f, 0.0f}); // cell 0
+  g.accumulatePoint(PointXYZ{0.25f, 0.05f, 0.0f}); // cell 2
   // no points in cell 1 -> should be interpolated (small hole)
 
   // cells 3 and 4 remain empty -> large connected hole spanning two cells
@@ -37,8 +40,7 @@ TEST(GridHeightMapHole, SmallVsLargeHole)
   EXPECT_FALSE(c4.has_observation);
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

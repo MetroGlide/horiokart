@@ -5,14 +5,14 @@
 
 #include "horiokart_obstacle_detector_3d/obstacle_detector_node.hpp"
 
-using namespace std::chrono_literals;
+using std::chrono_literals::operator"ms";
 
-TEST(PublishEmptyScan, PublishesWhenEnabled)
-{
+TEST(PublishEmptyScan, PublishesWhenEnabled) {
   // Initialize rclcpp in test context
   if (!rclcpp::ok()) {
     rclcpp::init(0, nullptr);
   }
+
   // Create node with parameter publish_empty_scan = true
   auto node = std::make_shared<ObstacleDetectorNode>();
 
@@ -22,10 +22,11 @@ TEST(PublishEmptyScan, PublishesWhenEnabled)
   // subscribe to scan topic
   std::atomic<bool> received{false};
   auto sub = node->create_subscription<sensor_msgs::msg::LaserScan>(
-    "test_obstacle_scan", 10, [&](const sensor_msgs::msg::LaserScan::SharedPtr msg) {
-      (void)msg;
-      received = true;
-    });
+      "test_obstacle_scan", 10,
+      [&](const sensor_msgs::msg::LaserScan::SharedPtr msg) {
+        (void)msg;
+        received = true;
+      });
 
   // Instead of spinning the global executor, spin this node a few cycles
   rclcpp::WallRate rate(10);
@@ -39,8 +40,7 @@ TEST(PublishEmptyScan, PublishesWhenEnabled)
   EXPECT_TRUE(received);
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

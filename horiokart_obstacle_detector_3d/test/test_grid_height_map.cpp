@@ -2,10 +2,11 @@
 
 #include "horiokart_obstacle_detector_3d/core/grid_height_map.hpp"
 
-using namespace obstacle_detector;
+using obstacle_detector::GridCell;
+using obstacle_detector::GridHeightMap;
+using obstacle_detector::PointXYZ;
 
-TEST(GridHeightMapTest, MedianAndInterpolation)
-{
+TEST(GridHeightMapTest, MedianAndInterpolation) {
   // grid covers x:[0,0.2), y:[0,0.2) with cell_size 0.1 => 2x2 grid
   GridHeightMap grid(0.0, 0.2, 0.0, 0.2, 0.1);
   grid.setParameters(3, 1, 2.0, 0.6, 0.5, 0.3, 0.4, 0.5);
@@ -18,7 +19,8 @@ TEST(GridHeightMapTest, MedianAndInterpolation)
   grid.accumulatePoint(p2);
   grid.accumulatePoint(p3);
 
-  // cell (1,1) remains empty and should be interpolated from neighbors if small hole
+  // cell (1,1) remains empty and should be interpolated from neighbors if small
+  // hole
   double now = 1.0;
   grid.finalizeFrame(now);
 
@@ -30,13 +32,13 @@ TEST(GridHeightMapTest, MedianAndInterpolation)
 
   // Check interpolated cell
   ASSERT_TRUE(grid.getCell(1, 1, c11));
-  // since neighbors exist, interpolated cell should have has_observation true and confidence > 0
+  // since neighbors exist, interpolated cell should have has_observation true
+  // and confidence > 0
   EXPECT_TRUE(c11.has_observation);
   EXPECT_GT(c11.confidence, 0.0);
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

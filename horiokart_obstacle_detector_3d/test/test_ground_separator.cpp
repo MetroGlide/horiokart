@@ -4,8 +4,7 @@
 
 using namespace obstacle_detector;
 
-TEST(GroundSeparatorTest, Basic)
-{
+TEST(GroundSeparatorTest, Basic) {
   GroundSeparator gs;
   gs.setParameters(0.2, 0.05);
 
@@ -19,8 +18,7 @@ TEST(GroundSeparatorTest, Basic)
   EXPECT_FALSE(gs.isGround(0.1, 0.1));
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

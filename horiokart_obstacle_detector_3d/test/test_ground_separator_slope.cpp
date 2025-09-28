@@ -4,8 +4,7 @@
 
 using namespace obstacle_detector;
 
-TEST(GroundSeparatorSlope, SlopeBehavior)
-{
+TEST(GroundSeparatorSlope, SlopeBehavior) {
   GroundSeparator g;
   g.setParameters(0.5, 0.1);
   g.setSlopeThresholdDeg(10.0);

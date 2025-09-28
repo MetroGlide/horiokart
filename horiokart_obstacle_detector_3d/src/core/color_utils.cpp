@@ -5,10 +5,8 @@
 #include <cmath>
 #include <cstdint>
 
-namespace obstacle_detector
-{
-void unpackFloatRGB(float rgb_float, double & r, double & g, double & b)
-{
+namespace obstacle_detector {
+void unpackFloatRGB(float rgb_float, double &r, double &g, double &b) {
   uint32_t u = *reinterpret_cast<uint32_t *>(&rgb_float);
   uint8_t ri = (u >> 16) & 0xFF;
   uint8_t gi = (u >> 8) & 0xFF;
@@ -18,8 +16,7 @@ void unpackFloatRGB(float rgb_float, double & r, double & g, double & b)
   b = bi / 255.0;
 }
 
-void rgbToHsv(double r, double g, double b, double & h, double & s, double & v)
-{
+void rgbToHsv(double r, double g, double b, double &h, double &s, double &v) {
   double mx = std::max(r, std::max(g, b));
   double mn = std::min(r, std::min(g, b));
   v = mx;
@@ -41,4 +38,4 @@ void rgbToHsv(double r, double g, double b, double & h, double & s, double & v)
   }
 }
 
-}  // namespace obstacle_detector
+} // namespace obstacle_detector

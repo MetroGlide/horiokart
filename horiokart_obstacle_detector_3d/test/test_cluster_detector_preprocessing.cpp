@@ -2,17 +2,19 @@
 
 #include "horiokart_obstacle_detector_3d/core/cluster_detector.hpp"
 
-using namespace obstacle_detector;
+using obstacle_detector::ClusterDetector;
+using obstacle_detector::PointXYZ;
+#include <random>
 
-TEST(ClusterDetectorPreprocessing, RadiusOutlierRemoval)
-{
+TEST(ClusterDetectorPreprocessing, RadiusOutlierRemoval) {
   // create a cluster at origin and a few isolated noise points far away
   std::vector<PointXYZ> pts;
+  thread_local std::mt19937 rng(54321);
+  std::uniform_real_distribution<double> ud(0.0, 1.0);
   for (int i = 0; i < 50; ++i) {
-    pts.push_back(PointXYZ{
-      static_cast<float>(0.0 + 0.01 * (rand() / (double)RAND_MAX)),
-      static_cast<float>(0.0 + 0.01 * (rand() / (double)RAND_MAX)),
-      static_cast<float>(0.0 + 0.01 * (rand() / (double)RAND_MAX))});
+    pts.push_back(PointXYZ{static_cast<float>(0.0 + 0.01 * ud(rng)),
+                           static_cast<float>(0.0 + 0.01 * ud(rng)),
+                           static_cast<float>(0.0 + 0.01 * ud(rng))});
   }
   // add noise
   pts.push_back(PointXYZ{5.0f, 5.0f, 5.0f});

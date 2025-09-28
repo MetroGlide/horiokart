@@ -4,8 +4,7 @@
 
 using namespace obstacle_detector;
 
-TEST(GroundSeparatorExtra, ScoreMonotonicity)
-{
+TEST(GroundSeparatorExtra, ScoreMonotonicity) {
   GroundSeparator gs;
   gs.setSlopeThresholdDeg(20.0);
   gs.setParameters(0.3, 0.05);
@@ -21,8 +20,7 @@ TEST(GroundSeparatorExtra, ScoreMonotonicity)
   EXPECT_LE(s_low, 1.0);
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char **argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

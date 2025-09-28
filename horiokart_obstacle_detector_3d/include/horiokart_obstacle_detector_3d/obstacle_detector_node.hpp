@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#ifndef HORIOKART_OBSTACLE_DETECTOR_3D_OBSTACLE_DETECTOR_NODE_HPP_
-#define HORIOKART_OBSTACLE_DETECTOR_3D_OBSTACLE_DETECTOR_NODE_HPP_
+#ifndef HORIOKART_OBSTACLE_DETECTOR_3D__OBSTACLE_DETECTOR_NODE_HPP_
+#define HORIOKART_OBSTACLE_DETECTOR_3D__OBSTACLE_DETECTOR_NODE_HPP_
 
 #include <tf2/time.h>
 
@@ -23,24 +23,21 @@
 #include "horiokart_obstacle_detector_3d/core/cloud_processor.hpp"
 
 // 公開ヘッダに重いヘッダを直接含めないため、tf2_ros 型を前方宣言します
-namespace tf2_ros
-{
+namespace tf2_ros {
 class Buffer;
 class TransformListener;
-}  // namespace tf2_ros
+} // namespace tf2_ros
 
-namespace obstacle_detector
-{
+namespace obstacle_detector {
 class ScanProjector;
 class ClusterDetector;
 class GroundSeparator;
 struct PointXYZ;
 class GridHeightMap;
 class CloudProcessor;
-}  // namespace obstacle_detector
+} // namespace obstacle_detector
 
-class ObstacleDetectorNode : public rclcpp::Node
-{
+class ObstacleDetectorNode : public rclcpp::Node {
 public:
   ObstacleDetectorNode();
 
@@ -55,13 +52,15 @@ private:
   void setupPublishersAndSubscribers();
 
   // 主処理エントリ（cloudCallback から切り出したもの）
-  void processCloud(const sensor_msgs::msg::PointCloud2::SharedPtr & msg);
+  void processCloud(const sensor_msgs::msg::PointCloud2::SharedPtr &msg);
 
   // ユーティリティ
   std::string make_key(double x, double y, double z) const;
-  geometry_msgs::msg::TransformStamped getSensorTransform(const tf2::TimePoint & when);
-  Eigen::Vector3d getSensorForward(const tf2::TimePoint & when);
-  bool checkFootprintTraversable(const obstacle_detector::GridHeightMap & grid, double lookahead_m);
+  geometry_msgs::msg::TransformStamped
+  getSensorTransform(const tf2::TimePoint &when);
+  Eigen::Vector3d getSensorForward(const tf2::TimePoint &when);
+  bool checkFootprintTraversable(const obstacle_detector::GridHeightMap &grid,
+                                 double lookahead_m);
 
   // パラメータ（元実装の public ライクなメンバをここで管理）
   double publish_rate_;
@@ -111,14 +110,19 @@ private:
   double intensity_angle_min_dot_;
 
   // パブリッシャ / サブスクライバ / core コンポーネント
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_confidence_cloud_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+      pub_confidence_cloud_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_traversable_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
-  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_obstacle_cloud_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr
+      pub_obstacle_cloud_;
   rclcpp::Publisher<sensor_msgs::msg::LaserScan>::SharedPtr pub_scan_;
-  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr pub_diagnostics_;
-  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_markers_;
-  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_cb_handle_;
+  rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr
+      pub_diagnostics_;
+  rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr
+      pub_markers_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
+      param_cb_handle_;
 
   std::shared_ptr<obstacle_detector::ScanProjector> projector_;
   std::shared_ptr<obstacle_detector::ClusterDetector> cluster_detector_;
@@ -145,25 +149,25 @@ private:
   using ColorInfo = obstacle_detector::ColorInfo;
 
   // processCloud から読みやすさ・テスト性のために切り出したヘルパメソッド
-  sensor_msgs::msg::PointCloud2::SharedPtr transformCloud(
-    const sensor_msgs::msg::PointCloud2::SharedPtr & msg);
+  sensor_msgs::msg::PointCloud2::SharedPtr
+  transformCloud(const sensor_msgs::msg::PointCloud2::SharedPtr &msg);
   void extractPointsAndMeta(
-    const sensor_msgs::msg::PointCloud2::SharedPtr & cloud_in_tf,
-    std::vector<obstacle_detector::PointXYZ> & pts,
-    std::unordered_map<std::string, ColorInfo> & point_meta, bool & has_rgb_field,
-    bool & has_intensity_field);
-  std::unique_ptr<obstacle_detector::GridHeightMap> buildGridFromPoints(
-    const std::vector<obstacle_detector::PointXYZ> & pts);
+      const sensor_msgs::msg::PointCloud2::SharedPtr &cloud_in_tf,
+      std::vector<obstacle_detector::PointXYZ> &pts,
+      std::unordered_map<std::string, ColorInfo> &point_meta,
+      bool &has_rgb_field, bool &has_intensity_field);
+  std::unique_ptr<obstacle_detector::GridHeightMap>
+  buildGridFromPoints(const std::vector<obstacle_detector::PointXYZ> &pts);
   void publishConfidenceCloud(
-    const obstacle_detector::GridHeightMap & grid,
-    const sensor_msgs::msg::PointCloud2::SharedPtr & cloud_in_tf);
+      const obstacle_detector::GridHeightMap &grid,
+      const sensor_msgs::msg::PointCloud2::SharedPtr &cloud_in_tf);
   void publishObstacleCloudAndScan(
-    const std::vector<obstacle_detector::PointXYZ> & obstacle_pts,
-    const std::unordered_map<std::string, ColorInfo> & point_meta,
-    const sensor_msgs::msg::PointCloud2::SharedPtr & cloud_in_tf);
+      const std::vector<obstacle_detector::PointXYZ> &obstacle_pts,
+      const std::unordered_map<std::string, ColorInfo> &point_meta,
+      const sensor_msgs::msg::PointCloud2::SharedPtr &cloud_in_tf);
 
   // ノードラッパが使用するヘッドレスな core の CloudProcessor インスタンス
   std::unique_ptr<obstacle_detector::CloudProcessor> cloud_processor_;
 };
 
-#endif  // HORIOKART_OBSTACLE_DETECTOR_3D_OBSTACLE_DETECTOR_NODE_HPP_
+#endif // HORIOKART_OBSTACLE_DETECTOR_3D__OBSTACLE_DETECTOR_NODE_HPP_
