@@ -2,9 +2,10 @@
 
 #include "horiokart_obstacle_detector_3d/core/ground_separator.hpp"
 
-using namespace obstacle_detector;
+using obstacle_detector::GroundSeparator;
 
-TEST(GroundSeparatorSlope, SlopeBehavior) {
+TEST(GroundSeparatorSlope, SlopeBehavior)
+{
   GroundSeparator g;
   g.setParameters(0.5, 0.1);
   g.setSlopeThresholdDeg(10.0);

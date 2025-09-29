@@ -6,7 +6,8 @@ using obstacle_detector::GridCell;
 using obstacle_detector::GridHeightMap;
 using obstacle_detector::PointXYZ;
 
-TEST(GridHeightMapTest, MedianAndInterpolation) {
+TEST(GridHeightMapTest, MedianAndInterpolation)
+{
   // grid covers x:[0,0.2), y:[0,0.2) with cell_size 0.1 => 2x2 grid
   GridHeightMap grid(0.0, 0.2, 0.0, 0.2, 0.1);
   grid.setParameters(3, 1, 2.0, 0.6, 0.5, 0.3, 0.4, 0.5);
@@ -38,7 +39,8 @@ TEST(GridHeightMapTest, MedianAndInterpolation) {
   EXPECT_GT(c11.confidence, 0.0);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char ** argv)
+{
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

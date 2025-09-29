@@ -1,19 +1,19 @@
 #include <gtest/gtest.h>
 
+#include <vector>
+
 #include "horiokart_obstacle_detector_3d/core/grid_height_map.hpp"
 #include "horiokart_obstacle_detector_3d/core/pca_slope_estimator.hpp"
-
-using obstacle_detector::computePcaSlopesAndNormals;
 using obstacle_detector::GridHeightMap;
 using obstacle_detector::PointXYZ;
 
-TEST(PcaSlopeEstimator, PlaneHorizontal) {
+TEST(PcaSlopeEstimator, PlaneHorizontal)
+{
   // create points on z=0 plane within roi
   std::vector<PointXYZ> pts;
   for (double x = 0.5; x <= 1.5; x += 0.1) {
     for (double y = -0.5; y <= 0.5; y += 0.1) {
-      pts.push_back(
-          PointXYZ{static_cast<float>(x), static_cast<float>(y), 0.0f});
+      pts.push_back(PointXYZ{static_cast<float>(x), static_cast<float>(y), 0.0f});
     }
   }
   GridHeightMap grid(0.0, 2.0, -1.0, 1.0, 0.1);
@@ -23,7 +23,7 @@ TEST(PcaSlopeEstimator, PlaneHorizontal) {
   auto res = computePcaSlopesAndNormals(pts, grid, 0.2, 5, 0.1, 0.0, -1.0);
   // Expect many cells have near-zero slope
   int near_zero = 0;
-  for (const auto &kv : res) {
+  for (const auto & kv : res) {
     double slope = kv.second.first;
     if (slope < 5.0) {
       near_zero++;

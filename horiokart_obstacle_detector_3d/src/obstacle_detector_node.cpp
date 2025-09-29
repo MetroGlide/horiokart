@@ -1,33 +1,40 @@
 #include "horiokart_obstacle_detector_3d/obstacle_detector_node.hpp"
 
-#include <pcl/kdtree/kdtree_flann.h>
-#include <pcl/point_types.h>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
-
 #include <Eigen/Dense>
+
+// C++ standard library
 #include <algorithm>
-#include <diagnostic_msgs/msg/diagnostic_array.hpp>
-#include <diagnostic_msgs/msg/diagnostic_status.hpp>
 #include <iomanip>
 #include <limits>
 #include <memory>
-#include <nav_msgs/msg/odometry.hpp>
 #include <optional>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+
+// Third-party (C-style headers that should come before C++ system headers)
+#include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/point_types.h>
+
+// ROS and related
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+
+#include <diagnostic_msgs/msg/diagnostic_array.hpp>
+#include <diagnostic_msgs/msg/diagnostic_status.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <rcl_interfaces/msg/set_parameters_result.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/laser_scan.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
-#include <sstream>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/header.hpp>
-#include <string>
 #include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
-#include <unordered_map>
 #include <visualization_msgs/msg/marker.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
+// project headers
 #include "horiokart_obstacle_detector_3d/core/cluster_detector.hpp"
 #include "horiokart_obstacle_detector_3d/core/color_utils.hpp"
 #include "horiokart_obstacle_detector_3d/core/grid_height_map.hpp"
@@ -41,7 +48,8 @@
 
 // 実装: ヘルパー関数へ委譲してノードを薄く保ちます
 
-ObstacleDetectorNode::ObstacleDetectorNode() : Node("obstacle_detector_node") {
+ObstacleDetectorNode::ObstacleDetectorNode() : Node("obstacle_detector_node")
+{
   setupParameters();
   setupCoreComponents();
   setupPublishersAndSubscribers();
@@ -63,19 +71,17 @@ ObstacleDetectorNode::ObstacleDetectorNode() : Node("obstacle_detector_node") {
   cp_cfg.min_obstacle_volume = min_obstacle_volume_;
   cp_cfg.use_rgb = use_rgb_;
   cp_cfg.use_intensity = use_intensity_;
-  cloud_processor_ =
-      std::make_unique<obstacle_detector::CloudProcessor>(cp_cfg);
+  cloud_processor_ = std::make_unique<obstacle_detector::CloudProcessor>(cp_cfg);
 }
 
-void ObstacleDetectorNode::setupParameters() {
+void ObstacleDetectorNode::setupParameters()
+{
   // パラメータを宣言（デフォルト値を設定）
   this->declare_parameter<std::string>("fixed_frame", "base_link");
   this->declare_parameter<std::string>("sensor_frame", "camera_link");
   this->declare_parameter<double>("processing_rate", 15.0);
-  this->declare_parameter<std::string>("input_cloud_topic",
-                                       "/camera/depth/points");
-  this->declare_parameter<std::string>("output_cloud_topic",
-                                       "/obstacle_points");
+  this->declare_parameter<std::string>("input_cloud_topic", "/camera/depth/points");
+  this->declare_parameter<std::string>("output_cloud_topic", "/obstacle_points");
   this->declare_parameter<std::string>("output_scan_topic", "/obstacle_scan");
   this->declare_parameter<std::string>("diagnostics_topic", "/diagnostics");
   this->declare_parameter<double>("scan_angle_min", -1.57);
@@ -112,7 +118,7 @@ void ObstacleDetectorNode::setupParameters() {
   this->declare_parameter<bool>("publish_empty_scan", true);
   this->declare_parameter<bool>("enable_visualization_markers", true);
   this->declare_parameter<std::vector<double>>(
-      "ground_score_weights", std::vector<double>{0.45, 0.35, 0.2});
+    "ground_score_weights", std::vector<double>{0.45, 0.35, 0.2});
   this->declare_parameter<double>("ground_ema_alpha", 0.3);
   this->declare_parameter<double>("ground_high_threshold", 0.7);
   this->declare_parameter<double>("ground_low_threshold", 0.4);
@@ -140,22 +146,19 @@ void ObstacleDetectorNode::setupParameters() {
   range_max_ = this->get_parameter("scan_range_max").as_double();
   voxel_leaf_size_ = this->get_parameter("voxel_leaf_size").as_double();
   outlier_radius_ = this->get_parameter("outlier_radius").as_double();
-  outlier_min_neighbors_ =
-      this->get_parameter("outlier_min_neighbors").as_int();
+  outlier_min_neighbors_ = this->get_parameter("outlier_min_neighbors").as_int();
   grid_cell_size_ = this->get_parameter("grid_cell_size").as_double();
   min_obs_per_cell_for_confident_median_ =
-      this->get_parameter("min_obs_per_cell_for_confident_median").as_int();
+    this->get_parameter("min_obs_per_cell_for_confident_median").as_int();
   radius_interp_cells_ = this->get_parameter("radius_interp_cells").as_int();
   interp_power_p_ = this->get_parameter("interp_power_p").as_double();
   interp_alpha_ = this->get_parameter("interp_alpha").as_double();
   max_interp_area_m2_ = this->get_parameter("max_interp_area_m2").as_double();
-  temporal_alpha_height_ =
-      this->get_parameter("temporal_alpha_height").as_double();
+  temporal_alpha_height_ = this->get_parameter("temporal_alpha_height").as_double();
   temporal_alpha_conf_ = this->get_parameter("temporal_alpha_conf").as_double();
   observation_timeout_ = this->get_parameter("observation_timeout").as_double();
 
-  base_slope_threshold_deg_ =
-      this->get_parameter("base_slope_threshold_deg").as_double();
+  base_slope_threshold_deg_ = this->get_parameter("base_slope_threshold_deg").as_double();
   k_v_ = this->get_parameter("k_v").as_double();
   slope_threshold_deg_ = this->get_parameter("slope_threshold_deg").as_double();
   ground_max_distance_ = this->get_parameter("ground_max_distance").as_double();
@@ -167,15 +170,12 @@ void ObstacleDetectorNode::setupParameters() {
   use_rgb_ = this->get_parameter("use_color").as_bool();
   use_intensity_ = this->get_parameter("use_intensity").as_bool();
   publish_empty_scan_ = this->get_parameter("publish_empty_scan").as_bool();
-  enable_markers_ =
-      this->get_parameter("enable_visualization_markers").as_bool();
+  enable_markers_ = this->get_parameter("enable_visualization_markers").as_bool();
   std::vector<double> gsw = this->get_parameter_or<std::vector<double>>(
-      "ground_score_weights", std::vector<double>{0.45, 0.35, 0.2});
+    "ground_score_weights", std::vector<double>{0.45, 0.35, 0.2});
   double footprint_w = this->get_parameter_or<double>("footprint_width", 0.6);
-  double footprint_look =
-      this->get_parameter_or<double>("footprint_lookahead", 1.0);
-  double footprint_frac =
-      this->get_parameter_or<double>("footprint_ground_fraction", 0.8);
+  double footprint_look = this->get_parameter_or<double>("footprint_lookahead", 1.0);
+  double footprint_frac = this->get_parameter_or<double>("footprint_ground_fraction", 0.8);
   if (gsw.size() >= 3 && ground_separator_) {
     ground_separator_->setScoreWeights(gsw[0], gsw[1], gsw[2]);
   }
@@ -183,20 +183,16 @@ void ObstacleDetectorNode::setupParameters() {
   footprint_width_ = footprint_w;
   footprint_lookahead_ = footprint_look;
   footprint_ground_fraction_ = footprint_frac;
-  slope_method_ = this->get_parameter_or<std::string>(
-      "slope_method", std::string("finite_difference"));
+  slope_method_ =
+    this->get_parameter_or<std::string>("slope_method", std::string("finite_difference"));
   pca_radius_m_ = this->get_parameter_or<double>("pca_radius_m", 0.15);
   pca_min_points_ = this->get_parameter_or<int>("pca_min_points", 10);
   intensity_compensate_distance_ =
-      this->get_parameter_or<bool>("intensity_compensate_distance", true);
-  intensity_distance_ref_ =
-      this->get_parameter_or<double>("intensity_distance_ref", 1.0);
-  intensity_distance_power_ =
-      this->get_parameter_or<double>("intensity_distance_power", 2.0);
-  intensity_compensate_angle_ =
-      this->get_parameter_or<bool>("intensity_compensate_angle", false);
-  intensity_angle_min_dot_ =
-      this->get_parameter_or<double>("intensity_angle_min_dot", 0.2);
+    this->get_parameter_or<bool>("intensity_compensate_distance", true);
+  intensity_distance_ref_ = this->get_parameter_or<double>("intensity_distance_ref", 1.0);
+  intensity_distance_power_ = this->get_parameter_or<double>("intensity_distance_power", 2.0);
+  intensity_compensate_angle_ = this->get_parameter_or<bool>("intensity_compensate_angle", false);
+  intensity_angle_min_dot_ = this->get_parameter_or<double>("intensity_angle_min_dot", 0.2);
   roi_x_min_ = this->get_parameter("roi.x_min").as_double();
   roi_x_max_ = this->get_parameter("roi.x_max").as_double();
   roi_y_min_ = this->get_parameter("roi.y_min").as_double();
@@ -209,14 +205,14 @@ void ObstacleDetectorNode::setupParameters() {
   cached_sensor_tf_time_ = rclcpp::Time(0, 0, RCL_ROS_TIME);
 }
 
-void ObstacleDetectorNode::setupCoreComponents() {
+void ObstacleDetectorNode::setupCoreComponents()
+{
   // パブリッシャは setupPublishersAndSubscribers で作成しますが、
   // core コンポーネントはここで初期化します
   projector_ = std::make_shared<obstacle_detector::ScanProjector>(
-      angle_min_, angle_max_, angle_inc_, range_max_);
+    angle_min_, angle_max_, angle_inc_, range_max_);
   cluster_detector_ = std::make_shared<obstacle_detector::ClusterDetector>();
-  cluster_detector_->setParameters(cluster_tolerance_, min_cluster_size_,
-                                   max_cluster_size_);
+  cluster_detector_->setParameters(cluster_tolerance_, min_cluster_size_, max_cluster_size_);
   cluster_detector_->setDownsampleLeafSize(voxel_leaf_size_);
   cluster_detector_->setOutlierRadius(outlier_radius_);
   cluster_detector_->setOutlierMinNeighbors(outlier_min_neighbors_);
@@ -234,106 +230,98 @@ void ObstacleDetectorNode::setupCoreComponents() {
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 }
 
-void ObstacleDetectorNode::setupPublishersAndSubscribers() {
-  pub_obstacle_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-      output_cloud_topic_, 10);
-  pub_confidence_cloud_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-      "/confidence_map", 1);
-  pub_scan_ = this->create_publisher<sensor_msgs::msg::LaserScan>(
-      output_scan_topic_, 10);
-  pub_markers_ = this->create_publisher<visualization_msgs::msg::MarkerArray>(
-      "/obstacle_markers", 1);
-  pub_traversable_ =
-      this->create_publisher<std_msgs::msg::Bool>("/footprint_traversable", 1);
+void ObstacleDetectorNode::setupPublishersAndSubscribers()
+{
+  pub_obstacle_cloud_ =
+    this->create_publisher<sensor_msgs::msg::PointCloud2>(output_cloud_topic_, 10);
+  pub_confidence_cloud_ =
+    this->create_publisher<sensor_msgs::msg::PointCloud2>("/confidence_map", 1);
+  pub_scan_ = this->create_publisher<sensor_msgs::msg::LaserScan>(output_scan_topic_, 10);
+  pub_markers_ =
+    this->create_publisher<visualization_msgs::msg::MarkerArray>("/obstacle_markers", 1);
+  pub_traversable_ = this->create_publisher<std_msgs::msg::Bool>("/footprint_traversable", 1);
   pub_diagnostics_ =
-      this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
-          diagnostics_topic_, 1);
+    this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(diagnostics_topic_, 1);
 
   odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
-      "/odom", rclcpp::SensorDataQoS(),
-      std::bind(&ObstacleDetectorNode::odomCallback, this,
-                std::placeholders::_1));
+    "/odom", rclcpp::SensorDataQoS(),
+    std::bind(&ObstacleDetectorNode::odomCallback, this, std::placeholders::_1));
   subscription_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
-      input_topic_, rclcpp::SensorDataQoS(),
-      std::bind(&ObstacleDetectorNode::cloudCallback, this,
-                std::placeholders::_1));
+    input_topic_, rclcpp::SensorDataQoS(),
+    std::bind(&ObstacleDetectorNode::cloudCallback, this, std::placeholders::_1));
 
   // 動的パラメータ用コールバック
-  param_cb_handle_ = this->add_on_set_parameters_callback(
-      [this](const std::vector<rclcpp::Parameter> &params) {
-        rcl_interfaces::msg::SetParametersResult result;
-        result.successful = true;
-        result.reason = "";
-        bool scan_params_changed = false;
-        for (const auto &p : params) {
-          const std::string &name = p.get_name();
-          if (name == "voxel_leaf_size") {
-            voxel_leaf_size_ = p.as_double();
-            if (cluster_detector_)
-              cluster_detector_->setDownsampleLeafSize(voxel_leaf_size_);
-          } else if (name == "outlier_radius") {
-            outlier_radius_ = p.as_double();
-            if (cluster_detector_)
-              cluster_detector_->setOutlierRadius(outlier_radius_);
-          } else if (name == "outlier_min_neighbors") {
-            outlier_min_neighbors_ = p.as_int();
-            if (cluster_detector_)
-              cluster_detector_->setOutlierMinNeighbors(outlier_min_neighbors_);
-          } else if (name == "cluster_tolerance") {
-            cluster_tolerance_ = p.as_double();
-            if (cluster_detector_)
-              cluster_detector_->setParameters(
-                  cluster_tolerance_, min_cluster_size_, max_cluster_size_);
-          } else if (name == "min_cluster_size") {
-            min_cluster_size_ = p.as_int();
-            if (cluster_detector_)
-              cluster_detector_->setParameters(
-                  cluster_tolerance_, min_cluster_size_, max_cluster_size_);
-          } else if (name == "max_cluster_size") {
-            max_cluster_size_ = p.as_int();
-            if (cluster_detector_)
-              cluster_detector_->setParameters(
-                  cluster_tolerance_, min_cluster_size_, max_cluster_size_);
-          } else if (name == "slope_threshold_deg") {
-            slope_threshold_deg_ = p.as_double();
-            if (ground_separator_)
-              ground_separator_->setSlopeThresholdDeg(slope_threshold_deg_);
-          } else if (name == "fixed_frame") {
-            target_frame_ = p.as_string();
-          } else if (name == "sensor_frame") {
-            sensor_frame_ = p.as_string();
-          } else if (name == "ground_max_distance") {
-            ground_max_distance_ = p.as_double();
-          } else if (name == "use_color") {
-            use_rgb_ = p.as_bool();
-          } else if (name == "use_intensity") {
-            use_intensity_ = p.as_bool();
-          } else if (name == "publish_empty_scan") {
-            publish_empty_scan_ = p.as_bool();
-          } else if (name == "scan_angle_min") {
-            angle_min_ = p.as_double();
-            scan_params_changed = true;
-          } else if (name == "scan_angle_max") {
-            angle_max_ = p.as_double();
-            scan_params_changed = true;
-          } else if (name == "scan_angle_increment") {
-            angle_inc_ = p.as_double();
-            scan_params_changed = true;
-          } else if (name == "scan_range_max") {
-            range_max_ = p.as_double();
-            scan_params_changed = true;
-          }
+  param_cb_handle_ =
+    this->add_on_set_parameters_callback([this](const std::vector<rclcpp::Parameter> & params) {
+      rcl_interfaces::msg::SetParametersResult result;
+      result.successful = true;
+      result.reason = "";
+      bool scan_params_changed = false;
+      for (const auto & p : params) {
+        const std::string & name = p.get_name();
+        if (name == "voxel_leaf_size") {
+          voxel_leaf_size_ = p.as_double();
+          if (cluster_detector_) cluster_detector_->setDownsampleLeafSize(voxel_leaf_size_);
+        } else if (name == "outlier_radius") {
+          outlier_radius_ = p.as_double();
+          if (cluster_detector_) cluster_detector_->setOutlierRadius(outlier_radius_);
+        } else if (name == "outlier_min_neighbors") {
+          outlier_min_neighbors_ = p.as_int();
+          if (cluster_detector_) cluster_detector_->setOutlierMinNeighbors(outlier_min_neighbors_);
+        } else if (name == "cluster_tolerance") {
+          cluster_tolerance_ = p.as_double();
+          if (cluster_detector_)
+            cluster_detector_->setParameters(
+              cluster_tolerance_, min_cluster_size_, max_cluster_size_);
+        } else if (name == "min_cluster_size") {
+          min_cluster_size_ = p.as_int();
+          if (cluster_detector_)
+            cluster_detector_->setParameters(
+              cluster_tolerance_, min_cluster_size_, max_cluster_size_);
+        } else if (name == "max_cluster_size") {
+          max_cluster_size_ = p.as_int();
+          if (cluster_detector_)
+            cluster_detector_->setParameters(
+              cluster_tolerance_, min_cluster_size_, max_cluster_size_);
+        } else if (name == "slope_threshold_deg") {
+          slope_threshold_deg_ = p.as_double();
+          if (ground_separator_) ground_separator_->setSlopeThresholdDeg(slope_threshold_deg_);
+        } else if (name == "fixed_frame") {
+          target_frame_ = p.as_string();
+        } else if (name == "sensor_frame") {
+          sensor_frame_ = p.as_string();
+        } else if (name == "ground_max_distance") {
+          ground_max_distance_ = p.as_double();
+        } else if (name == "use_color") {
+          use_rgb_ = p.as_bool();
+        } else if (name == "use_intensity") {
+          use_intensity_ = p.as_bool();
+        } else if (name == "publish_empty_scan") {
+          publish_empty_scan_ = p.as_bool();
+        } else if (name == "scan_angle_min") {
+          angle_min_ = p.as_double();
+          scan_params_changed = true;
+        } else if (name == "scan_angle_max") {
+          angle_max_ = p.as_double();
+          scan_params_changed = true;
+        } else if (name == "scan_angle_increment") {
+          angle_inc_ = p.as_double();
+          scan_params_changed = true;
+        } else if (name == "scan_range_max") {
+          range_max_ = p.as_double();
+          scan_params_changed = true;
         }
-        if (scan_params_changed) {
-          projector_ = std::make_shared<obstacle_detector::ScanProjector>(
-              angle_min_, angle_max_, angle_inc_, range_max_);
-        }
-        return result;
-      });
+      }
+      if (scan_params_changed) {
+        projector_ = std::make_shared<obstacle_detector::ScanProjector>(
+          angle_min_, angle_max_, angle_inc_, range_max_);
+      }
+      return result;
+    });
 }
 
-void ObstacleDetectorNode::odomCallback(
-    const nav_msgs::msg::Odometry::SharedPtr msg) {
+void ObstacleDetectorNode::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
+{
   double vx = msg->twist.twist.linear.x;
   double vy = msg->twist.twist.linear.y;
   double v = std::hypot(vx, vy);
@@ -345,15 +333,17 @@ void ObstacleDetectorNode::odomCallback(
 }
 
 // ユーティリティ: 座標を文字列キーへ変換（丸め込み）
-std::string ObstacleDetectorNode::make_key(double x, double y, double z) const {
+std::string ObstacleDetectorNode::make_key(double x, double y, double z) const
+{
   std::ostringstream ss;
   ss << std::fixed << std::setprecision(4) << x << "," << y << "," << z;
   return ss.str();
 }
 
 // TF 関連とフットプリント判定のユーティリティ実装
-geometry_msgs::msg::TransformStamped
-ObstacleDetectorNode::getSensorTransform(const tf2::TimePoint &when) {
+geometry_msgs::msg::TransformStamped ObstacleDetectorNode::getSensorTransform(
+  const tf2::TimePoint & when)
+{
   geometry_msgs::msg::TransformStamped tfst;
   if (!tf_buffer_) {
     throw tf2::TransformException("No TF buffer");
@@ -364,7 +354,7 @@ ObstacleDetectorNode::getSensorTransform(const tf2::TimePoint &when) {
     cached_sensor_tf_ = tfst;
     cached_sensor_tf_time_ = this->now();
     return tfst;
-  } catch (const tf2::TransformException &ex) {
+  } catch (const tf2::TransformException & ex) {
     std::lock_guard<std::mutex> lk(tf_cache_mutex_);
     if (cached_sensor_tf_) {
       double age = (this->now() - cached_sensor_tf_time_).seconds();
@@ -376,32 +366,29 @@ ObstacleDetectorNode::getSensorTransform(const tf2::TimePoint &when) {
   }
 }
 
-Eigen::Vector3d
-ObstacleDetectorNode::getSensorForward(const tf2::TimePoint &when) {
+Eigen::Vector3d ObstacleDetectorNode::getSensorForward(const tf2::TimePoint & when)
+{
   Eigen::Vector3d sensor_fwd(1.0, 0.0, 0.0);
   try {
     auto tfst = getSensorTransform(when);
-    const auto &r = tfst.transform.rotation;
+    const auto & r = tfst.transform.rotation;
     Eigen::Quaterniond q(r.w, r.x, r.y, r.z);
     sensor_fwd = q * Eigen::Vector3d(1.0, 0.0, 0.0);
     sensor_fwd.normalize();
-  } catch (const tf2::TransformException &ex) {
-    RCLCPP_DEBUG(this->get_logger(),
-                 "getSensorForward: using fallback +x due to TF error: %s",
-                 ex.what());
+  } catch (const tf2::TransformException & ex) {
+    RCLCPP_DEBUG(
+      this->get_logger(), "getSensorForward: using fallback +x due to TF error: %s", ex.what());
   }
   return sensor_fwd;
 }
 
 bool ObstacleDetectorNode::checkFootprintTraversable(
-    const obstacle_detector::GridHeightMap &grid, double lookahead_m) {
+  const obstacle_detector::GridHeightMap & grid, double lookahead_m)
+{
   int ix0 = static_cast<int>(std::floor((0.0 - roi_x_min_) / grid_cell_size_));
-  int ix1 = static_cast<int>(
-      std::floor((lookahead_m - roi_x_min_) / grid_cell_size_));
-  int half_w_cells =
-      static_cast<int>(std::ceil((footprint_width_ / 2.0) / grid_cell_size_));
-  int iy_center =
-      static_cast<int>(std::floor((0.0 - roi_y_min_) / grid_cell_size_));
+  int ix1 = static_cast<int>(std::floor((lookahead_m - roi_x_min_) / grid_cell_size_));
+  int half_w_cells = static_cast<int>(std::ceil((footprint_width_ / 2.0) / grid_cell_size_));
+  int iy_center = static_cast<int>(std::floor((0.0 - roi_y_min_) / grid_cell_size_));
   int required = 0;
   int total = 0;
   for (int ix = ix0; ix <= ix1; ++ix) {
@@ -412,8 +399,7 @@ bool ObstacleDetectorNode::checkFootprintTraversable(
         continue;
       }
       total++;
-      if (cell.confidence >= 0.5 &&
-          cell.ground_ema >= ground_separator_->getHighThreshold()) {
+      if (cell.confidence >= 0.5 && cell.ground_ema >= ground_separator_->getHighThreshold()) {
         required++;
       }
     }
@@ -427,14 +413,14 @@ bool ObstacleDetectorNode::checkFootprintTraversable(
 }
 
 // PointCloud サブスクライブコールバックは processCloud へ委譲
-void ObstacleDetectorNode::cloudCallback(
-    const sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+void ObstacleDetectorNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
+{
   processCloud(msg);
 }
 
 // processCloud: 点群処理の主エントリ
-void ObstacleDetectorNode::processCloud(
-    const sensor_msgs::msg::PointCloud2::SharedPtr &msg) {
+void ObstacleDetectorNode::processCloud(const sensor_msgs::msg::PointCloud2::SharedPtr & msg)
+{
   const auto t0 = std::chrono::high_resolution_clock::now();
 
   // 1) 入力点群をターゲットフレームへ変換
@@ -447,25 +433,21 @@ void ObstacleDetectorNode::processCloud(
   bool has_intensity_field = false;
   std::unordered_map<std::string, obstacle_detector::PointXYZ> dummy_meta;
   obstacle_detector_node_helpers::extractPointsAndMeta(
-      cloud_in_tf, pts, dummy_meta, point_meta, has_rgb_field,
-      has_intensity_field, roi_x_min_, roi_x_max_, roi_y_min_, roi_y_max_,
-      roi_z_min_, roi_z_max_, use_rgb_, use_intensity_, intensity_distance_ref_,
-      intensity_distance_power_, intensity_compensate_distance_,
-      intensity_compensate_angle_, intensity_angle_min_dot_,
-      [this](const tf2::TimePoint &t) { return this->getSensorForward(t); },
-      [this](const tf2::TimePoint &t) { return this->getSensorTransform(t); },
-      [this](double x, double y, double z) { return this->make_key(x, y, z); },
-      [this](const std::string &k, const std::vector<double> &d) {
-        return this->get_parameter_or<std::vector<double>>(k, d);
-      });
-  if (pts.empty())
-    return;
+    cloud_in_tf, pts, dummy_meta, point_meta, has_rgb_field, has_intensity_field, roi_x_min_,
+    roi_x_max_, roi_y_min_, roi_y_max_, roi_z_min_, roi_z_max_, use_rgb_, use_intensity_,
+    intensity_distance_ref_, intensity_distance_power_, intensity_compensate_distance_,
+    intensity_compensate_angle_, intensity_angle_min_dot_,
+    [this](const tf2::TimePoint & t) { return this->getSensorForward(t); },
+    [this](const tf2::TimePoint & t) { return this->getSensorTransform(t); },
+    [this](double x, double y, double z) { return this->make_key(x, y, z); },
+    [this](const std::string & k, const std::vector<double> & d) {
+      return this->get_parameter_or<std::vector<double>>(k, d);
+    });
+  if (pts.empty()) return;
 
   // 3) core (CloudProcessor) で処理
-  if (!cloud_processor_)
-    return;
-  auto res = cloud_processor_->process(pts, point_meta, *cluster_detector_,
-                                       *ground_separator_);
+  if (!cloud_processor_) return;
+  auto res = cloud_processor_->process(pts, point_meta, *cluster_detector_, *ground_separator_);
 
   // 4) フットプリントの走行可能判定を publish（ノード固有ルール）
   bool traversable = checkFootprintTraversable(*res.grid, footprint_lookahead_);
@@ -477,25 +459,21 @@ void ObstacleDetectorNode::processCloud(
 
   // 5) 信頼度グリッドを publish（node_helpers に委譲）
   obstacle_detector_node_helpers::publishConfidenceCloud(
-      *res.grid, cloud_in_tf, pub_confidence_cloud_, roi_x_min_, roi_y_min_,
-      grid_cell_size_);
+    *res.grid, cloud_in_tf, pub_confidence_cloud_, roi_x_min_, roi_y_min_, grid_cell_size_);
 
   // 6) 障害物点群とスキャンを publish（node_helpers に委譲）
   obstacle_detector_node_helpers::publishObstacleCloudAndScan(
-      res.obstacle_points, point_meta, cloud_in_tf, pub_obstacle_cloud_,
-      pub_scan_, use_rgb_, use_intensity_,
-      [this](double x, double y, double z) { return this->make_key(x, y, z); },
-      [this](const std::string &k, const std::vector<double> &d) {
-        return this->get_parameter_or<std::vector<double>>(k, d);
-      });
+    res.obstacle_points, point_meta, cloud_in_tf, pub_obstacle_cloud_, pub_scan_, use_rgb_,
+    use_intensity_, [this](double x, double y, double z) { return this->make_key(x, y, z); },
+    [this](const std::string & k, const std::vector<double> & d) {
+      return this->get_parameter_or<std::vector<double>>(k, d);
+    });
 
   // 診断情報の publish
   if (pub_diagnostics_ && pub_diagnostics_->get_subscription_count() > 0) {
     const auto t1 = std::chrono::high_resolution_clock::now();
     double proc_ms =
-        std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(
-            t1 - t0)
-            .count();
+      std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(t1 - t0).count();
     diagnostic_msgs::msg::DiagnosticArray darr;
     diagnostic_msgs::msg::DiagnosticStatus status;
     status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
@@ -521,8 +499,7 @@ void ObstacleDetectorNode::processCloud(
   }
 
   // 可視化用マーカーの生成と publish
-  if (enable_markers_ && pub_markers_ &&
-      pub_markers_->get_subscription_count() > 0) {
+  if (enable_markers_ && pub_markers_ && pub_markers_->get_subscription_count() > 0) {
     visualization_msgs::msg::MarkerArray ma;
     visualization_msgs::msg::Marker grid_marker;
     grid_marker.header = cloud_in_tf->header;
@@ -536,8 +513,7 @@ void ObstacleDetectorNode::processCloud(
     for (int ix = 0; ix < res.grid->rows(); ++ix) {
       for (int iy = 0; iy < res.grid->cols(); ++iy) {
         obstacle_detector::GridCell c;
-        if (!res.grid->getCell(ix, iy, c) || !c.has_observation)
-          continue;
+        if (!res.grid->getCell(ix, iy, c) || !c.has_observation) continue;
         geometry_msgs::msg::Point pt;
         double cx = roi_x_min_ + (ix + 0.5) * grid_cell_size_;
         double cy = roi_y_min_ + (iy + 0.5) * grid_cell_size_;
@@ -555,10 +531,9 @@ void ObstacleDetectorNode::processCloud(
     }
     ma.markers.push_back(grid_marker);
     int mid = 1;
-    for (const auto &c : res.clusters) {
-      double xmin = 1e9, ymin = 1e9, zmin = 1e9, xmax = -1e9, ymax = -1e9,
-             zmax = -1e9;
-      for (const auto &p : c.points) {
+    for (const auto & c : res.clusters) {
+      double xmin = 1e9, ymin = 1e9, zmin = 1e9, xmax = -1e9, ymax = -1e9, zmax = -1e9;
+      for (const auto & p : c.points) {
         xmin = std::min(xmin, static_cast<double>(p.x));
         ymin = std::min(ymin, static_cast<double>(p.y));
         zmin = std::min(zmin, static_cast<double>(p.z));
@@ -590,82 +565,83 @@ void ObstacleDetectorNode::processCloud(
 
 // ヘルパー実装
 sensor_msgs::msg::PointCloud2::SharedPtr ObstacleDetectorNode::transformCloud(
-    const sensor_msgs::msg::PointCloud2::SharedPtr &msg) {
+  const sensor_msgs::msg::PointCloud2::SharedPtr & msg)
+{
   sensor_msgs::msg::PointCloud2::SharedPtr cloud_in_tf = msg;
   if (!msg->header.frame_id.empty() && msg->header.frame_id != target_frame_) {
     try {
       geometry_msgs::msg::TransformStamped tfst = tf_buffer_->lookupTransform(
-          target_frame_, msg->header.frame_id,
-          tf2::TimePoint(std::chrono::seconds(msg->header.stamp.sec) +
-                         std::chrono::nanoseconds(msg->header.stamp.nanosec)));
+        target_frame_, msg->header.frame_id,
+        tf2::TimePoint(
+          std::chrono::seconds(msg->header.stamp.sec) +
+          std::chrono::nanoseconds(msg->header.stamp.nanosec)));
       auto transformed = std::make_shared<sensor_msgs::msg::PointCloud2>();
       tf2::doTransform(*msg, *transformed, tfst);
       transformed->header.frame_id = target_frame_;
       cloud_in_tf = transformed;
-    } catch (const tf2::TransformException &ex) {
-      RCLCPP_WARN(this->get_logger(),
-                  "TF transform failed: %s. Processing in original frame.",
-                  ex.what());
+    } catch (const tf2::TransformException & ex) {
+      RCLCPP_WARN(
+        this->get_logger(), "TF transform failed: %s. Processing in original frame.", ex.what());
     }
   }
   return cloud_in_tf;
 }
 
 void ObstacleDetectorNode::extractPointsAndMeta(
-    const sensor_msgs::msg::PointCloud2::SharedPtr &cloud_in_tf,
-    std::vector<obstacle_detector::PointXYZ> &pts,
-    std::unordered_map<std::string, ColorInfo> &point_meta, bool &has_rgb_field,
-    bool &has_intensity_field) {
+  const sensor_msgs::msg::PointCloud2::SharedPtr & cloud_in_tf,
+  std::vector<obstacle_detector::PointXYZ> & pts,
+  std::unordered_map<std::string, ColorInfo> & point_meta, bool & has_rgb_field,
+  bool & has_intensity_field)
+{
   // node_helpers の実装に委譲（ノードを薄く保つ）
   std::unordered_map<std::string, obstacle_detector::PointXYZ> dummy_meta;
   obstacle_detector_node_helpers::extractPointsAndMeta(
-      cloud_in_tf, pts, dummy_meta, point_meta, has_rgb_field,
-      has_intensity_field, roi_x_min_, roi_x_max_, roi_y_min_, roi_y_max_,
-      roi_z_min_, roi_z_max_, use_rgb_, use_intensity_, intensity_distance_ref_,
-      intensity_distance_power_, intensity_compensate_distance_,
-      intensity_compensate_angle_, intensity_angle_min_dot_,
-      [this](const tf2::TimePoint &t) { return this->getSensorForward(t); },
-      [this](const tf2::TimePoint &t) { return this->getSensorTransform(t); },
-      [this](double x, double y, double z) { return this->make_key(x, y, z); },
-      [this](const std::string &k, const std::vector<double> &d) {
-        return this->get_parameter_or<std::vector<double>>(k, d);
-      });
+    cloud_in_tf, pts, dummy_meta, point_meta, has_rgb_field, has_intensity_field, roi_x_min_,
+    roi_x_max_, roi_y_min_, roi_y_max_, roi_z_min_, roi_z_max_, use_rgb_, use_intensity_,
+    intensity_distance_ref_, intensity_distance_power_, intensity_compensate_distance_,
+    intensity_compensate_angle_, intensity_angle_min_dot_,
+    [this](const tf2::TimePoint & t) { return this->getSensorForward(t); },
+    [this](const tf2::TimePoint & t) { return this->getSensorTransform(t); },
+    [this](double x, double y, double z) { return this->make_key(x, y, z); },
+    [this](const std::string & k, const std::vector<double> & d) {
+      return this->get_parameter_or<std::vector<double>>(k, d);
+    });
 }
 
-std::unique_ptr<obstacle_detector::GridHeightMap>
-ObstacleDetectorNode::buildGridFromPoints(
-    const std::vector<obstacle_detector::PointXYZ> &pts) {
+std::unique_ptr<obstacle_detector::GridHeightMap> ObstacleDetectorNode::buildGridFromPoints(
+  const std::vector<obstacle_detector::PointXYZ> & pts)
+{
   return obstacle_detector_node_helpers::buildGridFromPoints(
-      pts, roi_x_min_, roi_x_max_, roi_y_min_, roi_y_max_, grid_cell_size_,
-      min_obs_per_cell_for_confident_median_, radius_interp_cells_,
-      interp_power_p_, interp_alpha_, max_interp_area_m2_,
-      temporal_alpha_height_, temporal_alpha_conf_, observation_timeout_);
+    pts, roi_x_min_, roi_x_max_, roi_y_min_, roi_y_max_, grid_cell_size_,
+    min_obs_per_cell_for_confident_median_, radius_interp_cells_, interp_power_p_, interp_alpha_,
+    max_interp_area_m2_, temporal_alpha_height_, temporal_alpha_conf_, observation_timeout_);
 }
 
 // ノードは CloudProcessor に処理を委譲します
 
 void ObstacleDetectorNode::publishConfidenceCloud(
-    const obstacle_detector::GridHeightMap &grid,
-    const sensor_msgs::msg::PointCloud2::SharedPtr &cloud_in_tf) {
+  const obstacle_detector::GridHeightMap & grid,
+  const sensor_msgs::msg::PointCloud2::SharedPtr & cloud_in_tf)
+{
   obstacle_detector_node_helpers::publishConfidenceCloud(
-      grid, cloud_in_tf, pub_confidence_cloud_, roi_x_min_, roi_y_min_,
-      grid_cell_size_);
+    grid, cloud_in_tf, pub_confidence_cloud_, roi_x_min_, roi_y_min_, grid_cell_size_);
 }
 
 void ObstacleDetectorNode::publishObstacleCloudAndScan(
-    const std::vector<obstacle_detector::PointXYZ> &obstacle_pts,
-    const std::unordered_map<std::string, ColorInfo> &point_meta,
-    const sensor_msgs::msg::PointCloud2::SharedPtr &cloud_in_tf) {
+  const std::vector<obstacle_detector::PointXYZ> & obstacle_pts,
+  const std::unordered_map<std::string, ColorInfo> & point_meta,
+  const sensor_msgs::msg::PointCloud2::SharedPtr & cloud_in_tf)
+{
   obstacle_detector_node_helpers::publishObstacleCloudAndScan(
-      obstacle_pts, point_meta, cloud_in_tf, pub_obstacle_cloud_, pub_scan_,
-      use_rgb_, use_intensity_,
-      [this](double x, double y, double z) { return this->make_key(x, y, z); },
-      [this](const std::string &k, const std::vector<double> &d) {
-        return this->get_parameter_or<std::vector<double>>(k, d);
-      });
+    obstacle_pts, point_meta, cloud_in_tf, pub_obstacle_cloud_, pub_scan_, use_rgb_, use_intensity_,
+    [this](double x, double y, double z) { return this->make_key(x, y, z); },
+    [this](const std::string & k, const std::vector<double> & d) {
+      return this->get_parameter_or<std::vector<double>>(k, d);
+    });
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char ** argv)
+{
   rclcpp::init(argc, argv);
   auto node = std::make_shared<ObstacleDetectorNode>();
   rclcpp::spin(node);

@@ -4,16 +4,18 @@
 
 #include "horiokart_obstacle_detector_3d/core/cluster_detector.hpp"
 
-using namespace obstacle_detector;
+using obstacle_detector::ClusterDetector;
+using obstacle_detector::PointXYZ;
 
-TEST(ClusterDetectorExpand, ExpandToOriginal) {
+TEST(ClusterDetectorExpand, ExpandToOriginal)
+{
   // create dense original cloud cluster
   std::vector<PointXYZ> original;
   const double PI = std::acos(-1.0);
   for (int i = 0; i < 200; ++i) {
     double ang = (i / 200.0) * 2.0 * PI;
-    original.push_back(PointXYZ{static_cast<float>(0.5 * std::cos(ang)),
-                                static_cast<float>(0.5 * std::sin(ang)), 0.0f});
+    original.push_back(PointXYZ{
+      static_cast<float>(0.5 * std::cos(ang)), static_cast<float>(0.5 * std::sin(ang)), 0.0f});
   }
   // detector will internally downsample when leaf size is set; pass the full
   // original cloud
@@ -28,5 +30,5 @@ TEST(ClusterDetectorExpand, ExpandToOriginal) {
   auto clusters = det.extractClusters(original);
   ASSERT_EQ(clusters.size(), 1u);
   EXPECT_GT(clusters[0].points.size(),
-            50u); // expanded should recover many points
+            50u);  // expanded should recover many points
 }

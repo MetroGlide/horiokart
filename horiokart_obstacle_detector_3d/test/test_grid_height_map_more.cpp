@@ -7,8 +7,9 @@ using obstacle_detector::GridHeightMap;
 using obstacle_detector::PointXYZ;
 
 // Test EMA temporal fusion and observation timeout behavior
-TEST(GridHeightMapMore, EMAAndTimeout) {
-  GridHeightMap g(0.0, 1.0, 0.0, 1.0, 0.5); // 2x2 grid with cell_size 0.5
+TEST(GridHeightMapMore, EMAAndTimeout)
+{
+  GridHeightMap g(0.0, 1.0, 0.0, 1.0, 0.5);  // 2x2 grid with cell_size 0.5
   g.setParameters(2, 1, 2.0, 0.5, 1.0, 0.5, 0.5, 0.2);
 
   // Frame 1: observe cell (0,0) with height 1.0 (two points)

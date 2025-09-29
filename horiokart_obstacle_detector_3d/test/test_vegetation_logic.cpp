@@ -5,7 +5,8 @@
 // Use shared core helpers
 #include "horiokart_obstacle_detector_3d/core/color_utils.hpp"
 
-TEST(VegetationLogic, GreenDetection) {
+TEST(VegetationLogic, GreenDetection)
+{
   // create a packed RGB float for greenish color (R=200,G=255,B=50) -> hue ~76
   // deg
   uint8_t r = 200, g = 255, b = 50;
@@ -23,7 +24,8 @@ TEST(VegetationLogic, GreenDetection) {
   EXPECT_GE(v, 0.2);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char ** argv)
+{
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

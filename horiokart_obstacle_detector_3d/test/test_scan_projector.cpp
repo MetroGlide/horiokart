@@ -9,7 +9,8 @@
 using obstacle_detector::PointXYZ;
 using obstacle_detector::ScanProjector;
 
-TEST(ScanProjector, BasicProjection) {
+TEST(ScanProjector, BasicProjection)
+{
   ScanProjector sp(-1.57, 1.57, 0.1, 10.0);
   std::vector<PointXYZ> pts;
   // point straight ahead (0 rad)

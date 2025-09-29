@@ -1,27 +1,29 @@
 #include <gtest/gtest.h>
 
+#include <random>
+
 #include "horiokart_obstacle_detector_3d/core/cluster_detector.hpp"
 
 using obstacle_detector::ClusterDetector;
 using obstacle_detector::PointXYZ;
-#include <random>
 
 // Helper to generate a cluster of points around center
-static void make_cluster(std::vector<PointXYZ> &out, double cx, double cy,
-                         double cz, int n, double spread) {
+static void make_cluster(
+  std::vector<PointXYZ> & out, double cx, double cy, double cz, int n, double spread)
+{
   thread_local std::mt19937 rng(12345);
   std::uniform_real_distribution<double> ud(-0.5, 0.5);
   for (int i = 0; i < n; ++i) {
     double rx = ud(rng) * spread;
     double ry = ud(rng) * spread;
     double rz = ud(rng) * spread;
-    out.push_back(PointXYZ{static_cast<float>(cx + rx),
-                           static_cast<float>(cy + ry),
-                           static_cast<float>(cz + rz)});
+    out.push_back(PointXYZ{
+      static_cast<float>(cx + rx), static_cast<float>(cy + ry), static_cast<float>(cz + rz)});
   }
 }
 
-TEST(ClusterDetectorTest, ThreeClusters) {
+TEST(ClusterDetectorTest, ThreeClusters)
+{
   std::vector<PointXYZ> pts;
   // seed deterministic RNG inside make_cluster (thread_local)
   make_cluster(pts, 0.0, 0.0, 0.0, 50, 0.1);
@@ -29,17 +31,16 @@ TEST(ClusterDetectorTest, ThreeClusters) {
   make_cluster(pts, 0.0, 2.0, 0.0, 30, 0.1);
 
   ClusterDetector det;
-  det.setParameters(0.3, 10, 1000); // tolerance 0.3
+  det.setParameters(0.3, 10, 1000);  // tolerance 0.3
   auto clusters = det.extractClusters(pts);
   // expect 3 clusters
   EXPECT_EQ(clusters.size(), 3u);
 
   // check centroids are near expected locations (unordered)
-  std::vector<PointXYZ> expected = {
-      {0.0, 0.0, 0.0}, {2.0, 0.0, 0.0}, {0.0, 2.0, 0.0}};
-  for (auto &c : clusters) {
+  std::vector<PointXYZ> expected = {{0.0, 0.0, 0.0}, {2.0, 0.0, 0.0}, {0.0, 2.0, 0.0}};
+  for (auto & c : clusters) {
     bool matched = false;
-    for (auto &e : expected) {
+    for (auto & e : expected) {
       double dx = c.centroid.x - e.x;
       double dy = c.centroid.y - e.y;
       double dz = c.centroid.z - e.z;
@@ -51,4 +52,19 @@ TEST(ClusterDetectorTest, ThreeClusters) {
     }
     EXPECT_TRUE(matched);
   }
+}
+
+TEST(ClusterDetectorTest, DebugMakeClusterOutput)
+{
+  std::vector<PointXYZ> pts;
+  make_cluster(pts, 0.0, 0.0, 0.0, 50, 0.1);
+  make_cluster(pts, 2.0, 0.0, 0.0, 40, 0.1);
+  make_cluster(pts, 0.0, 2.0, 0.0, 30, 0.1);
+
+  // Debug: Print generated points
+  for (const auto & p : pts) {
+    std::cout << "Point: (" << p.x << ", " << p.y << ", " << p.z << ")\n";
+  }
+
+  EXPECT_EQ(pts.size(), 120u);  // Ensure all points are generated
 }

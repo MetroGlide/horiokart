@@ -7,7 +7,8 @@ using obstacle_detector::GridHeightMap;
 using obstacle_detector::PointXYZ;
 
 // Verify small hole is interpolated while a large hole is not
-TEST(GridHeightMapHole, SmallVsLargeHole) {
+TEST(GridHeightMapHole, SmallVsLargeHole)
+{
   // Build a 5x1 grid: x [0..0.5) cell_size=0.1, y single row
   GridHeightMap g(0.0, 0.5, 0.0, 0.1, 0.1);
   // parameters: neighborhood, interpolation params: keep defaults
@@ -18,8 +19,8 @@ TEST(GridHeightMapHole, SmallVsLargeHole) {
 
   // Fill cells 0 and 2 (leaving cell 1 as small hole), and leave cells 3,4 as a
   // large hole
-  g.accumulatePoint(PointXYZ{0.05f, 0.05f, 0.0f}); // cell 0
-  g.accumulatePoint(PointXYZ{0.25f, 0.05f, 0.0f}); // cell 2
+  g.accumulatePoint(PointXYZ{0.05f, 0.05f, 0.0f});  // cell 0
+  g.accumulatePoint(PointXYZ{0.25f, 0.05f, 0.0f});  // cell 2
   // no points in cell 1 -> should be interpolated (small hole)
 
   // cells 3 and 4 remain empty -> large connected hole spanning two cells
@@ -40,7 +41,8 @@ TEST(GridHeightMapHole, SmallVsLargeHole) {
   EXPECT_FALSE(c4.has_observation);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char ** argv)
+{
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

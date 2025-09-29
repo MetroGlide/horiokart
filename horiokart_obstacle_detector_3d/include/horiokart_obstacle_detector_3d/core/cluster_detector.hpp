@@ -4,20 +4,22 @@
 
 #include "horiokart_obstacle_detector_3d/core/types.hpp"
 
-namespace obstacle_detector {
-struct Cluster {
+namespace obstacle_detector
+{
+struct Cluster
+{
   std::vector<PointXYZ> points;
   PointXYZ centroid;
   double volume;
   int id;
 };
 
-class ClusterDetector {
+class ClusterDetector
+{
 public:
   ClusterDetector() = default;
 
-  void setParameters(double cluster_tolerance, int min_cluster_size,
-                     int max_cluster_size);
+  void setParameters(double cluster_tolerance, int min_cluster_size, int max_cluster_size);
 
   /// 任意: ボクセルグリッドによるダウンサンプリングを有効にする（メートル単位の
   /// leaf サイズ）。 0.0 を設定すると無効（デフォルト）。
@@ -33,8 +35,7 @@ public:
   void setExpandToOriginalCloud(bool enable);
 
   // 最小限の API: ベクトル化した点集合からクラスタを抽出する（ヘッドレス実装）
-  std::vector<Cluster>
-  extractClusters(const std::vector<PointXYZ> &points) const;
+  std::vector<Cluster> extractClusters(const std::vector<PointXYZ> & points) const;
 
 private:
   double cluster_tolerance_ = 0.1;
@@ -52,4 +53,4 @@ private:
   bool expand_to_original_cloud_ = false;
 };
 
-} // namespace obstacle_detector
+}  // namespace obstacle_detector
