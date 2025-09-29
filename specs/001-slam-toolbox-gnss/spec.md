@@ -173,6 +173,17 @@ GNSS とローカル自己位置推定の融合により、地図上の自己位
 - Migration: once PoC is validated, port the optimization logic to C++ (re-using the same data models) and provide a single C++ CLI (or library API) for production use.
    - 実装配置: PoC と最終実装は `horiokart_slam` パッケージへ統合する（`app/horiokart_slam/tools` 等に配置）。
 
+## Implementation Policy (project-wide)
+
+- Priority: algorithmic robustness over interactive usability. For the initial and production-focused implementations, prefer proven robust estimation methods (covariance-aware information weighting, IRLS/DCS for outlier handling, lever-arm/yaw joint estimation) and conservative defaults rather than polishing CLI ergonomics or UX features. Usability improvements (rich CLI, GUIs) are secondary and can be added after algorithms and tests are stable.
+- GNSS covariance: assume the provided GNSS input includes horizontal covariance information (either as `position_covariance` in `NavSatFix` or derived from HDOP/VDOP fields). All GNSS-processing code MUST consume and propagate covariance information through interpolation/matching into the `constraints[].cov` field in the posegraph JSON.
+- KartoAdapter requirement: the C++ adapter(s) MUST export all available data from the posegraph and underlying sensors when possible. At minimum the JSON exporter should include:
+   - nodes[]: full timestamp, unique id/state_id, 2D pose (x,y,theta), node-level covariance (if available), any per-node metadata
+   - edges[]: from/to indices or ids, measurement transform (dx,dy,dtheta), edge covariance OR information matrix when available, edge type label (`scan`|`odom`|`loop`), measurement source metadata (e.g., sensor id)
+   - global metadata: map frame, projection (UTM zone), exporter version, timestamp of export
+
+These exporter guarantees are required because downstream optimization and robustification depend on having accurate covariance and provenance information.
+
 ## Build & Test (developer instructions)
 
 - Workspace: All C++ builds and ROS tests for this feature MUST be executed in the ROS2 workspace root: `/root/ros2_ws`.

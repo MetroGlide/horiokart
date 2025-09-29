@@ -42,6 +42,7 @@
 **Project Type**: [single/web/mobile - determines source structure]  
 **Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
 **Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
+**Implementation Prioritization**: Favor algorithmic robustness and correctness over usability polish for the initial and production-focused iterations. This means: prioritize implementing covariance-aware weighting, robust loss and outlier-rejection (IRLS/DCS), and lever-arm estimation before investing in CLI ergonomics or GUIs. Document the rationale and conservative defaults in `quickstart.md`.
 **Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
 
 ## Constitution Check
@@ -72,6 +73,15 @@ specs/[###-feature]/
 ├── quickstart.md        # Phase 1 output (/plan command)
 ├── contracts/           # Phase 1 output (/plan command)
 └── tasks.md             # Phase 2 output (/tasks command - NOT created by /plan)
+
+### KartoAdapter (export requirements)
+
+Implementers MUST ensure the C++ KartoAdapter (or service-based adapter) exports a complete data dump sufficient for offline covariance-aware optimization. At minimum the adapter should include:
+- nodes[]: id, state_id, timestamp, pose [x,y,theta], node-level covariance (if available), sensor/source metadata
+- edges[]: from/to (both id and index if possible), measured transform [dx,dy,dtheta], covariance or information matrix, edge type label, and source metadata
+- metadata: exporter tool/version, map frame, projection info (UTM zone), and generation timestamp
+
+This explicit contract reduces ambiguity for the Python PoC and later C++ optimizer and is a hard requirement for T002 (C++ PoseGraph prototype stabilization).
 ```
 
 ### Source Code (repository root)

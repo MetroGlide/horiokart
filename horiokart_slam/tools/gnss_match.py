@@ -20,6 +20,10 @@ try:
     _HAS_SCIPY = True
 except Exception:
     _HAS_SCIPY = False
+try:
+    import numpy.linalg as la
+except Exception:
+    la = None
 
 
 def _median(lst: List[float]) -> float:
@@ -71,6 +75,83 @@ def _mahalanobis_filter(points: List[Dict[str, Any]], threshold: float = 5.0) ->
     return filtered
 
 
+def _kalman_estimate_at_time(records: List[Dict[str, Any]], t_query: float):
+    """Run a simple Constant-Velocity Kalman Filter over GNSS records (x,y) and return state at t_query.
+
+    Returns (x,y,cov2x2) or raises on failure.
+    """
+    if len(records) == 0:
+        raise RuntimeError('no records')
+    # Build state vector [x, y, vx, vy]
+    # Initialize with first two samples if available
+    times = [r['time'] for r in records]
+    xs = [r['x'] for r in records]
+    ys = [r['y'] for r in records]
+    # basic process noise and measurement noise heuristics
+    q_pos = 0.1
+    q_vel = 1e-2
+    R_base = 1.0
+
+    # state and cov init
+    x = np.array([xs[0], ys[0], 0.0, 0.0], dtype=float)
+    P = np.eye(4) * 1.0
+
+    def F(dt):
+        M = np.eye(4)
+        M[0, 2] = dt
+        M[1, 3] = dt
+        return M
+
+    H = np.zeros((2, 4))
+    H[0, 0] = 1.0
+    H[1, 1] = 1.0
+
+    for i in range(1, len(records)):
+        t0 = times[i - 1]
+        t1 = times[i]
+        dt = t1 - t0
+        if dt <= 0:
+            continue
+        # Predict
+        Fm = F(dt)
+        Q = np.diag([q_pos * dt, q_pos * dt, q_vel * dt, q_vel * dt])
+        x = Fm @ x
+        P = Fm @ P @ Fm.T + Q
+        # Measurement
+        z = np.array([xs[i], ys[i]], dtype=float)
+        R = np.eye(2) * (records[i].get('accuracy', R_base) ** 2)
+        # Update
+        S = H @ P @ H.T + R
+        K = P @ H.T @ np.linalg.inv(S)
+        yv = z - (H @ x)
+        x = x + K @ yv
+        P = (np.eye(4) - K @ H) @ P
+        # If query time falls between t0 and t1, interpolate predict to query
+        if t_query >= t0 and t_query <= t1:
+            dtq = t_query - t1
+            if abs(dtq) < 1e-9:
+                # return current x
+                return float(x[0]), float(x[1]), P[:2, :2]
+            # predict forward dtq from current last state
+            Fq = F(dtq)
+            xq = Fq @ x
+            Pq = Fq @ P @ Fq.T + \
+                np.diag([q_pos * abs(dtq), q_pos * abs(dtq),
+                        q_vel * abs(dtq), q_vel * abs(dtq)])
+            return float(xq[0]), float(xq[1]), Pq[:2, :2]
+
+    # If query after last measurement, predict forward
+    dt_last = t_query - times[-1]
+    if dt_last < 0:
+        # query before first sample: return first
+        return float(xs[0]), float(ys[0]), np.eye(2) * R_base
+    Fq = F(dt_last)
+    xq = Fq @ x
+    Pq = Fq @ P @ Fq.T + np.diag([q_pos * abs(dt_last), q_pos *
+                                 abs(dt_last), q_vel * abs(dt_last), q_vel * abs(dt_last)])
+    return float(xq[0]), float(xq[1]), Pq[:2, :2]
+
+
 def match_posegraph_with_gnss(posegraph: Dict[str, Any], gnss: Dict[str, Any], window: float = 2.0, mad_threshold: float = 3.5, use_y: bool = True, weight_mode: str = 'var_interp', interp_method: str = 'linear', mah_threshold: Optional[float] = None) -> Dict[str, Any]:
     """Associate GNSS samples to posegraph nodes via time-window and linear interpolation.
 
@@ -111,7 +192,8 @@ def match_posegraph_with_gnss(posegraph: Dict[str, Any], gnss: Dict[str, Any], w
         t = node.get('timestamp')
         if t is None:
             continue
-        # find exact or surrounding
+        # apply node-level time offset if present in gnss metadata (handled externally)
+    # find exact or surrounding
         exact = [r for r in records_sorted if abs(r['time'] - t) < 1e-6]
         if exact:
             r = exact[0]
@@ -122,7 +204,7 @@ def match_posegraph_with_gnss(posegraph: Dict[str, Any], gnss: Dict[str, Any], w
                 {'node_idx': idx, 'x': r['x'], 'y': r['y'], 'weight': weight, 'source_time': r['time'], 'dt': dt})
             continue
 
-        # surrounding -> interpolation
+    # surrounding -> interpolation: support spline, kalman, or linear interpolation
         if interp_method == 'spline' and spline_x is not None and spline_y is not None:
             try:
                 x = float(spline_x(t))
@@ -137,15 +219,14 @@ def match_posegraph_with_gnss(posegraph: Dict[str, Any], gnss: Dict[str, Any], w
                 alpha = (t - t0) / (t1 - t0)
                 x = (1 - alpha) * s[0]['x'] + alpha * s[1]['x']
                 y = (1 - alpha) * s[0]['y'] + alpha * s[1]['y']
-        else:
+            # compute weights and cov as in linear case
             s = find_surrounding(t)
-            if s:
-                t0, t1 = s[0]['time'], s[1]['time']
-                if t1 == t0:
-                    continue
-                alpha = (t - t0) / (t1 - t0)
-                x = (1 - alpha) * s[0]['x'] + alpha * s[1]['x']
-                y = (1 - alpha) * s[0]['y'] + alpha * s[1]['y']
+            if not s:
+                continue
+            t0, t1 = s[0]['time'], s[1]['time']
+            if t1 == t0:
+                continue
+            alpha = (t - t0) / (t1 - t0)
             acc0 = s[0].get('accuracy', None)
             acc1 = s[1].get('accuracy', None)
             # choose weight mode
@@ -158,9 +239,9 @@ def match_posegraph_with_gnss(posegraph: Dict[str, Any], gnss: Dict[str, Any], w
                 cov0 = s[0].get('cov')
                 cov1 = s[1].get('cov')
                 if cov0 and cov1 and len(cov0) >= 4 and len(cov1) >= 4:
-                    t0 = cov0[0] + cov0[3]
-                    t1 = cov1[0] + cov1[3]
-                    v = ((1 - alpha) * t0 + alpha * t1)
+                    t0v = cov0[0] + cov0[3]
+                    t1v = cov1[0] + cov1[3]
+                    v = ((1 - alpha) * t0v + alpha * t1v)
                     weight = 1.0 / v if v > 0 else 1.0
                 else:
                     a0 = acc0 if acc0 is not None else 5.0
@@ -176,8 +257,92 @@ def match_posegraph_with_gnss(posegraph: Dict[str, Any], gnss: Dict[str, Any], w
                 weight = 1.0
             dt = min(abs(t - t0), abs(t - t1))
             if dt <= window:
-                constraints.append(
-                    {'node_idx': idx, 'x': x, 'y': y, 'weight': weight, 'source_time': t, 'dt': dt})
+                cov = None
+                cov0 = s[0].get('cov')
+                cov1 = s[1].get('cov')
+                if cov0 and cov1 and len(cov0) >= 4 and len(cov1) >= 4:
+                    try:
+                        c0 = np.array(cov0, dtype=float)
+                        c1 = np.array(cov1, dtype=float)
+                        c0m = c0.reshape((-1,))[:4].reshape((2, 2))
+                        c1m = c1.reshape((-1,))[:4].reshape((2, 2))
+                        cov = (1 - alpha) * c0m + alpha * c1m
+                        cov = cov.tolist()
+                    except Exception:
+                        cov = None
+                constraints.append({'node_idx': idx, 'x': x, 'y': y,
+                                   'weight': weight, 'source_time': t, 'dt': dt, 'cov': cov})
+
+        elif interp_method == 'kalman':
+            try:
+                est_x, est_y, est_cov = _kalman_estimate_at_time(
+                    records_sorted, t)
+            except Exception:
+                continue
+            weight = 1.0
+            cov = None
+            if est_cov is not None:
+                cov = est_cov.tolist()
+                tr = float(np.trace(est_cov))
+                if tr > 0:
+                    weight = 1.0 / tr
+            dt = 0.0
+            constraints.append({'node_idx': idx, 'x': float(est_x), 'y': float(
+                est_y), 'weight': weight, 'source_time': t, 'dt': dt, 'cov': cov})
+
+        else:
+            s = find_surrounding(t)
+            if s:
+                t0, t1 = s[0]['time'], s[1]['time']
+                if t1 == t0:
+                    continue
+                alpha = (t - t0) / (t1 - t0)
+                x = (1 - alpha) * s[0]['x'] + alpha * s[1]['x']
+                y = (1 - alpha) * s[0]['y'] + alpha * s[1]['y']
+                acc0 = s[0].get('accuracy', None)
+                acc1 = s[1].get('accuracy', None)
+                if weight_mode == 'var_interp':
+                    a0 = acc0 if acc0 is not None else 5.0
+                    a1 = acc1 if acc1 is not None else 5.0
+                    var = ((1 - alpha) * a0) ** 2 + (alpha * a1) ** 2
+                    weight = 1.0 / var if var > 0 else 1.0
+                elif weight_mode == 'cov_trace':
+                    cov0 = s[0].get('cov')
+                    cov1 = s[1].get('cov')
+                    if cov0 and cov1 and len(cov0) >= 4 and len(cov1) >= 4:
+                        t0v = cov0[0] + cov0[3]
+                        t1v = cov1[0] + cov1[3]
+                        v = ((1 - alpha) * t0v + alpha * t1v)
+                        weight = 1.0 / v if v > 0 else 1.0
+                    else:
+                        a0 = acc0 if acc0 is not None else 5.0
+                        a1 = acc1 if acc1 is not None else 5.0
+                        var = ((1 - alpha) * a0) ** 2 + (alpha * a1) ** 2
+                        weight = 1.0 / var if var > 0 else 1.0
+                elif weight_mode == 'hdop':
+                    hd0 = s[0].get('hdop', 5.0)
+                    hd1 = s[1].get('hdop', 5.0)
+                    val = (1 - alpha) * hd0 + alpha * hd1
+                    weight = 1.0 / (val ** 2) if val > 0 else 1.0
+                else:
+                    weight = 1.0
+                dt = min(abs(t - t0), abs(t - t1))
+                if dt <= window:
+                    cov = None
+                    cov0 = s[0].get('cov')
+                    cov1 = s[1].get('cov')
+                    if cov0 and cov1 and len(cov0) >= 4 and len(cov1) >= 4:
+                        try:
+                            c0 = np.array(cov0, dtype=float)
+                            c1 = np.array(cov1, dtype=float)
+                            c0m = c0.reshape((-1,))[:4].reshape((2, 2))
+                            c1m = c1.reshape((-1,))[:4].reshape((2, 2))
+                            cov = (1 - alpha) * c0m + alpha * c1m
+                            cov = cov.tolist()
+                        except Exception:
+                            cov = None
+                    constraints.append(
+                        {'node_idx': idx, 'x': x, 'y': y, 'weight': weight, 'source_time': t, 'dt': dt, 'cov': cov})
 
     # Outlier rejection: apply MAD and optionally Mahalanobis on (x,y)
     if constraints:
@@ -216,13 +381,47 @@ def cli():
     parser.add_argument('--no-y-filter', dest='use_y', action='store_false')
     parser.add_argument(
         '--weight-mode', choices=['fixed', 'var_interp', 'cov_trace', 'hdop'], default='var_interp')
+    parser.add_argument(
+        '--interp-method', choices=['linear', 'spline', 'kalman'], default='linear')
+    parser.add_argument('--mah-threshold', type=float, default=None)
+    parser.add_argument('--time-offset', type=float, default=0.0,
+                        help='apply a fixed time offset (seconds) to posegraph timestamps before matching')
+    parser.add_argument('--auto-time-offset', action='store_true',
+                        help='auto-estimate time offset by grid search (range +-5s, step 0.1s)')
     args = parser.parse_args()
     with open(args.posegraph) as f:
         pg = json.load(f)
     with open(args.gnss) as f:
         gnss = json.load(f)
+    # apply fixed time offset to posegraph nodes if requested
+    if abs(args.time_offset) > 0.0:
+        for n in pg.get('nodes', []):
+            if 'timestamp' in n:
+                n['timestamp'] = n['timestamp'] + args.time_offset
+    # auto-time-offset: grid search (coarse)
+    if args.auto_time_offset:
+        best_offset = 0.0
+        best_matches = -1
+        for off in np.arange(-5.0, 5.0 + 1e-9, 0.1):
+            # copy posegraph and shift timestamps
+            pg_copy = json.loads(json.dumps(pg))
+            for n in pg_copy.get('nodes', []):
+                if 'timestamp' in n:
+                    n['timestamp'] = n['timestamp'] + off
+            cons = match_posegraph_with_gnss(pg_copy, gnss, window=args.window, mad_threshold=args.mad_threshold, use_y=args.use_y,
+                                             weight_mode=args.weight_mode, interp_method=args.interp_method, mah_threshold=args.mah_threshold)
+            matches = len(cons.get('constraints', []))
+            if matches > best_matches:
+                best_matches = matches
+                best_offset = off
+        # apply best_offset
+        for n in pg.get('nodes', []):
+            if 'timestamp' in n:
+                n['timestamp'] = n['timestamp'] + best_offset
+        print(
+            f'auto-time-offset selected: {best_offset} s with {best_matches} matches')
     cons = match_posegraph_with_gnss(
-        pg, gnss, window=args.window, mad_threshold=args.mad_threshold, use_y=args.use_y, weight_mode=args.weight_mode)
+        pg, gnss, window=args.window, mad_threshold=args.mad_threshold, use_y=args.use_y, weight_mode=args.weight_mode, interp_method=args.interp_method, mah_threshold=args.mah_threshold)
     with open(args.out, 'w') as f:
         json.dump(cons, f, indent=2)
 
