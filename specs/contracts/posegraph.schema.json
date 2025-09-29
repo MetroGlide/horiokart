@@ -1,0 +1,71 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Posegraph",
+    "type": "object",
+    "required": [
+        "nodes"
+    ],
+    "properties": {
+        "nodes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "id",
+                    "state_id",
+                    "pose",
+                    "timestamp"
+                ],
+                "properties": {
+                    "id": {
+                        "type": "integer"
+                    },
+                    "state_id": {
+                        "type": "integer"
+                    },
+                    "pose": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": {
+                            "type": "number"
+                        }
+                    },
+                    "timestamp": {
+                        "type": "number"
+                    }
+                }
+            }
+        },
+        "edges": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "from",
+                    "to",
+                    "transform"
+                ],
+                "properties": {
+                    "from": {
+                        "type": "integer"
+                    },
+                    "to": {
+                        "type": "integer"
+                    },
+                    "transform": {
+                        "type": "array",
+                        "minItems": 3,
+                        "maxItems": 3,
+                        "items": {
+                            "type": "number"
+                        }
+                    },
+                    "info": {
+                        "type": "array"
+                    }
+                }
+            }
+        }
+    }
+}

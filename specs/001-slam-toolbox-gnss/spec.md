@@ -221,3 +221,9 @@ GNSS とローカル自己位置推定の融合により、地図上の自己位
 - [ ] Requirements generated
 - [ ] Entities identified
 - [ ] Review checklist passed
+
+## Current Implementation Status (repository sync)
+
+- Tasks and the implementation plan for this feature have been committed under `specs/001-slam-toolbox-gnss/`.
+- The task list (`tasks.md`) has been created/updated and includes an ordered set of implementation iterations (T001..T008). See `tasks.md` for per-task details and current statuses (T001: in-progress).
+- A PoC Python optimizer and a C++ Karto adapter prototype exist in the `horiokart_slam` package in the workspace; JSON export of posegraphs and timestamps has been validated on representative datasets. These artifacts should be consulted when implementing the next iterations (gnss_extract/transform/match/optimize).

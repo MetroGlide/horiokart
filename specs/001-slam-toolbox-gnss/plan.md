@@ -226,4 +226,27 @@ Phase 1: data-model.md, contracts/, quickstart.md — Completed (schemas present
 **Gate Status**:
 - Constitution Check: Passed with PARTIAL items (contract tests missing)
 
+## Current Execution State
+
+- The implementation plan (this file) and the feature spec (`spec.md`) are in sync.
+- The task list `tasks.md` was generated and saved. Primary work has started on T001 (contracts validation tests) and prototype artifacts for `karto_adapter` and a Python PoC optimizer exist in the workspace (`horiokart_slam`).
+- Next recommended step (per plan): implement `tools/gnss_extract.py` (T003) after T001 reaches a stable test harness.
+
+## Workspace Implementation Snapshot
+
+Based on the current repository under `src/horiokart/horiokart_slam/`, the following artifacts are present and should be considered part of the implementation baseline:
+
+- C++ adapter & serializer prototypes:
+   - `src/posegraph_serializer/karto_adapter.cpp`, `karto_adapter_test.cpp`, `service_adapter.cpp` — code to read Karto `.data`/.posegraph and export JSON.
+   - `include/horiokart_slam/karto_adapter.hpp`, `posegraph_adapter.hpp`, `service_adapter.hpp` — adapter interfaces and declarations.
+- Python PoC & tools:
+   - `tools/poc_optimize.py` — Python PoC optimizer.
+   - `tools/gnss_match.py`, `tools/gnss_optimize.py`, `tools/gnss_synth.py` — existing helper scripts related to matching/optimization/synthesis.
+- Integration scripts & launchers:
+   - `scripts/run_gnss_fusion.py` — an integration runner script exists (needs wiring/parameterization).
+   - ROS launch files `launch/bringup_slam_toolbox.launch.py`, `launch/record_bag.launch.py` are present to exercise slam_toolbox.
+
+Implication for plan phases:
+- Several Phase 1/Phase 2 artifacts already exist as prototypes; Task statuses should reflect that T002 (C++ serializer) has an implementation in-progress and T005/T006 (matching & optimization) have PoC code present. T003/T004 (gnss extraction & transform) remain to be implemented.
+
 *Based on Constitution v2.2.0 - See `/memory/constitution.md`

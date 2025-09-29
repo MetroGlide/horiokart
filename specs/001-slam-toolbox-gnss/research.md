@@ -22,3 +22,6 @@ Phase 0 research notes resolving NEEDS CLARIFICATION items and recording decisio
 1. Generate data model and JSON/YAML schemas for PoseGraph, GNSSObservation, AlignedMap.
 2. Create quickstart showing CLI usage for the offline optimizer.
 3. Prepare contracts for parsing tools and outputs.
+
+<!-- Feedback appended: prioritize timebase verification and a small PoC toolchain for GNSS extraction/transform/match/optimize. -->
+Feedback: before designing matching internals, verify that posegraph timestamps and NavSatFix `header.stamp` share a compatible epoch/units. Implement PoC toolchain to validate ideas quickly.
