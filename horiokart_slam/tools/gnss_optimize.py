@@ -179,7 +179,7 @@ def residuals_with_edges(z_flat: np.ndarray, nodes_init: np.ndarray, constraints
     return np.array(res)
 
 
-def optimize_posegraph(posegraph: Dict[str, Any], constraints: Dict[str, Any], loss: str = 'huber', f_scale: float = 1.0, edge_weight_scale: float = 1.0, max_nfev: int = 200, cov_regularization: float = 1e-6, include_yaw: bool = False, fix_first_node: bool = True, fix_weight: float = 1e3, angle_weight: float = 1.0):
+def optimize_posegraph(posegraph: Dict[str, Any], constraints: Dict[str, Any], loss: str = 'huber', f_scale: float = 1.0, edge_weight_scale: float = 1.0, max_nfev: int = 200, cov_regularization: float = 1e-6, include_yaw: bool = False, fix_first_node: bool = False, fix_weight: float = 1e3, angle_weight: float = 1.0):
     from scipy.optimize import least_squares
 
     nodes = posegraph.get('nodes', [])
@@ -191,7 +191,13 @@ def optimize_posegraph(posegraph: Dict[str, Any], constraints: Dict[str, Any], l
         pose0[i, 0] = float(p[0])
         pose0[i, 1] = float(p[1])
         pose0[i, 2] = float(p[2]) if len(p) > 2 else 0.0
-    cons = constraints.get('constraints', [])
+    # Accept either a dict {'constraints': [...]} or a direct list of constraints
+    if isinstance(constraints, list):
+        cons = constraints
+    elif isinstance(constraints, dict):
+        cons = constraints.get('constraints', [])
+    else:
+        raise TypeError('constraints must be a list or dict')
 
     edges = posegraph.get('edges', [])
     cov_reg = float(
@@ -272,7 +278,36 @@ def optimize_posegraph(posegraph: Dict[str, Any], constraints: Dict[str, Any], l
                 x_opt[i, 1]), nn.get('pose', [0, 0, 0])[2]]
         out_nodes.append(nn)
     out_pg['nodes'] = out_nodes
-    return out_pg, res
+
+    class OptimizeResult:
+        """Wrapper that behaves like a mapping for out_pg and also unpacks as (out_pg, res)."""
+
+        def __init__(self, out_pg, res):
+            self._out = out_pg
+            self._res = res
+
+        # Mapping-like access
+        def __getitem__(self, key):
+            return self._out[key]
+
+        def get(self, key, default=None):
+            return self._out.get(key, default)
+
+        def keys(self):
+            return self._out.keys()
+
+        def items(self):
+            return self._out.items()
+
+        def __repr__(self):
+            return f"OptimizeResult(out={self._out!r}, res={self._res!r})"
+
+        # allow tuple-unpacking: a, b = OptimizeResult(...)
+        def __iter__(self):
+            yield self._out
+            yield self._res
+
+    return OptimizeResult(out_pg, res)
 
 
 def cli():

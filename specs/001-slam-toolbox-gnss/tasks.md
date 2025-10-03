@@ -142,11 +142,3 @@ T011 — CI & dataset benchmarks
 - パイプラインは CLI で再現可能でログ・統計を出力すること。
 
 ---
-
-## 優先度付きネクストアクション（短期 → 中期）
-
-短期（今日〜数日）
- - A1: `karto_adapter` の JSON を schema 検証する自動テストを追加（T002） — half day。これにより C++ 出力の品質ゲートを作る。
- - A2: `gnss_match` の CLI に `--interp-method` と `--mah-threshold` を追加して運用で切り替え可能にする（T005） — 1–2 hours。関数実装は存在するが CLI 露出が未完。
- - A3: `gnss_optimize` の `edge_weight_scale` は既に CLI 実装済みのため、C++ 側エクスポータとの互換（`from_idx`/`to_idx`, `relative_pose`, `covariance` の安定出力）を確認して統合する（T002/T006 統合タスク） — 1–2 days。
- - A4: `requirements.txt` を CI に反映してユニットテストを CI 上で回す準備（T011） — 30–60 minutes 設定作業。

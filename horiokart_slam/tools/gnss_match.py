@@ -346,21 +346,19 @@ def match_posegraph_with_gnss(posegraph: Dict[str, Any], gnss: Dict[str, Any], w
 
     # Outlier rejection: apply MAD and optionally Mahalanobis on (x,y)
     if constraints:
+        # Use node_idx based filtering to avoid brittle float equality checks.
         if use_y:
-            # filter by both axes using MAD
-            filtered_x = _mad_filter(
-                [c for c in constraints], 'x', threshold=mad_threshold)
-            allowed_x = set([f['x'] for f in filtered_x])
-            filtered_y = _mad_filter(
-                [c for c in constraints], 'y', threshold=mad_threshold)
-            allowed_y = set([f['y'] for f in filtered_y])
-            filtered = [c for c in constraints if (
-                c['x'] in allowed_x and c['y'] in allowed_y)]
+            # filter by both axes using MAD, but keep node indices for lookup
+            filtered_x = _mad_filter([c for c in constraints], 'x', threshold=mad_threshold)
+            allowed_x_idx = set([f['node_idx'] for f in filtered_x if 'node_idx' in f])
+            filtered_y = _mad_filter([c for c in constraints], 'y', threshold=mad_threshold)
+            allowed_y_idx = set([f['node_idx'] for f in filtered_y if 'node_idx' in f])
+            allowed_idx = allowed_x_idx.intersection(allowed_y_idx)
+            filtered = [c for c in constraints if c.get('node_idx') in allowed_idx]
         else:
-            filtered_x = _mad_filter(
-                [c for c in constraints], 'x', threshold=mad_threshold)
-            allowed_x = set([f['x'] for f in filtered_x])
-            filtered = [c for c in constraints if c['x'] in allowed_x]
+            filtered_x = _mad_filter([c for c in constraints], 'x', threshold=mad_threshold)
+            allowed_x_idx = set([f['node_idx'] for f in filtered_x if 'node_idx' in f])
+            filtered = [c for c in constraints if c.get('node_idx') in allowed_x_idx]
         constraints = filtered
         # Mahalanobis-based filtering across remaining constraints if requested
         if mah_threshold is not None and len(constraints) >= 3:
