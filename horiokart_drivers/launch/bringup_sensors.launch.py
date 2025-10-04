@@ -39,7 +39,7 @@ def generate_launch_description():
         "use_ubx_protocol", default="true")
 
     use_rs_d435i_arg = launch_argument_creator.create(
-        "use_rs_d435i", default="false")
+        "use_rs_d435i", default="true")
     use_rs_d435_arg = launch_argument_creator.create(
         "use_rs_d435", default="false")
 
@@ -163,6 +163,7 @@ def generate_launch_description():
                 },
                     os.path.join(pkg_share, "params", "ublox_ubx_gps.yaml"),
                 ],
+                remappings=[("/fix", "/gps/fix")],
                 condition=launch.conditions.IfCondition(
                     launch.substitutions.AndSubstitution(
                         use_gps_arg.launch_config,

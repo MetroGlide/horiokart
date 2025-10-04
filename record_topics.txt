@@ -1,4 +1,5 @@
 /odom
 /scan_top_lidar
-/scan_front_lidar
+/scan_front_lidar_origin
 /nmea_sentence
+/gps/fix
