@@ -79,7 +79,6 @@ def utm_to_map(utm_x, utm_y, transform):
     x, y, yaw = transform
     map_x = x + math.cos(yaw) * utm_x - math.sin(yaw) * utm_y
     map_y = y + math.sin(yaw) * utm_x + math.cos(yaw) * utm_y
-    print(f"utm({utm_x:.2f}, {utm_y:.2f}) -> map({map_x:.2f}, {map_y:.2f})")
     return map_x, map_y
 
 # --- map画像・yamlからorigin, resolution取得 ---
@@ -100,17 +99,28 @@ def mapxy_to_pixel(map_x, map_y, origin, resolution, img_size):
     # map原点は画像左下、画像は左上原点
     px = int((map_x - origin[0]) / resolution)
     py = img_size[1] - int((map_y - origin[1]) / resolution)
-    print(f"map({map_x:.2f}, {map_y:.2f}) -> pixel({px}, {py})")
     return px, py
 
 # --- 透過画像にプロット ---
 
 
-def plot_points_on_transparent(map_points, origin, resolution, img_size, radius=3, color=(255, 0, 0, 255)):
+def plot_points_on_transparent(map_points, navsat_msgs, origin, resolution, img_size, radius=3, color=(255, 0, 0, 255)):
     img = Image.new('RGBA', img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-    for mx, my in map_points:
+    for i, (mx, my) in enumerate(map_points):
         px, py = mapxy_to_pixel(mx, my, origin, resolution, img_size)
+        # 誤差円（2σ, 共分散xyのみ）
+        msg = navsat_msgs[i]
+        if hasattr(msg, 'position_covariance') and msg.position_covariance[0] > 0 and msg.position_covariance[4] > 0:
+            cov_x = msg.position_covariance[0]
+            cov_y = msg.position_covariance[4]
+            sigma_x = math.sqrt(cov_x)
+            sigma_y = math.sqrt(cov_y)
+            # σ楕円をピクセル単位で描画
+            ellipse_rx = int(1 * sigma_x / resolution)
+            ellipse_ry = int(1 * sigma_y / resolution)
+            draw.ellipse([(px-ellipse_rx, py-ellipse_ry), (px+ellipse_rx,
+                         py+ellipse_ry)], outline=(0, 0, 255, 128), width=2)
         draw.ellipse(
             [(px-radius, py-radius), (px+radius, py+radius)], fill=color)
     return img
@@ -118,11 +128,21 @@ def plot_points_on_transparent(map_points, origin, resolution, img_size, radius=
 # --- map画像にプロット ---
 
 
-def plot_points_on_map(map_img, map_points, origin, resolution, radius=3, color=(255, 0, 0, 255)):
+def plot_points_on_map(map_img, map_points, navsat_msgs, origin, resolution, radius=3, color=(255, 0, 0, 255)):
     img = map_img.copy()
     draw = ImageDraw.Draw(img)
-    for mx, my in map_points:
+    for i, (mx, my) in enumerate(map_points):
         px, py = mapxy_to_pixel(mx, my, origin, resolution, img.size)
+        msg = navsat_msgs[i]
+        if hasattr(msg, 'position_covariance') and msg.position_covariance[0] > 0 and msg.position_covariance[4] > 0:
+            cov_x = msg.position_covariance[0]
+            cov_y = msg.position_covariance[4]
+            sigma_x = math.sqrt(cov_x)
+            sigma_y = math.sqrt(cov_y)
+            ellipse_rx = int(1 * sigma_x / resolution)
+            ellipse_ry = int(1 * sigma_y / resolution)
+            draw.ellipse([(px-ellipse_rx, py-ellipse_ry), (px+ellipse_rx,
+                         py+ellipse_ry)], outline=(0, 0, 255, 128), width=2)
         draw.ellipse(
             [(px-radius, py-radius), (px+radius, py+radius)], fill=color)
     return img
@@ -159,8 +179,9 @@ def main():
 
     # 5. 画像生成
     img_trans = plot_points_on_transparent(
-        map_points, origin, resolution, map_img.size)
-    img_on_map = plot_points_on_map(map_img, map_points, origin, resolution)
+        map_points, navsat_msgs, origin, resolution, map_img.size)
+    img_on_map = plot_points_on_map(
+        map_img, map_points, navsat_msgs, origin, resolution)
 
     # 6. 保存
     img_trans.save(os.path.join(args.output_dir,
