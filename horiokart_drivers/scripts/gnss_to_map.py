@@ -176,20 +176,66 @@ def main():
     # 4. map画像・yaml取得
     map_img, origin, resolution = load_map_and_params(
         args.map_img, args.map_yaml)
+    map_w, map_h = map_img.size
 
-    # 5. 画像生成
+    # 5. GNSS点群の描画範囲を計算
+    map_xs = [p[0] for p in map_points]
+    map_ys = [p[1] for p in map_points]
+    min_x = min(min(map_xs), origin[0])
+    max_x = max(max(map_xs), origin[0] + map_w * resolution)
+    min_y = min(min(map_ys), origin[1])
+    max_y = max(max(map_ys), origin[1] + map_h * resolution)
+    margin = 2.0  # [m] 余白
+    min_x -= margin
+    max_x += margin
+    min_y -= margin
+    max_y += margin
+
+    # 6. 新しい画像サイズ・originを計算
+    new_w = int(math.ceil((max_x - min_x) / resolution))
+    new_h = int(math.ceil((max_y - min_y) / resolution))
+    new_origin = [min_x, min_y, origin[2] if len(origin) > 2 else 0.0]
+    print(f"拡張後画像サイズ: {new_w}x{new_h}, origin: {new_origin}")
+
+    # 7. 拡張後ベース画像生成
+    new_img = Image.new('RGBA', (new_w, new_h), (255, 255, 255, 0))
+    # 既存map画像を新しい画像の正しい位置に貼り付け
+    old_offset_x = int((origin[0] - min_x) / resolution)
+    old_offset_y = new_h - int((origin[1] - min_y) / resolution) - map_h
+    new_img.paste(map_img, (old_offset_x, old_offset_y))
+
+    # 8. GNSS点・誤差円を新しい画像上に描画
     img_trans = plot_points_on_transparent(
-        map_points, navsat_msgs, origin, resolution, map_img.size)
+        map_points, navsat_msgs, new_origin, resolution, (new_w, new_h))
     img_on_map = plot_points_on_map(
-        map_img, map_points, navsat_msgs, origin, resolution)
+        new_img, map_points, navsat_msgs, new_origin, resolution)
 
-    # 6. 保存
+    # 9. 保存
     img_trans.save(os.path.join(args.output_dir,
                    'gnss_points_transparent.png'))
     img_on_map.save(os.path.join(args.output_dir, 'gnss_points_on_map.png'))
     save_points_yaml(map_points, os.path.join(
         args.output_dir, 'gnss_points.yaml'))
 
+    # 10. 新しいmap.yamlも保存（ベースマップ情報も追記）
+    base_map_info = {
+        'base_map_image': os.path.basename(args.map_img),
+        'base_map_yaml': os.path.basename(args.map_yaml),
+        'base_map_origin': origin,
+        'base_map_resolution': resolution,
+        'base_map_size': [map_w, map_h],
+    }
+    new_map_yaml = {
+        'image': 'gnss_points_on_map.png',
+        'resolution': resolution,
+        'origin': new_origin,
+        'negate': 0,
+        'occupied_thresh': 0.65,
+        'free_thresh': 0.196,
+        'base_map': base_map_info
+    }
+    with open(os.path.join(args.output_dir, 'gnss_points_on_map.yaml'), 'w') as f:
+        yaml.safe_dump(new_map_yaml, f)
     print("Complete!")
 
 
