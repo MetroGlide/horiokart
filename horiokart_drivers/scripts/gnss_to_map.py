@@ -1,14 +1,69 @@
-
 import os
-import math
-import yaml
-import pyproj
-import numpy as np
+import argparse
 from PIL import Image, ImageDraw
+import numpy as np
+import pyproj
+import yaml
+import math
+
+
+def extract_navstatus_from_bag(bag_path, topic):
+    try:
+        import rosbag2_py
+    except ImportError:
+        raise ImportError(
+            "rosbag2_pyが必要です。pip install rosbag2_py でインストールしてください。")
+    from ublox_msgs.msg import NavSTATUS
+    import rclpy.serialization
+    from rclpy.serialization import deserialize_message
+
+    storage_options = rosbag2_py.StorageOptions(
+        uri=bag_path, storage_id='sqlite3')
+    converter_options = rosbag2_py.ConverterOptions('', '')
+    reader = rosbag2_py.SequentialReader()
+    reader.open(storage_options, converter_options)
+    topic_types = reader.get_all_topics_and_types()
+    type_map = {t.name: t.type for t in topic_types}
+
+    msgs = []
+    while reader.has_next():
+        (topic_name, data, t) = reader.read_next()
+        if topic_name == topic:
+            msg = deserialize_message(data, NavSTATUS)
+            msgs.append(msg)
+    return msgs
+
+
+# NavStatusのgps_fix値ごとの色定義
+GPS_FIX_COLORS = {
+    0: (128, 128, 128, 255),  # NO_FIX: gray
+    1: (255, 255, 0, 255),   # DEAD_RECKONING_ONLY: yellow
+    2: (0, 128, 255, 255),   # 2D_FIX: blue
+    3: (0, 255, 0, 255),     # 3D_FIX: green
+    4: (128, 0, 255, 255),   # GPS+DR: purple
+    5: (255, 0, 0, 255),     # TIME_ONLY_FIX: red
+}
+
+
+def match_navstatus_to_navsatfix(navsat_msgs, navstatus_msgs):
+    # NavSatFix.header.stamp.sec/nanosecとNavStatus.i_tow(ミリ秒)で最も近いものを紐付け
+    def navsatfix_time(msg):
+        return msg.header.stamp.sec * 1e3 + msg.header.stamp.nanosec / 1e6
+
+    def navstatus_time(msg):
+        return msg.i_tow
+    navstatus_sorted = sorted(navstatus_msgs, key=navstatus_time)
+    result = []
+    for nav in navsat_msgs:
+        t = navsatfix_time(nav)
+        # 最も近いNavStatusを探す
+        closest = min(navstatus_sorted, key=lambda ns: abs(
+            navstatus_time(ns)-t)) if navstatus_sorted else None
+        result.append(closest)
+    return result
 
 
 # --- argparseでパラメータ受け取り ---
-import argparse
 
 
 def parse_args():
@@ -104,19 +159,20 @@ def mapxy_to_pixel(map_x, map_y, origin, resolution, img_size):
 # --- 透過画像にプロット ---
 
 
-def plot_points_on_transparent(map_points, navsat_msgs, origin, resolution, img_size, radius=3, color=(255, 0, 0, 255)):
+def plot_points_on_transparent(map_points, navsat_msgs, navstatus_msgs, origin, resolution, img_size, radius=3):
     img = Image.new('RGBA', img_size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     for i, (mx, my) in enumerate(map_points):
         px, py = mapxy_to_pixel(mx, my, origin, resolution, img_size)
-        # 誤差円（2σ, 共分散xyのみ）
         msg = navsat_msgs[i]
+        navstatus = navstatus_msgs[i] if navstatus_msgs else None
+        color = GPS_FIX_COLORS.get(
+            getattr(navstatus, 'gps_fix', None), (255, 0, 0, 255))
         if hasattr(msg, 'position_covariance') and msg.position_covariance[0] > 0 and msg.position_covariance[4] > 0:
             cov_x = msg.position_covariance[0]
             cov_y = msg.position_covariance[4]
             sigma_x = math.sqrt(cov_x)
             sigma_y = math.sqrt(cov_y)
-            # σ楕円をピクセル単位で描画
             ellipse_rx = int(1 * sigma_x / resolution)
             ellipse_ry = int(1 * sigma_y / resolution)
             draw.ellipse([(px-ellipse_rx, py-ellipse_ry), (px+ellipse_rx,
@@ -128,12 +184,15 @@ def plot_points_on_transparent(map_points, navsat_msgs, origin, resolution, img_
 # --- map画像にプロット ---
 
 
-def plot_points_on_map(map_img, map_points, navsat_msgs, origin, resolution, radius=3, color=(255, 0, 0, 255)):
+def plot_points_on_map(map_img, map_points, navsat_msgs, navstatus_msgs, origin, resolution, radius=3):
     img = map_img.copy()
     draw = ImageDraw.Draw(img)
     for i, (mx, my) in enumerate(map_points):
         px, py = mapxy_to_pixel(mx, my, origin, resolution, img.size)
         msg = navsat_msgs[i]
+        navstatus = navstatus_msgs[i] if navstatus_msgs else None
+        color = GPS_FIX_COLORS.get(
+            getattr(navstatus, 'gps_fix', None), (255, 0, 0, 255))
         if hasattr(msg, 'position_covariance') and msg.position_covariance[0] > 0 and msg.position_covariance[4] > 0:
             cov_x = msg.position_covariance[0]
             cov_y = msg.position_covariance[4]
@@ -164,6 +223,13 @@ def main():
     # 1. rosbagからNavSatFix抽出
     navsat_msgs = extract_navsatfix_from_bag(args.bag, args.topic)
     print(f"NavSatFix msgs: {len(navsat_msgs)}件")
+
+    # NavStatusトピック名（仮: /ublox_gps/navstatus）
+    navstatus_topic = '/navstatus'
+    navstatus_msgs = extract_navstatus_from_bag(args.bag, navstatus_topic)
+    print(f"NavStatus msgs: {len(navstatus_msgs)}件")
+    navstatus_for_navsat = match_navstatus_to_navsatfix(
+        navsat_msgs, navstatus_msgs)
 
     # 2. GNSS→UTM
     utm_proj = pyproj.Proj(proj='utm', zone=args.utm_zone,
@@ -204,11 +270,11 @@ def main():
     old_offset_y = new_h - int((origin[1] - min_y) / resolution) - map_h
     new_img.paste(map_img, (old_offset_x, old_offset_y))
 
-    # 8. GNSS点・誤差円を新しい画像上に描画
+    # 8. GNSS点・誤差円を新しい画像上に描画（NavStatus色分け対応）
     img_trans = plot_points_on_transparent(
-        map_points, navsat_msgs, new_origin, resolution, (new_w, new_h))
+        map_points, navsat_msgs, navstatus_for_navsat, new_origin, resolution, (new_w, new_h))
     img_on_map = plot_points_on_map(
-        new_img, map_points, navsat_msgs, new_origin, resolution)
+        new_img, map_points, navsat_msgs, navstatus_for_navsat, new_origin, resolution)
 
     # 9. 保存
     img_trans.save(os.path.join(args.output_dir,
