@@ -99,6 +99,9 @@ class GNSSOdometryNode(Node):
             'static_transform': self.declare_parameter('static_transform', None).get_parameter_value().double_array_value,
             'map_frame_id': self.declare_parameter('map_frame_id', 'map').get_parameter_value().string_value,
             'gps_frame_id': self.declare_parameter('gps_frame_id', 'gps_link').get_parameter_value().string_value,
+
+            'is_test_data': self.declare_parameter('is_test_data', False).get_parameter_value().bool_value,
+
             # 対応点リストはlist of [utm_x, utm_y, odom_x, odom_y]で与える
             'correspondences': [
                 # [UTM座標系(x, y), map座標系(x, y)]
@@ -107,18 +110,21 @@ class GNSSOdometryNode(Node):
                 [416853.546224, 3993538.449184, 0.130025, 0.25998],
                 [416894.135621, 3993535.301766, -1.970327, 40.691986],
                 [416895.132355, 3993565.376684, -31.059014, 37.89707],
+            ],
+        }
 
-
+        if params.get('is_test_data'):
+            params['correspondences'] = [
                 # 平行移動+回転（45度, x=1, y=2）を含む理想的なテストデータ
                 # UTM座標 (x, y) → map座標 (x', y')
                 # x' = 1 + cos(π/4)*x - sin(π/4)*y
                 # y' = 2 + sin(π/4)*x + cos(π/4)*y
-                # [0.0, 0.0, 1.0, 2.0],
-                # [1.0, 0.0, 1.0 + math.sqrt(2)/2, 2.0 + math.sqrt(2)/2],
-                # [0.0, 1.0, 1.0 - math.sqrt(2)/2, 2.0 + math.sqrt(2)/2],
-                # [1.0, 1.0, 1.0, 2.0 + math.sqrt(2)],
-            ],
-        }
+                [0.0, 0.0, 1.0, 2.0],
+                [1.0, 0.0, 1.0 + math.sqrt(2)/2, 2.0 + math.sqrt(2)/2],
+                [0.0, 1.0, 1.0 - math.sqrt(2)/2, 2.0 + math.sqrt(2)/2],
+                [1.0, 1.0, 1.0, 2.0 + math.sqrt(2)],
+            ]
+
         self.transform_manager = TransformManager(params)
         self.odom_manager = OdometryManager(params)
 
@@ -144,7 +150,7 @@ class GNSSOdometryNode(Node):
             if est is not None:
                 self.transform_manager.set_static_transform(*est)
                 self.get_logger().info(
-                    f"static_transform estimated from correspondences: x={est[0]:.3f}, y={est[1]:.3f}, yaw={est[2]:.3f}")
+                    f"static_transform estimated from correspondences: x={est[0]:.6f}, y={est[1]:.6f}, yaw={est[2]:.6f}")
 
             else:
                 self.transform_manager.static_transform = (0.0, 0.0, 0.0)
@@ -204,11 +210,11 @@ class GNSSOdometryNode(Node):
 
         # utm_to_mapで変換
         map_x, map_y = self.utm_to_map(utm_x, utm_y)
-        self.publish_odometry(map_x, map_y)
+        self.publish_odometry(map_x, map_y, navsat_msg=msg)
         self.get_logger().info(
             f"GNSS UTM: ({utm_x:.3f}, {utm_y:.3f}) => map: ({map_x:.3f}, {map_y:.3f})")
 
-    def publish_odometry(self, map_x, map_y):
+    def publish_odometry(self, map_x, map_y, navsat_msg=None):
         # map座標系でOdometryをpublish
         odom = Odometry()
         odom.header.stamp = self.get_clock().now().to_msg()
@@ -222,14 +228,27 @@ class GNSSOdometryNode(Node):
         odom.pose.pose.orientation.y = q[1]
         odom.pose.pose.orientation.z = q[2]
         odom.pose.pose.orientation.w = q[3]
-        odom.pose.covariance = [
-            1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
-            0.0, 0.0, 9999.0, 0.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 9999.0, 0.0, 0.0,
-            0.0, 0.0, 0.0, 0.0, 9999.0, 0.0,
-            0.0, 0.0, 0.0, 0.0, 0.0, 9999.0
-        ]
+        # 共分散反映
+        if navsat_msg is not None and hasattr(navsat_msg, 'position_covariance'):
+            cov = navsat_msg.position_covariance
+            # NavSatFixの共分散は3x3(row major)→Odometryの6x6(row major)へ
+            odom.pose.covariance = [
+                cov[0], cov[1], cov[2], 0.0, 0.0, 0.0,
+                cov[3], cov[4], cov[5], 0.0, 0.0, 0.0,
+                cov[6], cov[7], cov[8], 0.0, 0.0, 0.0,
+                0.0,   0.0,   0.0,   9999.0, 0.0, 0.0,
+                0.0,   0.0,   0.0,   0.0,   9999.0, 0.0,
+                0.0,   0.0,   0.0,   0.0,   0.0,   9999.0
+            ]
+        else:
+            odom.pose.covariance = [
+                1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 9999.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 9999.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 9999.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 9999.0
+            ]
         self.odom_pub.publish(odom)
 
     def utm_to_map(self, utm_x, utm_y):
