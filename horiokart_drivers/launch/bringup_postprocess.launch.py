@@ -78,21 +78,18 @@ def generate_launch_description():
 
             Node(
                 package=pkg_name,
-                executable="gps_transform_node.py",
-                name="gps_transform_node",
+                executable="gnss_odometry_node.py",
+                name="gnss_odometry_node",
                 output="screen",
                 parameters=[{
                     "use_sim_time": simulation_arg.launch_config,
-
-                    "gps_frame_id": "gps_link",
-                    "robot_base_frame_id": "base_footprint",
                     "map_frame_id": "map",
-
-                    "utm_param_yaml_path": "/root/ros2_data/map/utm_to_map_refpoint.yaml",
+                    "gps_frame_id": "gps_link",
                 }],
                 condition=launch.conditions.IfCondition(
                     use_gps_arg.launch_config),
             ),
+
         ]
     )
 
