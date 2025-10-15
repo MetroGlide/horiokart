@@ -137,7 +137,7 @@ class GNSSOdometryNode(Node):
             self.tf_buffer, self, spin_thread=False)
         self.tf_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
 
-        self.odom_pub = self.create_publisher(Odometry, '/gnss/odom', 10)
+        self.odom_pub = self.create_publisher(Odometry, '/odom/gnss', 10)
 
         # サブスクライバ
         self.gnss_sub = self.create_subscription(
