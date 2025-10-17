@@ -12,9 +12,6 @@ find_package(action_msgs REQUIRED)
 
 nav2_package()
 
-# TODO(jwallace42): This is a work around for https://github.com/ros2/rosidl_typesupport_fastrtps/issues/28
-add_compile_options(-Wno-error=deprecated)
-
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/CollisionMonitorState.msg"
   "msg/CollisionDetectorState.msg"
@@ -27,18 +24,27 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/BehaviorTreeLog.msg"
   "msg/Particle.msg"
   "msg/ParticleCloud.msg"
+  "msg/Route.msg"
+  "msg/RouteNode.msg"
+  "msg/RouteEdge.msg"
+  "msg/EdgeCost.msg"
   "srv/GetCostmap.srv"
   "srv/IsPathValid.srv"
   "srv/ClearCostmapExceptRegion.srv"
   "srv/ClearCostmapAroundRobot.srv"
   "srv/ClearEntireCostmap.srv"
+  "srv/DynamicEdges.srv"
   "srv/ManageLifecycleNodes.srv"
   "srv/LoadMap.srv"
   "srv/SaveMap.srv"
+  "srv/SetInitialPose.srv"
+  "srv/SetRouteGraph.srv"
   "action/AssistedTeleop.action"
   "action/BackUp.action"
   "action/ComputePathToPose.action"
   "action/ComputePathThroughPoses.action"
+  "action/ComputeRoute.action"
+  "action/ComputeAndTrackRoute.action"
   "action/DriveOnHeading.action"
   "action/SmoothPath.action"
   "action/FollowPath.action"
