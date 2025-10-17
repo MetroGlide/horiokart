@@ -106,11 +106,8 @@ class GNSSOdometryNode(Node):
             # 対応点リストはlist of [utm_x, utm_y, odom_x, odom_y]で与える
             'correspondences': [
                 # [UTM座標系(x, y), map座標系(x, y)]
-                [416852.97,  3993538.49, 0.130, 0.26],
-                [416894.552, 3993556.40, -22.886, 37.79],
-                [416853.546224, 3993538.449184, 0.130025, 0.25998],
-                [416894.135621, 3993535.301766, -1.970327, 40.691986],
-                [416895.132355, 3993565.376684, -31.059014, 37.89707],
+                [416860.455628, 3993538.760756, 19.648010, 21.072767],
+                [416896.252099, 3993539.142067, 18.218765, 56.421684],
             ],
         }
 
@@ -138,7 +135,7 @@ class GNSSOdometryNode(Node):
             self.tf_buffer, self, spin_thread=False)
         self.tf_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
 
-        self.odom_pub = self.create_publisher(Odometry, '/odom/gnss', 10)
+        self.odom_pub = self.create_publisher(Odometry, '/odom/gps', 10)
 
         # サブスクライバ
         self.gnss_sub = self.create_subscription(
@@ -205,15 +202,15 @@ class GNSSOdometryNode(Node):
                 map_x_cur = trans.transform.translation.x
                 map_y_cur = trans.transform.translation.y
                 self.get_logger().info(
-                    f"[No correspondences] GNSS UTM: ({utm_x:.3f}, {utm_y:.3f}), Current gps_link in map: ({map_x_cur:.3f}, {map_y_cur:.3f})")
+                    f"[No correspondences] GNSS UTM: ({utm_x:.6f}, {utm_y:.6f}), Current gps_link in map: ({map_x_cur:.6f}, {map_y_cur:.6f}) To copy [{utm_x:.6f}, {utm_y:.6f}, {map_x_cur:.6f}, {map_y_cur:.6f}]")
             except Exception as e:
                 self.get_logger().warn(f"TF lookup failed: {e}")
 
         # utm_to_mapで変換
         map_x, map_y = self.utm_to_map(utm_x, utm_y)
         self.publish_odometry(map_x, map_y, navsat_msg=msg)
-        self.get_logger().info(
-            f"GNSS UTM: ({utm_x:.3f}, {utm_y:.3f}) => map: ({map_x:.3f}, {map_y:.3f})")
+        # self.get_logger().info(
+        #     f"GNSS UTM: ({utm_x:.3f}, {utm_y:.3f}) => map: ({map_x:.3f}, {map_y:.3f})")
 
     def publish_odometry(self, map_x, map_y, navsat_msg=None):
         # map座標系でOdometryをpublish
