@@ -93,7 +93,7 @@ class GNSSOdometryNode(Node):
     # TODO: GNSS/Odometry受信異常時のエラーハンドリングを追加
     # TODO: パラメータ（UTMゾーン、サンプル数上限など）の柔軟化
     def __init__(self):
-        super().__init__('gnss_odometory_node')
+        super().__init__('gnss_odometry_node')
         # パラメータ取得
         params = {
             'static_transform': self.declare_parameter('static_transform', None).get_parameter_value().double_array_value,
