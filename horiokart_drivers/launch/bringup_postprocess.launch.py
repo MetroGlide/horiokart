@@ -22,6 +22,8 @@ def generate_launch_description():
         "use_odom", default="true")
     use_odom_tf_arg = launch_argument_creator.create(
         "use_odom_tf", default="true")
+    use_realsense_arg = launch_argument_creator.create(
+        "use_realsense", default="false")
     use_lidar_arg = launch_argument_creator.create(
         "use_lidar", default="true")
     use_gps_arg = launch_argument_creator.create(
@@ -88,6 +90,37 @@ def generate_launch_description():
                 }],
                 condition=launch.conditions.IfCondition(
                     use_gps_arg.launch_config),
+            ),
+
+            # for converting Realsense pointcloud to laser scan
+            Node(
+                package="pointcloud_to_laserscan",
+                executable="pointcloud_to_laserscan_node",
+                name="pointcloud_to_laserscan_node",
+                output="screen",
+                parameters=[{
+                    "target_frame": "base_footprint",
+                    "transform_tolerance": 0.5,
+                    "min_height": 0.2,
+                    "max_height": 0.5,
+                    "angle_min": -3.14,
+                    "angle_max": 3.14,
+                    "angle_increment": 0.0058,
+                    "scan_time": 0.1,
+                    "range_min": 0.05,
+                    "range_max": 8.0,
+                    # "use_sim_time": simulation_arg.launch_config,
+                    "use_sim_time": True,
+                    "use_inf": True,
+                    "inf_epsilon": 1.0,
+                }],
+                remappings=[
+                    ("cloud_in", "/camera/camera/depth/color/points"),
+                    ("scan", "/scan_from_realsense"),
+                ],
+                condition=launch.conditions.IfCondition(
+                    use_realsense_arg.launch_config
+                )
             ),
 
         ]
