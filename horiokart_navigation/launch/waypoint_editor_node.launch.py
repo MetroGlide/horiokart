@@ -80,7 +80,8 @@ def generate_launch_description():
     map_dir_arg = os.environ["MAP_PATH"]
 
     load_waypoints_yaml_path = launch_argument_creator.create(
-        'load_path', default=""
+        # 'load_path', default=""
+        'load_path', default="/root/ros2_data/map/waypoint.yaml"
     )
     save_waypoints_yaml_path = launch_argument_creator.create(
         'save_path', default=EnvironmentVariable("WAYPOINT_PATH")
@@ -91,7 +92,6 @@ def generate_launch_description():
     #     'map_list_name', default="map_list.txt"
     # )
     map_list_name = "map_list.txt"
-
 
     with open(os.path.join(map_dir_arg, map_list_name), 'r') as file:
         map_list = [map_name.strip() for map_name in file.readlines()]
