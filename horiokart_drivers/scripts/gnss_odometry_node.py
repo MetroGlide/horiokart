@@ -78,8 +78,9 @@ class TransformManager:
 class OdometryManager:
     def __init__(self, params):
         self.gps_frame = params.get('gps_frame_id', 'gps_link')
+        utm_zone = params.get('utm_zone', 54)  # UTMゾーンをパラメータ化（デフォルト: 54）
         self.utm_proj = pyproj.Proj(
-            proj='utm', zone=54, ellps='WGS84', south=False)  # zoneは適宜変更
+            proj='utm', zone=utm_zone, ellps='WGS84', south=False)
 
     def gnss_to_utm(self, gnss_msg):
         # WGS84緯度経度→UTM座標
