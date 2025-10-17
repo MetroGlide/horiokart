@@ -231,13 +231,19 @@ class WaypointsFollowerNode(Node):
 
         load_path = self.declare_parameter(
             # 'load_path', "/root/ros2_data/new_waypoints.yaml").value
-            'load_path', "/root/ros2_data/map/waypoints_list.yaml").value
+            # 'load_path', "/root/ros2_data/map/waypoints_list.yaml").value
+            'load_path', "/root/ros2_data/map/waypoint.yaml").value
 
         self.through_point_tolerance = self.declare_parameter(
             'through_point_tolerance', 3.0).value
 
         self.waypoint_manager = WaypointManager.load_waypoints_from_file(
             load_path, node=self)
+
+        if self.waypoint_manager is None:
+            self.get_logger().error(
+                f"Failed to load waypoints. Load from file: {load_path}")
+            return
 
         self._tf_buffer = Buffer()
         self._tf_listener = TransformListener(self._tf_buffer, self)
@@ -491,7 +497,8 @@ class WaypointsFollowerNode(Node):
         request = SetBool.Request()
         request.data = state
 
-        future = self._change_gps_resistration_state_srv_client.call_async(request)
+        future = self._change_gps_resistration_state_srv_client.call_async(
+            request)
 
         self._on_reached_actions_progress_list.append(
             self.ServiceFuture(
@@ -501,7 +508,6 @@ class WaypointsFollowerNode(Node):
                 callback=self._change_gps_resistration_state_callback
             )
         )
-
 
     def _on_reached_action_front_lidar_on_off(self, waypoint: Waypoint, state: bool):
         self._change_front_lidar_publish_state_srv_client.wait_for_service()
