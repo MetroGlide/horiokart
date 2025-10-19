@@ -35,7 +35,7 @@ def generate_launch_description():
                 parameters=[{
                     "motor_driver.device_name": device_name_arg.launch_config,
                     "motor_driver.wheel_pitch": 0.358,  # m
-                    "motor_driver.max_speed": 0.4,  # m/s
+                    "motor_driver.max_speed": 1.0,  # m/s
                 }],
             ),
         ]

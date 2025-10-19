@@ -164,7 +164,7 @@ controller_server:
       # y軸方向の最小速度を指定します。
       min_vel_y: 0.0
       # x軸方向の最大速度を指定します。
-      max_vel_x: 0.5
+      max_vel_x: 1.0
       # y軸方向の最大速度を指定します。
       max_vel_y: 0.0
       # 角速度の最大値を指定します。
@@ -173,7 +173,7 @@ controller_server:
       # xy平面上の最小速度を指定します。
       min_speed_xy: 0.0
       # xy平面上の最大速度を指定します。
-      max_speed_xy: 0.5
+      max_speed_xy: 1.0
       # 角速度の最小値を指定します。
       min_speed_theta: 0.0 # 0.0
       # x軸方向の加速度の最大値を指定します。
@@ -553,7 +553,8 @@ collision_detector:
       visualize: True
       polygon_pub_topic: "~/polygon_rear"
 
-    observation_sources: ["scan_top", "scan_front"]
+    # observation_sources: ["scan_top", "scan_front"]
+    observation_sources: ["scan_top"]
     scan_top:
       type: "scan"
       topic: "scan_top_lidar"
