@@ -23,7 +23,7 @@ def generate_launch_description():
     use_odom_tf_arg = launch_argument_creator.create(
         "use_odom_tf", default="true")
     use_realsense_arg = launch_argument_creator.create(
-        "use_realsense", default="false")
+        "use_realsense", default="true")
     use_lidar_arg = launch_argument_creator.create(
         "use_lidar", default="true")
     use_gps_arg = launch_argument_creator.create(
@@ -101,14 +101,14 @@ def generate_launch_description():
                 parameters=[{
                     "target_frame": "base_footprint",
                     "transform_tolerance": 0.5,
-                    "min_height": 0.2,
-                    "max_height": 0.5,
+                    "min_height": 0.3,
+                    "max_height": 1.5,
                     "angle_min": -3.14,
                     "angle_max": 3.14,
                     "angle_increment": 0.0058,
                     "scan_time": 0.1,
-                    "range_min": 0.05,
-                    "range_max": 8.0,
+                    "range_min": 0.01,
+                    "range_max": 3.0,
                     # "use_sim_time": simulation_arg.launch_config,
                     "use_sim_time": True,
                     "use_inf": True,
