@@ -396,6 +396,10 @@ class WaypointEditorNode(Node):
         return file_path
 
     def load_waypoints_from_file(self, file_path):
+        if not os.path.exists(file_path):
+            self.get_logger().error(f"File {file_path} does not exist.")
+            return
+
         loader = WaypointsLoader(file_path)
         self._interactive_waypoints_manager = InteractiveWaypointsManager.from_waypoint_list(
             loader.load(),
