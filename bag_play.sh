@@ -9,8 +9,9 @@ default_bag_dir="./"
 
 # コマンドライン引数の解析
 
-# -d: bagディレクトリ名, -f: トピックリストファイル, -s: use_sim_time
-while getopts ":d:f:s" opt; do
+
+# -d: bagディレクトリ名, -f: トピックリストファイル, -s: use_sim_time, -o: 開始時間オフセット（秒）
+while getopts ":d:f:so:" opt; do
   case $opt in
     d)
       bag_dir="$OPTARG"
@@ -20,6 +21,9 @@ while getopts ":d:f:s" opt; do
       ;;
     s)
       use_sim_time=true
+      ;;
+    o)
+      start_offset="$OPTARG"
       ;;
     \?)
       echo "Invalid option: -$OPTARG" >&2
@@ -48,10 +52,14 @@ while IFS= read -r line; do
   fi
 done < "$topics_file"
 
+
 # ros2 bag playコマンドのビルド
 play_cmd="ros2 bag play \"$bag_dir\""
 if [ "$use_sim_time" = true ]; then
   play_cmd+=" --clock"
+fi
+if [ -n "$start_offset" ]; then
+  play_cmd+=" --start-offset $start_offset"
 fi
 
 # --topics オプションでトピックを指定
