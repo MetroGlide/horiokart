@@ -8,9 +8,12 @@ amcl:
     scan_topic: /scan_top_lidar
     laser_max_range: -1.0 # Maximum scan range to be considered, -1.0 will cause the laser’s reported maximum range to be used.
     laser_min_range: -1.0 # Minimum scan range to be considered, -1.0 will cause the laser’s reported minimum range to be used.
-    max_beams: 1000 # How many evenly-spaced beams in each scan to be used when updating the filter.
-    max_particles: 2000
-    min_particles: 500
+    # max_beams: 1000 # How many evenly-spaced beams in each scan to be used when updating the filter.
+    # max_particles: 2000
+    # min_particles: 500
+    max_beams: 1500 # How many evenly-spaced beams in each scan to be used when updating the filter.
+    max_particles: 5000
+    min_particles: 1000
 
     # For filter update rates
     update_min_a: 0.2 # Rotational movement required before performing a filter update.
@@ -22,6 +25,7 @@ amcl:
 
     robot_model_type: "nav2_amcl::DifferentialMotionModel"
     alpha1: 0.2 # Expected process noise in odometry's rotation estimate from rotation (rad)
+    # alpha1: 1.0 # Expected process noise in odometry's rotation estimate from rotation (rad)
     alpha2: 0.2 # Expected process noise in odometry's rotation estimate from translation (rad)
     alpha3: 0.2 # Expected process noise in odometry's translation estimate from translation (m)
     alpha4: 0.2 # Expected process noise in odometry's translation estimate from rotation (m)
@@ -31,11 +35,14 @@ amcl:
 
     # model params are the same for all laser models
     sigma_hit: 0.2 # Standard deviation for Gaussian model used in z_hit part of the model.
-    z_hit: 0.5 # Mixture weight for z_hit part of model, sum of all used z weight must be 1. Beam uses all 4, likelihood model uses z_hit and z_rand..
-    z_rand: 0.5 # Mixture weight for z_rand part of model, sum of all used z weight must be 1. Beam uses all 4, likelihood model uses z_hit and z_rand..
+    # z_hit: 0.5 # Mixture weight for z_hit part of model, sum of all used z weight must be 1. Beam uses all 4, likelihood model uses z_hit and z_rand..
+    # z_rand: 0.5 # Mixture weight for z_rand part of model, sum of all used z weight must be 1. Beam uses all 4, likelihood model uses z_hit and z_rand..
+    z_hit: 0.7 # Mixture weight for z_hit part of model, sum of all used z weight must be 1. Beam uses all 4, likelihood model uses z_hit and z_rand..
+    z_rand: 0.3 # Mixture weight for z_rand part of model, sum of all used z weight must be 1. Beam uses all 4, likelihood model uses z_hit and z_rand..
 
     # only for likelihood_field model
-    laser_likelihood_max_dist: 2.0 # Maximum distance to do obstacle inflation on map, for use in likelihood_field model.
+    # laser_likelihood_max_dist: 2.0 # Maximum distance to do obstacle inflation on map, for use in likelihood_field model.
+    laser_likelihood_max_dist: 15.0 # Maximum distance to do obstacle inflation on map, for use in likelihood_field model.
 
     # only for beam model
     z_max: 0.05 # Mixture weight for z_max part of model, sum of all used z weight must be 1. Beam uses all 4, likelihood model uses z_hit and z_rand.
