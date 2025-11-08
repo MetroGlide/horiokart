@@ -17,6 +17,8 @@ class OnReachedAction(enum.Enum):
     AMCL_OFF = "amcl_off"
     GPS_ON = "gps_on"
     GPS_OFF = "gps_off"
+    # TODO: work in progress
+    WAIT_ALL_ACTION_DONE = "wait_all_action_done"
 
     @classmethod
     def get_all_values(cls):

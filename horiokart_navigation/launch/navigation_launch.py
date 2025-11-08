@@ -220,6 +220,7 @@ def generate_launch_description():
                 executable='lifecycle_manager',
                 name='lifecycle_manager_navigation',
                 output='screen',
+                emulate_tty=True,
                 arguments=['--ros-args', '--log-level', log_level],
                 parameters=[{'use_sim_time': use_sim_time},
                             {'autostart': autostart},
@@ -298,6 +299,7 @@ def generate_launch_description():
                 name='lifecycle_manager_navigation',
                 parameters=[{'use_sim_time': use_sim_time,
                              'autostart': autostart,
+                            #  'bond_timeout': 1.0,
                              'node_names': lifecycle_nodes}]),
         ],
     )

@@ -43,7 +43,8 @@ def generate_launch_description():
     autostart_arg = launch_argument_creator.create(
         'autostart', default="true")
     use_composition_arg = launch_argument_creator.create(
-        'use_composition', default="True")
+        # 'use_composition', default="True")
+        'use_composition', default="False")
     use_respawn_arg = launch_argument_creator.create(
         'use_respawn', default="false")
     log_level_arg = launch_argument_creator.create(
@@ -111,6 +112,7 @@ def generate_launch_description():
             arguments=['--ros-args', '--log-level',
                        log_level_arg.launch_config],
             remappings=remappings,
+            emulate_tty=True,
             output='screen'
         ),
 

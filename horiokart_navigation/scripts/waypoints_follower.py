@@ -632,6 +632,21 @@ class WaypointsFollowerNode(Node):
                 f"OnReachedAction: GPS off"
             )
             self._on_reach_action_gps_on_off(waypoint, True)
+        # TODO: work in progress
+        elif OnReachedAction.WAIT_ALL_ACTION_DONE == on_reached_action:
+            self.get_logger().info(
+                f"OnReachedAction: Wait all action done"
+            )
+            if len(self._on_reached_actions_progress_list) <= 1:
+                self.get_logger().info(
+                    f"No actions in progress. Continue"
+                )
+                self._stop_request = False
+            else:
+                self.get_logger().info(
+                    f"Waiting for {len(self._on_reached_actions_progress_list)} actions to complete"
+                )
+                self._stop_request = True
 
     def _on_reached(self, waypoint: Waypoint):
         for on_reached_action in waypoint.on_reached_action:

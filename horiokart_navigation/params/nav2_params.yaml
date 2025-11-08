@@ -478,8 +478,8 @@ map_saver:
 
 planner_server:
   ros__parameters:
-    ## expected_planner_frequency: 20.0
-    expected_planner_frequency: 10.0
+    # expected_planner_frequency: 10.0
+    expected_planner_frequency: 1.0
     use_sim_time: False
     planner_plugins: ["GridBased"]
     GridBased:
