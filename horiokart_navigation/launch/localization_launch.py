@@ -176,7 +176,15 @@ def generate_launch_description():
         executable='pose_with_cov_publish_controller_node.py',
         name='amcl_publish_controller_node',
         output='screen',
-        remappings=[("pose_with_cov_origin","amcl_pose_origin"), ("pose_with_cov", "amcl_pose")]
+        remappings=[("pose_with_cov_origin", "amcl_pose_origin"),
+                    ("pose_with_cov", "amcl_pose")]
+    )
+    gnss_amcl_initializer_node = Node(
+        package='horiokart_navigation',
+        executable='gnss_amcl_initializer_node.py',
+        name='gnss_amcl_initializer_node',
+        output='screen',
+        remappings=[]
     )
 
     # Create the launch description and populate
