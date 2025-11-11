@@ -184,6 +184,18 @@ def generate_launch_description():
         executable='gnss_amcl_initializer_node.py',
         name='gnss_amcl_initializer_node',
         output='screen',
+        parameters=[
+            {'use_sim_time': use_sim_time,
+             'override_pose_covariance': True,
+             'pose_covariance': [
+                0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.06853891909122467
+             ]}
+        ],
         remappings=[]
     )
 
@@ -209,5 +221,6 @@ def generate_launch_description():
     ld.add_action(load_composable_nodes)
 
     ld.add_action(change_amcl_publish_state_node)
+    ld.add_action(gnss_amcl_initializer_node)
 
     return ld
