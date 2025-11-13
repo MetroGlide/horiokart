@@ -19,8 +19,7 @@ behaviour.
 """
 
 import math
-import collections
-from typing import Deque, Optional, List
+from typing import Optional, List
 
 import rclpy
 from rclpy.node import Node
@@ -48,107 +47,16 @@ def quaternion_from_yaw(yaw: float) -> Quaternion:
 class GNSSAMCLInitializer(Node):
     def __init__(self):
         super().__init__('gnss_amcl_initializer')
-
-        # Parameters
-        self.declare_parameter('odom_gps_topic', '/odom/gps')
-        self.declare_parameter('initialpose_topic', '/initialpose')
-        self.declare_parameter(
-            'reinit_service', '/gnss_amcl_initializer/reinit')
-        self.declare_parameter('map_frame', 'map')
-        self.declare_parameter('base_link_frame', 'base_link')
-        self.declare_parameter('required_consecutive_good', 10)
-        self.declare_parameter('max_position_std_m', 5.0)
-        self.declare_parameter('max_vertical_std_m', 10.0)
-        # self.declare_parameter('use_fixed_heading', False)
-        self.declare_parameter('use_fixed_heading', True)
-        self.declare_parameter('fixed_heading', 1.57)
-        self.declare_parameter('covariance_scale', 1.0)
-        # orientation_covariance: [roll_var, pitch_var, yaw_var]
-        self.declare_parameter('orientation_covariance',
-                               [9999.0, 9999.0, 9999.0])
-        # allow overriding the full 6x6 pose covariance via parameter
-        self.declare_parameter('override_pose_covariance', False)
-        # expected length 36 (row-major 6x6). Default: zeros (will be ignored unless override is true)
-        self.declare_parameter('pose_covariance', [0.0] * 36)
-        self.declare_parameter('odom_age_timeout_sec', 2.0)
-        self.declare_parameter('ignore_odom_age', False)
-
-        # Read parameters
-        self.odom_gps_topic: str = self.get_parameter(
-            'odom_gps_topic').get_parameter_value().string_value
-        self.initialpose_topic: str = self.get_parameter(
-            'initialpose_topic').get_parameter_value().string_value
-        self.reinit_service_name: str = self.get_parameter(
-            'reinit_service').get_parameter_value().string_value
-        self.map_frame: str = self.get_parameter(
-            'map_frame').get_parameter_value().string_value
-        self.base_link_frame: str = self.get_parameter(
-            'base_link_frame').get_parameter_value().string_value
-        self.required_consecutive_good: int = self.get_parameter(
-            'required_consecutive_good').get_parameter_value().integer_value
-        self.max_position_std_m: float = self.get_parameter(
-            'max_position_std_m').get_parameter_value().double_value
-        self.max_vertical_std_m: float = self.get_parameter(
-            'max_vertical_std_m').get_parameter_value().double_value
-        self.use_fixed_heading: bool = self.get_parameter(
-            'use_fixed_heading').get_parameter_value().bool_value
-        self.fixed_heading: float = self.get_parameter(
-            'fixed_heading').get_parameter_value().double_value
-        self.covariance_scale: float = self.get_parameter(
-            'covariance_scale').get_parameter_value().double_value
-        self.orientation_covariance: List[float] = self.get_parameter(
-            'orientation_covariance').get_parameter_value().double_array_value
-        self.override_pose_covariance: bool = self.get_parameter(
-            'override_pose_covariance').get_parameter_value().bool_value
-        self.pose_covariance: List[float] = self.get_parameter(
-            'pose_covariance').get_parameter_value().double_array_value
-        self.odom_age_timeout_sec: float = self.get_parameter(
-            'odom_age_timeout_sec').get_parameter_value().double_value
-        self.ignore_odom_age: bool = self.get_parameter(
-            'ignore_odom_age').get_parameter_value().bool_value
-
-        # Log parameter summary for debugging
-        self.get_logger().info(
-            f"Parameters: odom_gps_topic={self.odom_gps_topic}, initialpose_topic={self.initialpose_topic}, reinit_service={self.reinit_service_name}")
-        self.get_logger().info(
-            f"Parameters: map_frame={self.map_frame}, required_consecutive_good={self.required_consecutive_good}")
-        self.get_logger().info(
-            f"Thresholds: max_position_std_m={self.max_position_std_m}, max_vertical_std_m={self.max_vertical_std_m}, covariance_scale={self.covariance_scale}")
-        self.get_logger().info(
-            f"Heading: use_fixed_heading={self.use_fixed_heading}, fixed_heading={self.fixed_heading}")
-        self.get_logger().info(
-            f"Pose covariance override: override_pose_covariance={self.override_pose_covariance}")
-        try:
-            use_sim = self.get_parameter(
-                'use_sim_time').get_parameter_value().bool_value
-            self.get_logger().info(f'use_sim_time={use_sim}')
-        except Exception:
-            pass
-        if self.ignore_odom_age:
-            self.get_logger().info('Odom age check is DISABLED (ignore_odom_age=True)')
+        # Initialize parameters and node configuration
+        self._init_parameters()
 
         # Internal state
-        self._good_count = 0
         self._consecutive_good = 0
         self._latest_valid_odom: Optional[Odometry] = None
         self._published_once = False
-        self._odom_history: Deque[Odometry] = collections.deque(
-            maxlen=max(50, self.required_consecutive_good))
 
-        # TF buffer/listener for optional frame transforms
-        self.tf_buffer = tf2_ros.Buffer()
-        self.tf_listener = tf2_ros.TransformListener(
-            self.tf_buffer, self, spin_thread=False)
-
-        # Publisher and subscribers
-        self.initialpose_pub = self.create_publisher(
-            PoseWithCovarianceStamped, self.initialpose_topic, 10)
-        self.odom_sub = self.create_subscription(
-            Odometry, self.odom_gps_topic, self.odom_callback, 20)
-
-        # Service to force reinit
-        self.srv = self.create_service(
-            Trigger, self.reinit_service_name, self.handle_reinit)
+        # Initialize TF, publishers/subscribers and services
+        self._init_communications()
 
         self.get_logger().info(
             f"GNSS AMCL Initializer started, listening to '{self.odom_gps_topic}'")
@@ -160,14 +68,10 @@ class GNSSAMCLInitializer(Node):
         if self._published_once:
             return
 
-        # Quick checks (age and covariance) are performed early and silently to
-        # avoid unnecessary work when the message cannot lead to a publish.
-        now = self.get_clock().now()
-
-        # check age (can be disabled via ignore_odom_age)
+        # Do a quick age check (can be disabled via ignore_odom_age)
         try:
             stamp = Time.from_msg(msg.header.stamp)
-            age = (now - stamp).nanoseconds * 1e-9
+            age = (self.get_clock().now() - stamp).nanoseconds * 1e-9
         except Exception:
             # malformed header; treat as invalid
             self._consecutive_good = 0
@@ -177,45 +81,26 @@ class GNSSAMCLInitializer(Node):
             self._consecutive_good = 0
             return
 
-        # quick covariance existence/size check
-        cov = msg.pose.covariance
-        if cov is None or len(cov) != 36:
+        # Evaluate odometry quality using helper (checks covariance and thresholds)
+        if not self._evaluate_odometry_quality(msg):
+            # _evaluate_odometry_quality logs reason
             self._consecutive_good = 0
             return
 
-        # quick quality check using covariance only (avoid TF until necessary)
-        var_x = float(cov[0]) * float(self.covariance_scale)
-        var_y = float(cov[7]) * float(self.covariance_scale)
-        var_z = float(cov[14]) * float(self.covariance_scale)
-        std_x = math.sqrt(max(var_x, 0.0))
-        std_y = math.sqrt(max(var_y, 0.0))
-        std_z = math.sqrt(max(var_z, 0.0))
-        ok_xy = (std_x <= self.max_position_std_m) and (
-            std_y <= self.max_position_std_m)
-        ok_z = std_z <= self.max_vertical_std_m
-        if not (ok_xy and ok_z):
-            self._consecutive_good = 0
-            return
+    # Passed quality checks: prepare to transform if needed
 
-        # Passed quick checks: now do the more expensive operations and logging
-        # store in history
-        self._odom_history.append(msg)
-
-        # Log received odometry summary (only for messages that may be used)
+        # Log a concise summary for usable messages
         try:
             px = msg.pose.pose.position.x
             py = msg.pose.pose.position.y
             pz = msg.pose.pose.position.z
             q = msg.pose.pose.orientation
-            cov0 = cov[0]
-            cov7 = cov[7]
-            cov14 = cov[14]
             self.get_logger().info(
-                f"Received odom: header.frame_id={msg.header.frame_id}, pos=({px:.3f},{py:.3f},{pz:.3f}), quat=({q.x:.3f},{q.y:.3f},{q.z:.3f},{q.w:.3f}), cov_x={cov0}, cov_y={cov7}, cov_z={cov14}")
+                f"Received odom: frame={msg.header.frame_id}, pos=({px:.3f},{py:.3f},{pz:.3f}), quat=({q.x:.3f},{q.y:.3f},{q.z:.3f},{q.w:.3f})")
         except Exception:
             self.get_logger().debug('Received odom: unable to extract full summary')
 
-        # ensure pose is expressed in map frame; transform if necessary
+        # Ensure pose is expressed in map frame; transform if necessary
         odom_in_map = msg
         if msg.header.frame_id != self.map_frame:
             try:
@@ -227,17 +112,17 @@ class GNSSAMCLInitializer(Node):
                 # fall back to original odom if TF fails
                 pass
 
-        # At this point odom passed quick quality checks
+        # Count consecutive good samples and publish when requirement met
         self._consecutive_good += 1
         self._latest_valid_odom = odom_in_map
         self.get_logger().info(
             f'Good odom #{self._consecutive_good}/{self.required_consecutive_good} (pos=({odom_in_map.pose.pose.position.x:.3f},{odom_in_map.pose.pose.position.y:.3f}))')
 
-        # publish when requirement met
         if self._consecutive_good >= self.required_consecutive_good:
             self.get_logger().info('Publishing initialpose based on GNSS odometry')
             self.publish_initialpose_from_odom(self._latest_valid_odom)
             self._published_once = True
+            self._consecutive_good = 0
 
     # ---------------- core utilities ----------------
     def _evaluate_odometry_quality(self, odom: Odometry) -> bool:
@@ -266,6 +151,97 @@ class GNSSAMCLInitializer(Node):
         else:
             self.get_logger().info('Odometry judged BAD')
         return ok_xy and ok_z
+
+    # ---------------- init helpers ----------------
+    def _init_parameters(self) -> None:
+        """Declare and read parameters used by the node."""
+        self.declare_parameter('map_frame', 'map')
+        self.declare_parameter('base_link_frame', 'base_link')
+        self.declare_parameter('required_consecutive_good', 5)
+        self.declare_parameter('max_position_std_m', 5.0)
+        self.declare_parameter('max_vertical_std_m', 10.0)
+        self.declare_parameter('use_fixed_heading', True)
+        self.declare_parameter('fixed_heading', 1.57)
+        self.declare_parameter('covariance_scale', 1.0)
+        # orientation_covariance: [roll_var, pitch_var, yaw_var]
+        self.declare_parameter('orientation_covariance',
+                               [9999.0, 9999.0, 9999.0])
+        # allow overriding the full 6x6 pose covariance via parameter
+        self.declare_parameter('override_pose_covariance', False)
+        # expected length 36 (row-major 6x6). Default: zeros
+        self.declare_parameter('pose_covariance', [0.0] * 36)
+        self.declare_parameter('odom_age_timeout_sec', 2.0)
+        self.declare_parameter('ignore_odom_age', False)
+
+        # Read other tunable parameters
+        self.map_frame = self.get_parameter(
+            'map_frame').get_parameter_value().string_value
+        self.base_link_frame = self.get_parameter(
+            'base_link_frame').get_parameter_value().string_value
+        self.required_consecutive_good = self.get_parameter(
+            'required_consecutive_good').get_parameter_value().integer_value
+        self.max_position_std_m = self.get_parameter(
+            'max_position_std_m').get_parameter_value().double_value
+        self.max_vertical_std_m = self.get_parameter(
+            'max_vertical_std_m').get_parameter_value().double_value
+        self.use_fixed_heading = self.get_parameter(
+            'use_fixed_heading').get_parameter_value().bool_value
+        self.fixed_heading = self.get_parameter(
+            'fixed_heading').get_parameter_value().double_value
+        self.covariance_scale = self.get_parameter(
+            'covariance_scale').get_parameter_value().double_value
+        self.orientation_covariance = self.get_parameter(
+            'orientation_covariance').get_parameter_value().double_array_value
+        self.override_pose_covariance = self.get_parameter(
+            'override_pose_covariance').get_parameter_value().bool_value
+        self.pose_covariance = self.get_parameter(
+            'pose_covariance').get_parameter_value().double_array_value
+        self.odom_age_timeout_sec = self.get_parameter(
+            'odom_age_timeout_sec').get_parameter_value().double_value
+        self.ignore_odom_age = self.get_parameter(
+            'ignore_odom_age').get_parameter_value().bool_value
+
+        self.get_logger().info(
+            f"Parameters: map_frame={self.map_frame}, required_consecutive_good={self.required_consecutive_good}")
+        self.get_logger().info(
+            f"Thresholds: max_position_std_m={self.max_position_std_m}, max_vertical_std_m={self.max_vertical_std_m}, covariance_scale={self.covariance_scale}")
+        self.get_logger().info(
+            f"Heading: use_fixed_heading={self.use_fixed_heading}, fixed_heading={self.fixed_heading}")
+        self.get_logger().info(
+            f"Pose covariance override: override_pose_covariance={self.override_pose_covariance}")
+        try:
+            use_sim = self.get_parameter(
+                'use_sim_time').get_parameter_value().bool_value
+            self.get_logger().info(f'use_sim_time={use_sim}')
+        except Exception:
+            pass
+        if self.ignore_odom_age:
+            self.get_logger().info('Odom age check is DISABLED (ignore_odom_age=True)')
+
+    def _init_communications(self) -> None:
+        """Initialize TF, publishers, subscribers and services."""
+        # TF buffer/listener for optional frame transforms
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(
+            self.tf_buffer, self, spin_thread=False)
+
+        self.odom_gps_topic = '/odom/gps'
+        self.initialpose_topic = '/initialpose'
+        self.reinit_service_name = '~/reinit'
+
+        # Log parameter summary for debugging
+        self.get_logger().info(
+            f"Topics/Services: odom_gps_topic={self.odom_gps_topic}, initialpose_topic={self.initialpose_topic}, reinit_service={self.reinit_service_name}")
+
+        # Publisher and subscribers
+        self.initialpose_pub = self.create_publisher(
+            PoseWithCovarianceStamped, self.initialpose_topic, 10)
+        self.odom_sub = self.create_subscription(
+            Odometry, self.odom_gps_topic, self.odom_callback, 20)
+
+        # Service to force reinit
+        self.srv = self.create_service(
+            Trigger, self.reinit_service_name, self.handle_reinit)
 
     def _transform_odometry_pose(self, odom: Odometry, trans) -> Odometry:
         # Create a shallow copy of odom with transformed pose into map_frame
@@ -413,9 +389,9 @@ class GNSSAMCLInitializer(Node):
             self.get_logger().warn('Reinit failed: no valid odom')
             return response
 
-        # allow future re-publication, then publish using the latest valid sample
+        # allow future re-publication
         self._published_once = False
-        self.publish_initialpose_from_odom(self._latest_valid_odom)
+
         response.success = True
         response.message = 'Reinit: initialpose published'
         self.get_logger().info('Reinit: initialpose published')
