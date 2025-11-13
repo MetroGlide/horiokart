@@ -202,7 +202,7 @@ def generate_launch_description():
     )
 
     gnss_amcl_initializer_node_timer = TimerAction(
-        period=5.0,
+        period=10.0,
         actions=[gnss_amcl_initializer_node]
     )
 

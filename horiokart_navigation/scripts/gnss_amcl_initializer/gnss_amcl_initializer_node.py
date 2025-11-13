@@ -1,21 +1,12 @@
 #!/usr/bin/env python3
 
-"""
-GNSS -> AMCL Initializer
+"""GNSS -> AMCL initializer.
 
-Subscribe to `/odom/gps` (nav_msgs/Odometry) which is expected to contain
-GNSS-derived pose in the `map` frame (as produced by
-`horiokart_drivers/scripts/gnss_odometry_node.py`). When a sequence of
-odometry messages satisfies configured accuracy thresholds this node
-publishes a `geometry_msgs/PoseWithCovarianceStamped` to initialize AMCL.
-
-Provides a service to force re-initialization using the latest valid
-odometry sample.
-
-This file implements the design agreed in the project: use Odometry as
-input (map-frame), map covariance into initialpose, support TF-based
-frame conversion when necessary, and expose parameters to tune
-behaviour.
+Subscribe to `/odom/gps` (nav_msgs/Odometry) containing GNSS-derived
+pose in the map frame. When a sequence of odometry messages meets the
+configured accuracy thresholds, publish a PoseWithCovarianceStamped to
+initialize AMCL. A node-private service is provided to reset and retry
+the initialization logic.
 """
 
 import math
@@ -44,16 +35,81 @@ def quaternion_from_yaw(yaw: float) -> Quaternion:
     return quat
 
 
+class GNSSQualityManager:
+    """Track consecutive-good / consecutive-bad counts and finished state.
+
+    Responsibilities:
+    - maintain consecutive_good / consecutive_bad counters
+    - decide when to mark finished (publish reached) or give up
+    - provide simple query methods for callers (is_publish_ready/is_gave_up)
+
+    The owning node keeps the latest Odometry message; this class only
+    tracks numeric state and optional logging.
+    """
+
+    def __init__(self, required_consecutive_good: int, max_consecutive_bad: int, logger=None):
+        self.required_consecutive_good = int(required_consecutive_good)
+        self.max_consecutive_bad = int(max_consecutive_bad)
+        self.consecutive_good = 0
+        self.consecutive_bad = 0
+        self.finished = False
+        self._logger = logger
+
+    def reset(self) -> None:
+        """Reset counters and allow processing to continue."""
+        self.consecutive_good = 0
+        self.consecutive_bad = 0
+        self.finished = False
+
+    def add_bad(self) -> None:
+        """Record a bad sample and mark give-up if threshold exceeded."""
+        self.consecutive_good = 0
+        self.consecutive_bad += 1
+        if self.consecutive_bad >= self.max_consecutive_bad:
+            self.finished = True
+            if self._logger:
+                self._logger.warn(
+                    'Too many consecutive bad odom samples; giving up')
+
+    def add_good(self) -> None:
+        """Record a good sample (increments counter and clears bad counter)."""
+        self.consecutive_bad = 0
+        self.consecutive_good += 1
+        if self.consecutive_good >= self.required_consecutive_good:
+            self.finished = True
+            if self._logger:
+                self._logger.info(
+                    'Required consecutive good odom samples reached')
+
+    def is_publish_ready(self) -> bool:
+        """Return True when enough consecutive good samples have been seen."""
+        return self.consecutive_good >= self.required_consecutive_good
+
+    def is_gave_up(self) -> bool:
+        """Return True if the state has given up due to too many bad samples."""
+        return self.finished and (self.consecutive_bad >= self.max_consecutive_bad)
+
+    def mark_published(self) -> None:
+        """Mark that a publish has occurred (keeps finished True but resets
+        the consecutive_good counter to allow reinit-based reprocessing).
+        """
+        self.finished = True
+        self.consecutive_good = 0
+
+
 class GNSSAMCLInitializer(Node):
     def __init__(self):
         super().__init__('gnss_amcl_initializer')
         # Initialize parameters and node configuration
         self._init_parameters()
 
-        # Internal state
-        self._consecutive_good = 0
-        self._latest_valid_odom: Optional[Odometry] = None
-        self._published_once = False
+        # Internal state is managed by GNSSQualityManager to keep good/bad logic
+        # together and simplify reasoning about finished/reset behavior.
+        self.state = GNSSQualityManager(self.required_consecutive_good,
+                                        self.max_consecutive_bad,
+                                        logger=self.get_logger())
+        # The node retains ownership of the latest valid odometry sample.
+        self.latest_valid_odom: Optional[Odometry] = None
 
         # Initialize TF, publishers/subscribers and services
         self._init_communications()
@@ -64,32 +120,31 @@ class GNSSAMCLInitializer(Node):
     # ---------------- callbacks ----------------
 
     def odom_callback(self, msg: Odometry) -> None:
-        # If we've already published once, skip early to avoid unnecessary work.
-        if self._published_once:
+        # If finished (published or gave up), ignore further samples.
+        if self.state.finished:
             return
 
-        # Do a quick age check (can be disabled via ignore_odom_age)
+    # Age check (can be disabled via ignore_odom_age)
         try:
             stamp = Time.from_msg(msg.header.stamp)
             age = (self.get_clock().now() - stamp).nanoseconds * 1e-9
         except Exception:
             # malformed header; treat as invalid
-            self._consecutive_good = 0
+            self.state.add_bad()
             return
 
         if not self.ignore_odom_age and age > self.odom_age_timeout_sec:
-            self._consecutive_good = 0
+            # aged message -> treat as bad
+            self.state.add_bad()
             return
 
-        # Evaluate odometry quality using helper (checks covariance and thresholds)
+    # Evaluate odometry quality (covariance thresholds)
         if not self._evaluate_odometry_quality(msg):
             # _evaluate_odometry_quality logs reason
-            self._consecutive_good = 0
+            self.state.add_bad()
             return
 
-    # Passed quality checks: prepare to transform if needed
-
-        # Log a concise summary for usable messages
+    # Passed quality checks: transform to map frame if needed and log
         try:
             px = msg.pose.pose.position.x
             py = msg.pose.pose.position.y
@@ -100,7 +155,7 @@ class GNSSAMCLInitializer(Node):
         except Exception:
             self.get_logger().debug('Received odom: unable to extract full summary')
 
-        # Ensure pose is expressed in map frame; transform if necessary
+    # Transform pose into map frame if required
         odom_in_map = msg
         if msg.header.frame_id != self.map_frame:
             try:
@@ -112,17 +167,17 @@ class GNSSAMCLInitializer(Node):
                 # fall back to original odom if TF fails
                 pass
 
-        # Count consecutive good samples and publish when requirement met
-        self._consecutive_good += 1
-        self._latest_valid_odom = odom_in_map
+    # Good sample: store latest odom, update state, and publish when ready.
+        self.latest_valid_odom = odom_in_map
+        self.state.add_good()
         self.get_logger().info(
-            f'Good odom #{self._consecutive_good}/{self.required_consecutive_good} (pos=({odom_in_map.pose.pose.position.x:.3f},{odom_in_map.pose.pose.position.y:.3f}))')
+            f'Good odom #{self.state.consecutive_good}/{self.required_consecutive_good} (pos=({odom_in_map.pose.pose.position.x:.3f},{odom_in_map.pose.pose.position.y:.3f}))')
 
-        if self._consecutive_good >= self.required_consecutive_good:
+        if self.state.is_publish_ready():
             self.get_logger().info('Publishing initialpose based on GNSS odometry')
-            self.publish_initialpose_from_odom(self._latest_valid_odom)
-            self._published_once = True
-            self._consecutive_good = 0
+            self.publish_initialpose_from_odom(self.latest_valid_odom)
+            # mark published/gone-to-finished and reset per-policy
+            self.state.mark_published()
 
     # ---------------- core utilities ----------------
     def _evaluate_odometry_quality(self, odom: Odometry) -> bool:
@@ -172,6 +227,7 @@ class GNSSAMCLInitializer(Node):
         self.declare_parameter('pose_covariance', [0.0] * 36)
         self.declare_parameter('odom_age_timeout_sec', 2.0)
         self.declare_parameter('ignore_odom_age', False)
+        self.declare_parameter('max_consecutive_bad', 20)
 
         # Read other tunable parameters
         self.map_frame = self.get_parameter(
@@ -200,6 +256,8 @@ class GNSSAMCLInitializer(Node):
             'odom_age_timeout_sec').get_parameter_value().double_value
         self.ignore_odom_age = self.get_parameter(
             'ignore_odom_age').get_parameter_value().bool_value
+        self.max_consecutive_bad = self.get_parameter(
+            'max_consecutive_bad').get_parameter_value().integer_value
 
         self.get_logger().info(
             f"Parameters: map_frame={self.map_frame}, required_consecutive_good={self.required_consecutive_good}")
@@ -217,6 +275,8 @@ class GNSSAMCLInitializer(Node):
             pass
         if self.ignore_odom_age:
             self.get_logger().info('Odom age check is DISABLED (ignore_odom_age=True)')
+        self.get_logger().info(
+            f'max_consecutive_bad={self.max_consecutive_bad}')
 
     def _init_communications(self) -> None:
         """Initialize TF, publishers, subscribers and services."""
@@ -227,7 +287,9 @@ class GNSSAMCLInitializer(Node):
 
         self.odom_gps_topic = '/odom/gps'
         self.initialpose_topic = '/initialpose'
-        self.reinit_service_name = '~/reinit'
+        # node-private service name for reinit requests; remap/namespace can
+        # be applied from the outside launch file. Use a descriptive name.
+        self.reinit_service_name = '~/request_reinit'
 
         # Log parameter summary for debugging
         self.get_logger().info(
@@ -239,7 +301,7 @@ class GNSSAMCLInitializer(Node):
         self.odom_sub = self.create_subscription(
             Odometry, self.odom_gps_topic, self.odom_callback, 20)
 
-        # Service to force reinit
+        # Service to force reinit (resets internal state so processing can resume)
         self.srv = self.create_service(
             Trigger, self.reinit_service_name, self.handle_reinit)
 
@@ -382,19 +444,18 @@ class GNSSAMCLInitializer(Node):
 
     # ---------------- service handlers ----------------
     def handle_reinit(self, request, response):
-        self.get_logger().info('Reinit service called')
-        if self._latest_valid_odom is None:
-            response.success = False
-            response.message = 'No valid odometry sample available for reinit'
-            self.get_logger().warn('Reinit failed: no valid odom')
-            return response
+        # Service to request re-initialization: reset internal state so the
+        # node can re-process incoming odometry samples. Per request,
+        # this service only resets state and always returns success=True.
+        self.get_logger().info('Reinitialize request received; resetting internal state')
 
-        # allow future re-publication
-        self._published_once = False
+        # Reset processing state; do not attempt an immediate publish here.
+        self.state.reset()
+        # Clear stored latest odom so re-processing starts fresh
+        self.latest_valid_odom = None
 
         response.success = True
-        response.message = 'Reinit: initialpose published'
-        self.get_logger().info('Reinit: initialpose published')
+        response.message = 'Reinitialization requested'
         return response
 
 
