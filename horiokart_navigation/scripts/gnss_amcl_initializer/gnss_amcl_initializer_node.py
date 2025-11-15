@@ -124,7 +124,7 @@ class GNSSAMCLInitializer(Node):
         if self.state.finished:
             return
 
-    # Age check (can be disabled via ignore_odom_age)
+        # Age check (can be disabled via ignore_odom_age)
         try:
             stamp = Time.from_msg(msg.header.stamp)
             age = (self.get_clock().now() - stamp).nanoseconds * 1e-9
@@ -138,13 +138,13 @@ class GNSSAMCLInitializer(Node):
             self.state.add_bad()
             return
 
-    # Evaluate odometry quality (covariance thresholds)
+        # Evaluate odometry quality (covariance thresholds)
         if not self._evaluate_odometry_quality(msg):
             # _evaluate_odometry_quality logs reason
             self.state.add_bad()
             return
 
-    # Passed quality checks: transform to map frame if needed and log
+        # Passed quality checks: transform to map frame if needed and log
         try:
             px = msg.pose.pose.position.x
             py = msg.pose.pose.position.y
@@ -155,7 +155,7 @@ class GNSSAMCLInitializer(Node):
         except Exception:
             self.get_logger().debug('Received odom: unable to extract full summary')
 
-    # Transform pose into map frame if required
+        # Transform pose into map frame if required
         odom_in_map = msg
         if msg.header.frame_id != self.map_frame:
             try:
@@ -167,7 +167,7 @@ class GNSSAMCLInitializer(Node):
                 # fall back to original odom if TF fails
                 pass
 
-    # Good sample: store latest odom, update state, and publish when ready.
+        # Good sample: store latest odom, update state, and publish when ready.
         self.latest_valid_odom = odom_in_map
         self.state.add_good()
         self.get_logger().info(
