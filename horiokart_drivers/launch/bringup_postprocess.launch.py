@@ -87,7 +87,24 @@ def generate_launch_description():
                     "use_sim_time": simulation_arg.launch_config,
                     "map_frame_id": "map",
                     "gps_frame_id": "gps_link",
+                    # GNSS input selection: 'navsatfix' or 'navpvt'
+                    "gnss_input": "navpvt",
+                    # min_speed_for_heading: m/s (if ground speed < this, motion heading is ignored)
+                    "min_speed_for_heading": 0.5,
+                    # heading_smoothing_alpha: unitless (0..1), larger -> more weight to latest observation
+                    "heading_smoothing_alpha": 0.6,
+                    # apply_heading_offset: bool, enable applying heading_offset_deg (degrees)
+                    "apply_heading_offset": False,
+                    # heading_offset_deg: degrees, applied if apply_heading_offset is True
+                    "heading_offset_deg": 0.0,
+                    # apply_heading_invert: bool, multiply heading by -1 when True
+                    "apply_heading_invert": True,
+                    # apply_heading_add_pi: bool, add 180 deg (pi rad) to heading when True
+                    "apply_heading_add_pi": True,
                 }],
+                remappings=[
+                    ("/ublox/navpvt", "/navpvt"),
+                ],
                 condition=launch.conditions.IfCondition(
                     use_gps_arg.launch_config),
             ),

@@ -112,6 +112,15 @@ class GNSSOdometryNode(Node):
             'min_speed_for_heading': self.declare_parameter('min_speed_for_heading', 0.5).get_parameter_value().double_value,
             # heading_smoothing_alpha: unitless (0..1), 環状EMAのα
             'heading_smoothing_alpha': self.declare_parameter('heading_smoothing_alpha', 0.6).get_parameter_value().double_value,
+            # Heading correction options
+            # apply_heading_offset: bool, enable applying heading_offset_deg (degrees)
+            'apply_heading_offset': self.declare_parameter('apply_heading_offset', False).get_parameter_value().bool_value,
+            # heading_offset_deg: degrees, applied if apply_heading_offset is True
+            'heading_offset_deg': self.declare_parameter('heading_offset_deg', 0.0).get_parameter_value().double_value,
+            # apply_heading_invert: bool, multiply heading by -1 when True
+            'apply_heading_invert': self.declare_parameter('apply_heading_invert', True).get_parameter_value().bool_value,
+            # apply_heading_add_pi: bool, add 180 deg (pi rad) to heading when True
+            'apply_heading_add_pi': self.declare_parameter('apply_heading_add_pi', False).get_parameter_value().bool_value,
 
             # 対応点リストは list of [utm_x, utm_y, odom_x, odom_y] で与える (単位: m)
             'correspondences': [
@@ -154,6 +163,11 @@ class GNSSOdometryNode(Node):
         self.heading_cos = 0.0
         self.min_speed_for_heading = params.get('min_speed_for_heading', 0.5)
         self.heading_alpha = params.get('heading_smoothing_alpha', 0.6)
+        # Heading correction flags/values
+        self.apply_heading_offset = params.get('apply_heading_offset', False)
+        self.heading_offset_deg = params.get('heading_offset_deg', 0.0)
+        self.apply_heading_invert = params.get('apply_heading_invert', True)
+        self.apply_heading_add_pi = params.get('apply_heading_add_pi', False)
 
         # サブスクライバ: パラメータ gnss_input で navsatfix / navpvt を切替
         gnss_input = params.get('gnss_input', 'navsatfix')
@@ -331,7 +345,23 @@ class GNSSOdometryNode(Node):
                 self.get_logger().debug(
                     f"NavPVT motion heading skipped due to low speed: {speed}")
             else:
+                self.get_logger().info(
+                    f"NavPVT heading source: {src}, raw: {raw_deg:.3f} deg, speed: {speed if speed is not None else 'N/A'} m/s")
                 heading_rad = math.radians(raw_deg)
+                # Apply optional heading corrections before smoothing
+                self.get_logger().info(
+                    f"apply heading invert: {self.apply_heading_invert}, apply heading +180 deg: {self.apply_heading_add_pi}, apply heading offset: {self.apply_heading_offset}")
+                if self.apply_heading_invert:
+                    heading_rad = -heading_rad
+                    self.get_logger().info("Applied heading inversion.")
+                if self.apply_heading_add_pi:
+                    heading_rad = heading_rad + math.pi
+                    self.get_logger().info("Applied heading + 180 deg.")
+                if self.apply_heading_offset:
+                    heading_rad = heading_rad + \
+                        math.radians(self.heading_offset_deg)
+                    self.get_logger().info(
+                        f"Applied heading offset: {self.heading_offset_deg} deg.")
                 # headAcc -> variance if available
                 try:
                     if hasattr(msg, 'headAcc') and msg.headAcc > 0:
