@@ -17,7 +17,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, GroupAction, SetEnvironmentVariable, TimerAction
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import LoadComposableNodes
@@ -176,7 +176,32 @@ def generate_launch_description():
         executable='pose_with_cov_publish_controller_node.py',
         name='amcl_publish_controller_node',
         output='screen',
-        remappings=[("pose_with_cov_origin","amcl_pose_origin"), ("pose_with_cov", "amcl_pose")]
+        remappings=[("pose_with_cov_origin", "amcl_pose_origin"),
+                    ("pose_with_cov", "amcl_pose")]
+    )
+    gnss_amcl_initializer_node = Node(
+        package='horiokart_navigation',
+        executable='gnss_amcl_initializer_node.py',
+        name='gnss_amcl_initializer_node',
+        output='screen',
+        parameters=[
+            {'use_sim_time': os.environ.get(
+                'SIMULATION', 'false').lower() == 'true',
+             'override_pose_covariance': True,
+             'pose_covariance': [
+                0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.25, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.06853891909122467
+            ]}
+        ]
+    )
+
+    gnss_amcl_initializer_node_timer = TimerAction(
+        period=10.0,
+        actions=[gnss_amcl_initializer_node]
     )
 
     # Create the launch description and populate
@@ -201,5 +226,6 @@ def generate_launch_description():
     ld.add_action(load_composable_nodes)
 
     ld.add_action(change_amcl_publish_state_node)
+    ld.add_action(gnss_amcl_initializer_node_timer)
 
     return ld
