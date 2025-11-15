@@ -27,6 +27,7 @@ from geometry_msgs.msg import TransformStamped
 import numpy as np
 import math
 import pyproj
+from ublox_msgs.msg import NavPVT
 
 # --- TransformManager ---
 
@@ -82,9 +83,10 @@ class OdometryManager:
         self.utm_proj = pyproj.Proj(
             proj='utm', zone=utm_zone, ellps='WGS84', south=False)
 
-    def gnss_to_utm(self, gnss_msg):
-        # WGS84緯度経度→UTM座標
-        x, y = self.utm_proj(gnss_msg.longitude, gnss_msg.latitude)
+    def gnss_to_utm(self, longitude, latitude):
+        # WGS84 緯度経度 -> UTM 座標
+        # 引数: longitude (deg), latitude (deg)
+        x, y = self.utm_proj(longitude, latitude)
         return x, y
 
 # --- RosInterface ---
@@ -96,6 +98,7 @@ class GNSSOdometryNode(Node):
     def __init__(self):
         super().__init__('gnss_odometry_node')
         # パラメータ取得
+        # 注意: 数値パラメータには単位をコメントで明記しています。
         params = {
             'static_transform': self.declare_parameter('static_transform', None).get_parameter_value().double_array_value,
             'map_frame_id': self.declare_parameter('map_frame_id', 'map').get_parameter_value().string_value,
@@ -103,7 +106,14 @@ class GNSSOdometryNode(Node):
 
             'is_test_data': self.declare_parameter('is_test_data', False).get_parameter_value().bool_value,
 
-            # 対応点リストはlist of [utm_x, utm_y, odom_x, odom_y]で与える
+            # input selection: 'navsatfix' or 'navpvt'
+            'gnss_input': self.declare_parameter('gnss_input', 'navsatfix').get_parameter_value().string_value,
+            # min_speed_for_heading: m/s (地上速度がこの閾値未満の場合、motion heading は信用しない)
+            'min_speed_for_heading': self.declare_parameter('min_speed_for_heading', 0.5).get_parameter_value().double_value,
+            # heading_smoothing_alpha: unitless (0..1), 環状EMAのα
+            'heading_smoothing_alpha': self.declare_parameter('heading_smoothing_alpha', 0.6).get_parameter_value().double_value,
+
+            # 対応点リストは list of [utm_x, utm_y, odom_x, odom_y] で与える (単位: m)
             'correspondences': [
                 # [UTM座標系(x, y), map座標系(x, y)]
                 [416860.455628, 3993538.760756, 19.648010, 21.072767],
@@ -137,9 +147,22 @@ class GNSSOdometryNode(Node):
 
         self.odom_pub = self.create_publisher(Odometry, '/odom/gps', 10)
 
-        # サブスクライバ
-        self.gnss_sub = self.create_subscription(
-            NavSatFix, '/gps/fix', self.gnss_callback, 10)
+        # Heading state and smoothing (used for both NavSatFix and NavPVT-derived headings)
+        self.latest_heading = None
+        self.latest_heading_var = None
+        self.heading_sin = 0.0
+        self.heading_cos = 0.0
+        self.min_speed_for_heading = params.get('min_speed_for_heading', 0.5)
+        self.heading_alpha = params.get('heading_smoothing_alpha', 0.6)
+
+        # サブスクライバ: パラメータ gnss_input で navsatfix / navpvt を切替
+        gnss_input = params.get('gnss_input', 'navsatfix')
+        if gnss_input == 'navpvt':
+            self.navpvt_sub = self.create_subscription(
+                NavPVT, '/ublox/navpvt', self.navpvt_callback, 10)
+        else:
+            self.gnss_sub = self.create_subscription(
+                NavSatFix, '/gps/fix', self.gnss_callback, 10)
 
         # 対応点が2点以上あればstatic_transformを自動推定
         if self.transform_manager.correspondences is not None and len(self.transform_manager.correspondences) >= 2:
@@ -191,7 +214,13 @@ class GNSSOdometryNode(Node):
             self.test_transform_accuracy()
 
         # GNSS→UTM→map (tfで変換)
-        utm_x, utm_y = self.odom_manager.gnss_to_utm(msg)
+        # gnss_to_utm now accepts (longitude, latitude) in degrees
+        try:
+            utm_x, utm_y = self.odom_manager.gnss_to_utm(
+                msg.longitude, msg.latitude)
+        except Exception as e:
+            self.get_logger().warn(f"Failed to convert NavSatFix to UTM: {e}")
+            return
 
         # static_transform未指定（初期パラメータ対応点なし）の場合、tfから現在のgps_link位置を取得してlog info
         if (self.transform_manager.correspondences is None or len(self.transform_manager.correspondences) < 2):
@@ -221,7 +250,11 @@ class GNSSOdometryNode(Node):
         odom.pose.pose.position.x = map_x
         odom.pose.pose.position.y = map_y
         odom.pose.pose.position.z = 0.0
-        q = tf_transformations.quaternion_from_euler(0, 0, 0)
+        # Determine yaw: prefer a heading passed via latest_heading, otherwise 0
+        yaw = 0.0
+        if getattr(self, 'latest_heading', None) is not None:
+            yaw = self.latest_heading
+        q = tf_transformations.quaternion_from_euler(0, 0, yaw)
         odom.pose.pose.orientation.x = q[0]
         odom.pose.pose.orientation.y = q[1]
         odom.pose.pose.orientation.z = q[2]
@@ -247,7 +280,86 @@ class GNSSOdometryNode(Node):
                 0.0, 0.0, 0.0, 0.0, 9999.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 9999.0
             ]
+        # If we have a heading variance estimate (from NavPVT), set yaw variance at index 35
+        if getattr(self, 'latest_heading_var', None) is not None:
+            odom.pose.covariance[35] = self.latest_heading_var
         self.odom_pub.publish(odom)
+
+    def navpvt_callback(self, msg):
+        # Handle NavPVT message: extract lon/lat, convert to UTM, extract heading and headAcc
+        try:
+            # lon/lat: degrees = raw * 1e-7
+            lon = msg.lon * 1e-7
+            lat = msg.lat * 1e-7
+        except Exception as e:
+            self.get_logger().warn(f"NavPVT message missing lon/lat: {e}")
+            return
+
+        # convert to UTM using odom_manager (expects longitude, latitude in degrees)
+        try:
+            utm_x, utm_y = self.odom_manager.gnss_to_utm(lon, lat)
+        except Exception as e:
+            self.get_logger().warn(
+                f"Failed to convert NavPVT lon/lat to UTM: {e}")
+            return
+
+        # Determine heading source: prefer headVeh if FLAGS_HEAD_VEH_VALID set
+        heading_rad = None
+        heading_var = None
+        FLAGS_HEAD_VEH_VALID = 32
+        try:
+            if (msg.flags & FLAGS_HEAD_VEH_VALID) != 0 and hasattr(msg, 'headVeh'):
+                raw_deg = msg.headVeh * 1e-5
+                src = 'headVeh'
+            else:
+                raw_deg = msg.heading * 1e-5
+                src = 'heading'
+        except Exception:
+            raw_deg = None
+            src = None
+
+        if raw_deg is not None:
+            # speed guard: if using motion heading and speed is low, skip updating heading
+            speed = None
+            try:
+                speed = msg.gSpeed / 1000.0  # mm/s -> m/s
+            except Exception:
+                speed = None
+
+            if src == 'heading' and speed is not None and speed < self.min_speed_for_heading:
+                # do not update heading from motion when nearly stationary
+                self.get_logger().debug(
+                    f"NavPVT motion heading skipped due to low speed: {speed}")
+            else:
+                heading_rad = math.radians(raw_deg)
+                # headAcc -> variance if available
+                try:
+                    if hasattr(msg, 'headAcc') and msg.headAcc > 0:
+                        headacc_deg = msg.headAcc * 1e-5
+                        heading_var = math.radians(headacc_deg) ** 2
+                except Exception:
+                    heading_var = None
+
+        # Smoothing: circular EMA using sin/cos
+        if heading_rad is not None:
+            s = math.sin(heading_rad)
+            c = math.cos(heading_rad)
+            if self.heading_sin == 0.0 and self.heading_cos == 0.0:
+                self.heading_sin = s
+                self.heading_cos = c
+            else:
+                a = self.heading_alpha
+                self.heading_sin = a * s + (1 - a) * self.heading_sin
+                self.heading_cos = a * c + (1 - a) * self.heading_cos
+            self.latest_heading = math.atan2(
+                self.heading_sin, self.heading_cos)
+            if heading_var is not None:
+                self.latest_heading_var = heading_var
+
+        # Convert UTM->map and publish
+        map_x, map_y = self.utm_to_map(utm_x, utm_y)
+        # publish using the latest heading state (publish_odometry will pick self.latest_heading)
+        self.publish_odometry(map_x, map_y, navsat_msg=None)
 
     def utm_to_map(self, utm_x, utm_y):
         # static_transform (map = R*utm + t) を適用
