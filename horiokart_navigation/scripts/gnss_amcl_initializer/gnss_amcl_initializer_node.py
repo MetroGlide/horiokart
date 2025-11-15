@@ -10,7 +10,7 @@ the initialization logic.
 """
 
 import math
-from typing import Optional, List
+from typing import Optional
 
 import rclpy
 from rclpy.node import Node
@@ -376,7 +376,7 @@ class GNSSAMCLInitializer(Node):
             yaw = 0.0
 
         msg.pose.pose.orientation = quaternion_from_yaw(
-            yaw if yaw is not None else 0.0)
+            yaw)
 
         # If operator requested overriding the full pose covariance via parameter,
         # use that 6x6 (36-element row-major) array directly.
@@ -401,16 +401,10 @@ class GNSSAMCLInitializer(Node):
         # covariance mapping: odom.pose.covariance (6x6 row-major) -> pose.covariance (6x6)
         cov = list(odom.pose.covariance) if odom.pose.covariance is not None and len(
             odom.pose.covariance) == 36 else [0.0]*36
-        # scale position covariances
-        cov[0] = cov[0] * self.covariance_scale
-        cov[1] = cov[1] * self.covariance_scale
-        cov[2] = cov[2] * self.covariance_scale
-        cov[3] = cov[3] * self.covariance_scale
-        cov[4] = cov[4] * self.covariance_scale
-        cov[5] = cov[5] * self.covariance_scale
-        cov[6] = cov[6] * self.covariance_scale
-        cov[7] = cov[7] * self.covariance_scale
-        cov[8] = cov[8] * self.covariance_scale
+        # scale position variances (diagonal elements only)
+        cov[0] = cov[0] * self.covariance_scale      # x variance
+        cov[7] = cov[7] * self.covariance_scale      # y variance
+        cov[14] = cov[14] * self.covariance_scale    # z variance
 
         # orientation covariance override from parameter: roll_var, pitch_var, yaw_var
         roll_var, pitch_var, yaw_var = (float(v) for v in (

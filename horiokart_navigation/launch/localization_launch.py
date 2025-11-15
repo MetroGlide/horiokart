@@ -187,7 +187,6 @@ def generate_launch_description():
         parameters=[
             {'use_sim_time': os.environ.get(
                 'SIMULATION', 'false').lower() == 'true',
-             # {'use_sim_time': True,
              'override_pose_covariance': True,
              'pose_covariance': [
                 0.25, 0.0, 0.0, 0.0, 0.0, 0.0,
@@ -197,8 +196,7 @@ def generate_launch_description():
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.06853891909122467
             ]}
-        ],
-        remappings=[]
+        ]
     )
 
     gnss_amcl_initializer_node_timer = TimerAction(
