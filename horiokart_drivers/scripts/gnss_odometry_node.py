@@ -78,8 +78,8 @@ class TransformManager:
 
 class OdometryManager:
     def __init__(self, params):
-        self.gps_frame = params.get('gps_frame_id', 'gps_link')
-        utm_zone = params.get('utm_zone', 54)  # UTMゾーンをパラメータ化（デフォルト: 54）
+        self.gps_frame = params.get('gps_frame_id')
+        utm_zone = params.get('utm_zone')
         self.utm_proj = pyproj.Proj(
             proj='utm', zone=utm_zone, ellps='WGS84', south=False)
 
@@ -105,6 +105,7 @@ class GNSSOdometryNode(Node):
             'gps_frame_id': self.declare_parameter('gps_frame_id', 'gps_link').get_parameter_value().string_value,
 
             'is_test_data': self.declare_parameter('is_test_data', False).get_parameter_value().bool_value,
+            'utm_zone': self.declare_parameter('utm_zone', 54).get_parameter_value().integer_value,
 
             # input selection: 'navsatfix' or 'navpvt'
             'gnss_input': self.declare_parameter('gnss_input', 'navsatfix').get_parameter_value().string_value,
@@ -121,6 +122,23 @@ class GNSSOdometryNode(Node):
             'apply_heading_invert': self.declare_parameter('apply_heading_invert', True).get_parameter_value().bool_value,
             # apply_heading_add_pi: bool, add 180 deg (pi rad) to heading when True
             'apply_heading_add_pi': self.declare_parameter('apply_heading_add_pi', False).get_parameter_value().bool_value,
+
+            # --- Covariance source parameters ---
+            # NavPVT-based covariance parameters
+            # navpvt_hacc_to_pos_std_scale: unitless scale applied to hAcc (mm -> m) to derive pos std [m]
+            'navpvt_hacc_to_pos_std_scale': self.declare_parameter('navpvt_hacc_to_pos_std_scale', 1.0).get_parameter_value().double_value,
+            # navpvt_vacc_to_pos_std_scale: unitless scale applied to vAcc (mm -> m) to derive z std [m]
+            'navpvt_vacc_to_pos_std_scale': self.declare_parameter('navpvt_vacc_to_pos_std_scale', 1.0).get_parameter_value().double_value,
+            # navpvt_headacc_to_yaw_var_scale: unitless scale applied to headAcc->rad to compute yaw variance
+            'navpvt_headacc_to_yaw_var_scale': self.declare_parameter('navpvt_headacc_to_yaw_var_scale', 1.0).get_parameter_value().double_value,
+            # Defaults used if NavPVT fields are missing or zero
+            'navpvt_default_pos_var': self.declare_parameter('navpvt_default_pos_var', 1.0).get_parameter_value().double_value,
+            'navpvt_default_z_var': self.declare_parameter('navpvt_default_z_var', 9999.0).get_parameter_value().double_value,
+            'navpvt_default_yaw_var': self.declare_parameter('navpvt_default_yaw_var', 9999.0).get_parameter_value().double_value,
+            # NavSatFix defaults (if position_covariance missing)
+            'navsatfix_default_pos_var': self.declare_parameter('navsatfix_default_pos_var', 1.0).get_parameter_value().double_value,
+            'navsatfix_default_z_var': self.declare_parameter('navsatfix_default_z_var', 9999.0).get_parameter_value().double_value,
+            'navsatfix_default_yaw_var': self.declare_parameter('navsatfix_default_yaw_var', 9999.0).get_parameter_value().double_value,
 
             # 対応点リストは list of [utm_x, utm_y, odom_x, odom_y] で与える (単位: m)
             'correspondences': [
@@ -145,8 +163,8 @@ class GNSSOdometryNode(Node):
         self.transform_manager = TransformManager(params)
         self.odom_manager = OdometryManager(params)
 
-        self.map_frame = params.get('map_frame_id')
-        self.gps_frame = params.get('gps_frame_id')
+        # Store params centrally so code uses self.params.get(...) when accessing parameters
+        self.params = params
 
         # tf2_ros Buffer/Listenerを初期化
         self.tf_buffer = tf2_ros.Buffer()
@@ -161,16 +179,10 @@ class GNSSOdometryNode(Node):
         self.latest_heading_var = None
         self.heading_sin = 0.0
         self.heading_cos = 0.0
-        self.min_speed_for_heading = params.get('min_speed_for_heading', 0.5)
-        self.heading_alpha = params.get('heading_smoothing_alpha', 0.6)
-        # Heading correction flags/values
-        self.apply_heading_offset = params.get('apply_heading_offset', False)
-        self.heading_offset_deg = params.get('heading_offset_deg', 0.0)
-        self.apply_heading_invert = params.get('apply_heading_invert', True)
-        self.apply_heading_add_pi = params.get('apply_heading_add_pi', False)
+        # Parameteric values are accessed dynamically from self.params when needed
 
         # サブスクライバ: パラメータ gnss_input で navsatfix / navpvt を切替
-        gnss_input = params.get('gnss_input', 'navsatfix')
+        gnss_input = self.params.get('gnss_input')
         if gnss_input == 'navpvt':
             self.navpvt_sub = self.create_subscription(
                 NavPVT, '/ublox/navpvt', self.navpvt_callback, 10)
@@ -208,7 +220,8 @@ class GNSSOdometryNode(Node):
         t = TransformStamped()
         t.header.stamp = self.get_clock().now().to_msg()
         t.header.frame_id = 'utm'  # UTM座標系
-        t.child_frame_id = self.map_frame
+        # child_frame_id comes from declared parameter 'map_frame_id'
+        t.child_frame_id = self.params.get('map_frame_id')
         t.transform.translation.x = x
         t.transform.translation.y = y
         t.transform.translation.z = 0.0
@@ -239,8 +252,8 @@ class GNSSOdometryNode(Node):
         # static_transform未指定（初期パラメータ対応点なし）の場合、tfから現在のgps_link位置を取得してlog info
         if (self.transform_manager.correspondences is None or len(self.transform_manager.correspondences) < 2):
             try:
-                target = self.map_frame if self.map_frame is not None else 'map'
-                source = self.gps_frame if self.gps_frame is not None else 'gps_link'
+                target = self.params.get('map_frame_id')
+                source = self.params.get('gps_frame_id')
                 trans = self.tf_buffer.lookup_transform(target, source, Time())
                 map_x_cur = trans.transform.translation.x
                 map_y_cur = trans.transform.translation.y
@@ -252,123 +265,103 @@ class GNSSOdometryNode(Node):
         # utm_to_mapで変換
         map_x, map_y = self.utm_to_map(utm_x, utm_y)
         self.publish_odometry(map_x, map_y, navsat_msg=msg)
-        # self.get_logger().info(
-        #     f"GNSS UTM: ({utm_x:.3f}, {utm_y:.3f}) => map: ({map_x:.3f}, {map_y:.3f})")
 
-    def publish_odometry(self, map_x, map_y, navsat_msg=None):
+    def publish_odometry(self, map_x, map_y, navsat_msg=None, navpvt_msg=None):
         # map座標系でOdometryをpublish
         odom = Odometry()
         odom.header.stamp = self.get_clock().now().to_msg()
-        odom.header.frame_id = self.map_frame
-        odom.child_frame_id = self.gps_frame
+        odom.header.frame_id = self.params.get('map_frame_id')
+        odom.child_frame_id = self.params.get('gps_frame_id')
         odom.pose.pose.position.x = map_x
         odom.pose.pose.position.y = map_y
         odom.pose.pose.position.z = 0.0
+
         # Determine yaw: prefer a heading passed via latest_heading, otherwise 0
-        yaw = 0.0
-        if getattr(self, 'latest_heading', None) is not None:
-            yaw = self.latest_heading
+        yaw = self.latest_heading if getattr(
+            self, 'latest_heading', None) is not None else 0.0
         q = tf_transformations.quaternion_from_euler(0, 0, yaw)
         odom.pose.pose.orientation.x = q[0]
         odom.pose.pose.orientation.y = q[1]
         odom.pose.pose.orientation.z = q[2]
         odom.pose.pose.orientation.w = q[3]
-        # 共分散反映
-        if navsat_msg is not None and hasattr(navsat_msg, 'position_covariance'):
-            cov = navsat_msg.position_covariance
-            # NavSatFixの共分散は3x3(row major)→Odometryの6x6(row major)へ
-            odom.pose.covariance = [
-                cov[0], cov[1], cov[2], 0.0, 0.0, 0.0,
-                cov[3], cov[4], cov[5], 0.0, 0.0, 0.0,
-                cov[6], cov[7], cov[8], 0.0, 0.0, 0.0,
-                0.0,   0.0,   0.0,   9999.0, 0.0, 0.0,
-                0.0,   0.0,   0.0,   0.0,   9999.0, 0.0,
-                0.0,   0.0,   0.0,   0.0,   0.0,   9999.0
-            ]
+
+        # Build default covariance using NavSatFix defaults from declared params
+        cov = [0.0] * 36
+        cov[0] = self.params.get('navsatfix_default_pos_var')
+        cov[7] = self.params.get('navsatfix_default_pos_var')
+        cov[14] = self.params.get('navsatfix_default_z_var')
+        cov[21] = 9999.0
+        cov[27] = 9999.0
+        cov[35] = self.params.get('navsatfix_default_yaw_var')
+
+        # If configured to use NavPVT for covariance, build from navpvt_msg
+        if self.params.get('gnss_input') == 'navpvt':
+            cov = self.build_covariance_from_navpvt(navpvt_msg)
         else:
-            odom.pose.covariance = [
-                1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 9999.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 9999.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 0.0, 9999.0, 0.0,
-                0.0, 0.0, 0.0, 0.0, 0.0, 9999.0
-            ]
-        # If we have a heading variance estimate (from NavPVT), set yaw variance at index 35
+            # navsatfix path: map 3x3 -> 6x6 (if available)
+            if navsat_msg is not None and hasattr(navsat_msg, 'position_covariance'):
+                ncov = navsat_msg.position_covariance
+                cov = [
+                    ncov[0], ncov[1], ncov[2], 0.0, 0.0, 0.0,
+                    ncov[3], ncov[4], ncov[5], 0.0, 0.0, 0.0,
+                    ncov[6], ncov[7], ncov[8], 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 9999.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 9999.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0, 0.0, self.params.get(
+                        'navsatfix_default_yaw_var')
+                ]
+
+        # If smoothing produced a heading variance estimate, override yaw variance
         if getattr(self, 'latest_heading_var', None) is not None:
-            odom.pose.covariance[35] = self.latest_heading_var
+            cov[35] = self.latest_heading_var
+
+        odom.pose.covariance = cov
         self.odom_pub.publish(odom)
 
     def navpvt_callback(self, msg):
         # Handle NavPVT message: extract lon/lat, convert to UTM, extract heading and headAcc
-        try:
-            # lon/lat: degrees = raw * 1e-7
-            lon = msg.lon * 1e-7
-            lat = msg.lat * 1e-7
-        except Exception as e:
-            self.get_logger().warn(f"NavPVT message missing lon/lat: {e}")
-            return
+        # lon/lat: degrees = raw * 1e-7
+        lon = msg.lon * 1e-7
+        lat = msg.lat * 1e-7
 
         # convert to UTM using odom_manager (expects longitude, latitude in degrees)
-        try:
-            utm_x, utm_y = self.odom_manager.gnss_to_utm(lon, lat)
-        except Exception as e:
-            self.get_logger().warn(
-                f"Failed to convert NavPVT lon/lat to UTM: {e}")
-            return
+        utm_x, utm_y = self.odom_manager.gnss_to_utm(lon, lat)
 
         # Determine heading source: prefer headVeh if FLAGS_HEAD_VEH_VALID set
         heading_rad = None
         heading_var = None
         FLAGS_HEAD_VEH_VALID = 32
-        try:
-            if (msg.flags & FLAGS_HEAD_VEH_VALID) != 0 and hasattr(msg, 'headVeh'):
-                raw_deg = msg.headVeh * 1e-5
-                src = 'headVeh'
-            else:
-                raw_deg = msg.heading * 1e-5
-                src = 'heading'
-        except Exception:
-            raw_deg = None
-            src = None
+        # Determine heading source: prefer head_veh if FLAGS_HEAD_VEH_VALID set
+        if (msg.flags & FLAGS_HEAD_VEH_VALID) != 0:
+            raw_deg = msg.head_veh * 1e-5
+            src = 'head_veh'
+        else:
+            raw_deg = msg.heading * 1e-5
+            src = 'heading'
 
         if raw_deg is not None:
             # speed guard: if using motion heading and speed is low, skip updating heading
-            speed = None
-            try:
-                speed = msg.gSpeed / 1000.0  # mm/s -> m/s
-            except Exception:
-                speed = None
+            # field name is g_speed in current message definition
+            speed = msg.g_speed / 1000.0  # mm/s -> m/s
 
-            if src == 'heading' and speed is not None and speed < self.min_speed_for_heading:
+            if src == 'heading' and speed is not None and speed < self.params.get('min_speed_for_heading'):
                 # do not update heading from motion when nearly stationary
                 self.get_logger().debug(
                     f"NavPVT motion heading skipped due to low speed: {speed}")
             else:
-                self.get_logger().info(
-                    f"NavPVT heading source: {src}, raw: {raw_deg:.3f} deg, speed: {speed if speed is not None else 'N/A'} m/s")
                 heading_rad = math.radians(raw_deg)
                 # Apply optional heading corrections before smoothing
-                self.get_logger().info(
-                    f"apply heading invert: {self.apply_heading_invert}, apply heading +180 deg: {self.apply_heading_add_pi}, apply heading offset: {self.apply_heading_offset}")
-                if self.apply_heading_invert:
+                if self.params.get('apply_heading_invert'):
                     heading_rad = -heading_rad
-                    self.get_logger().info("Applied heading inversion.")
-                if self.apply_heading_add_pi:
+                if self.params.get('apply_heading_add_pi'):
                     heading_rad = heading_rad + math.pi
-                    self.get_logger().info("Applied heading + 180 deg.")
-                if self.apply_heading_offset:
+                if self.params.get('apply_heading_offset'):
                     heading_rad = heading_rad + \
-                        math.radians(self.heading_offset_deg)
-                    self.get_logger().info(
-                        f"Applied heading offset: {self.heading_offset_deg} deg.")
-                # headAcc -> variance if available
-                try:
-                    if hasattr(msg, 'headAcc') and msg.headAcc > 0:
-                        headacc_deg = msg.headAcc * 1e-5
-                        heading_var = math.radians(headacc_deg) ** 2
-                except Exception:
-                    heading_var = None
+                        math.radians(self.params.get('heading_offset_deg'))
+                # head_acc -> variance if available (will raise if field missing)
+                if msg.head_acc > 0:
+                    headacc_deg = msg.head_acc * 1e-5
+                    heading_var = math.radians(headacc_deg) ** 2
 
         # Smoothing: circular EMA using sin/cos
         if heading_rad is not None:
@@ -378,7 +371,7 @@ class GNSSOdometryNode(Node):
                 self.heading_sin = s
                 self.heading_cos = c
             else:
-                a = self.heading_alpha
+                a = self.params.get('heading_smoothing_alpha')
                 self.heading_sin = a * s + (1 - a) * self.heading_sin
                 self.heading_cos = a * c + (1 - a) * self.heading_cos
             self.latest_heading = math.atan2(
@@ -389,7 +382,51 @@ class GNSSOdometryNode(Node):
         # Convert UTM->map and publish
         map_x, map_y = self.utm_to_map(utm_x, utm_y)
         # publish using the latest heading state (publish_odometry will pick self.latest_heading)
-        self.publish_odometry(map_x, map_y, navsat_msg=None)
+        self.publish_odometry(map_x, map_y, navpvt_msg=msg)
+
+    def build_covariance_from_navpvt(self, msg):
+        """Build a 6x6 (36 element row-major) Odometry covariance from a NavPVT message.
+        Uses hAcc/mm, vAcc/mm, headAcc/(deg/1e-5). If fields are missing or zero,
+        falls back to configured defaults.
+        """
+        cov = [0.0] * 36
+        # position variance (xx, yy)
+        # Access fields directly; if a field is missing, let AttributeError surface so user notices
+        # h_acc: horizontal accuracy estimate [mm]
+        if msg.h_acc and msg.h_acc > 0:
+            pos_std = (msg.h_acc / 1000.0) * \
+                self.params.get('navpvt_hacc_to_pos_std_scale')
+            pos_var = pos_std * pos_std
+        else:
+            pos_var = self.params.get('navpvt_default_pos_var')
+
+        # z variance
+        # v_acc: vertical accuracy estimate [mm]
+        if msg.v_acc and msg.v_acc > 0:
+            z_std = (msg.v_acc / 1000.0) * \
+                self.params.get('navpvt_vacc_to_pos_std_scale')
+            z_var = z_std * z_std
+        else:
+            z_var = self.params.get('navpvt_default_z_var')
+
+        # yaw variance from head_acc
+        # head_acc: heading accuracy [deg / 1e-5]
+        if msg.head_acc and msg.head_acc > 0:
+            headacc_deg = msg.head_acc * 1e-5
+            yaw_std = math.radians(
+                headacc_deg) * self.params.get('navpvt_headacc_to_yaw_var_scale')
+            yaw_var = yaw_std * yaw_std
+        else:
+            yaw_var = self.params.get('navpvt_default_yaw_var')
+
+        cov[0] = pos_var
+        cov[7] = pos_var
+        cov[14] = z_var
+        # Set large rotation variances for roll/pitch, yaw filled below
+        cov[21] = 9999.0
+        cov[27] = 9999.0
+        cov[35] = yaw_var
+        return cov
 
     def utm_to_map(self, utm_x, utm_y):
         # static_transform (map = R*utm + t) を適用
