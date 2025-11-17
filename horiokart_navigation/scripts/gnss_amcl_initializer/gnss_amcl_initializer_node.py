@@ -197,7 +197,7 @@ class GNSSAMCLInitializer(Node):
 
         ok_xy = (std_x <= self.max_position_std_m) and (
             std_y <= self.max_position_std_m)
-        ok_z = std_z <= self.max_vertical_std_m or self.ignore_z_std
+        ok_z = self.ignore_z_std or (std_z <= self.max_vertical_std_m)
 
         self.get_logger().info(
             f'Odom std (x,y,z)=({std_x:.3f},{std_y:.3f},{std_z:.3f}), thresholds (xy,z)=({self.max_position_std_m},{self.max_vertical_std_m})')

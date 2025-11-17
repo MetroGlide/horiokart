@@ -453,7 +453,6 @@ class GNSSOdometryNode(Node):
                 map_y_cur = trans.transform.translation.y
             except Exception:
                 self.get_logger().error("Failed to lookup transform for gps_link in map frame.")
-                pass
 
         # Convert to map and publish odometry using handler result
         map_x, map_y = self.utm_to_map(utm_x, utm_y)
