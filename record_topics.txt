@@ -3,3 +3,4 @@
 /scan_front_lidar_origin
 /nmea_sentence
 /gps/fix
+/navpvt

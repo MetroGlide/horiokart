@@ -187,6 +187,7 @@ def generate_launch_description():
         parameters=[
             {'use_sim_time': os.environ.get(
                 'SIMULATION', 'false').lower() == 'true',
+             'use_fixed_heading': False,
              'override_pose_covariance': True,
              'pose_covariance': [
                 0.25, 0.0, 0.0, 0.0, 0.0, 0.0,

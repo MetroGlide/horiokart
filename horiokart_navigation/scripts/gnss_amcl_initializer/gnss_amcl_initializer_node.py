@@ -197,7 +197,7 @@ class GNSSAMCLInitializer(Node):
 
         ok_xy = (std_x <= self.max_position_std_m) and (
             std_y <= self.max_position_std_m)
-        ok_z = std_z <= self.max_vertical_std_m
+        ok_z = self.ignore_z_std or (std_z <= self.max_vertical_std_m)
 
         self.get_logger().info(
             f'Odom std (x,y,z)=({std_x:.3f},{std_y:.3f},{std_z:.3f}), thresholds (xy,z)=({self.max_position_std_m},{self.max_vertical_std_m})')
@@ -228,6 +228,7 @@ class GNSSAMCLInitializer(Node):
         self.declare_parameter('odom_age_timeout_sec', 2.0)
         self.declare_parameter('ignore_odom_age', False)
         self.declare_parameter('max_consecutive_bad', 20)
+        self.declare_parameter('ignore_z_std', True)
 
         # Read other tunable parameters
         self.map_frame = self.get_parameter(
@@ -258,6 +259,8 @@ class GNSSAMCLInitializer(Node):
             'ignore_odom_age').get_parameter_value().bool_value
         self.max_consecutive_bad = self.get_parameter(
             'max_consecutive_bad').get_parameter_value().integer_value
+        self.ignore_z_std = self.get_parameter(
+            'ignore_z_std').get_parameter_value().bool_value
 
         self.get_logger().info(
             f"Parameters: map_frame={self.map_frame}, required_consecutive_good={self.required_consecutive_good}")
