@@ -238,7 +238,7 @@ class NavPVTHandler(BaseGNSSHandler):
         if msg.head_acc is not None and msg.head_acc > 0:
             headacc_deg = msg.head_acc * 1e-5
             yaw_std = math.radians(headacc_deg) * \
-                self.params['navpvt_headacc_to_yaw_var_scale']
+                self.params['navpvt_headacc_to_yaw_std_scale']
             cov[35] = yaw_std * yaw_std
 
         # Build quaternion if yaw available
@@ -302,8 +302,8 @@ class GNSSOdometryNode(Node):
             'navpvt_hacc_to_pos_std_scale': self.declare_parameter('navpvt_hacc_to_pos_std_scale', 1.0).get_parameter_value().double_value,
             # navpvt_vacc_to_pos_std_scale: unitless scale applied to vAcc (mm -> m) to derive z std [m]
             'navpvt_vacc_to_pos_std_scale': self.declare_parameter('navpvt_vacc_to_pos_std_scale', 1.0).get_parameter_value().double_value,
-            # navpvt_headacc_to_yaw_var_scale: unitless scale applied to headAcc->rad to compute yaw variance
-            'navpvt_headacc_to_yaw_var_scale': self.declare_parameter('navpvt_headacc_to_yaw_var_scale', 1.0).get_parameter_value().double_value,
+            # navpvt_headacc_to_yaw_std_scale: unitless scale applied to headAcc->rad to derive yaw standard deviation
+            'navpvt_headacc_to_yaw_std_scale': self.declare_parameter('navpvt_headacc_to_yaw_std_scale', 1.0).get_parameter_value().double_value,
             # Global default covariance (36 elements: row-major 6x6). If provided and length==36,
             # handlers and node will prefer this array as the default covariance.
             'default_covariance': self.declare_parameter('default_covariance', [

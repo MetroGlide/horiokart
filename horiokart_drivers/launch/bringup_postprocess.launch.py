@@ -103,7 +103,7 @@ def generate_launch_description():
                     # NavPVT covariance/default parameters
                     "navpvt_hacc_to_pos_std_scale": 1.0,
                     "navpvt_vacc_to_pos_std_scale": 1.0,
-                    "navpvt_headacc_to_yaw_var_scale": 1.5,
+                    "navpvt_headacc_to_yaw_std_scale": 1.5,
                 }],
                 remappings=[
                     ("/ublox/navpvt", "/navpvt"),
