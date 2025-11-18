@@ -205,6 +205,22 @@ def generate_launch_description():
         actions=[gnss_amcl_initializer_node]
     )
 
+    # AMCL watchdog node: monitor amcl covariance and trigger reinitialization when needed
+    amcl_watchdog_node = Node(
+        package='horiokart_navigation',
+        executable='amcl_watchdog_node.py',
+        name='amcl_watchdog_node',
+        output='screen',
+        parameters=[{'use_sim_time': os.environ.get(
+            'SIMULATION', 'false').lower() == 'true'}],
+        remappings=remappings
+    )
+
+    amcl_watchdog_node_timer = TimerAction(
+        period=12.0,
+        actions=[amcl_watchdog_node]
+    )
+
     # Create the launch description and populate
     ld = LaunchDescription()
 
@@ -228,5 +244,6 @@ def generate_launch_description():
 
     ld.add_action(change_amcl_publish_state_node)
     ld.add_action(gnss_amcl_initializer_node_timer)
+    # ld.add_action(amcl_watchdog_node_timer)
 
     return ld
