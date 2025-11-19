@@ -1,10 +1,8 @@
 """AMCL watchdog node implementation placed inside the python package.
 
 This module is imported by the installed script wrapper so that package
-imports work correctly after `colcon build` and `source install/setup.bash`.
 """
 from typing import Optional
-import threading
 import time
 
 from rclpy.node import Node
@@ -18,59 +16,68 @@ from .types import RecoveryContext
 
 class AmclWatchdogNode(Node):
     def __init__(self):
-        super().__init__('amcl_watchdog')
+        super().__init__('amcl_watchdog_node')
 
-        # parameters
-        metric = self.declare_parameter(
+        # declare and read parameters
+        self._declare_parameters()
+
+        # initialize components and ROS communications
+        self._init_communications()
+
+        # state
+        self._last_recovery_time = 0.0
+        self._in_recovery = False
+
+        self.get_logger().info(
+            f"amcl_watchdog started: metric={self.metric_name} threshold={self.threshold} consecutive_count={self.consecutive_count}")
+
+    def _declare_parameters(self) -> None:
+        """
+        Declare and read node parameters (only operational parameters).
+        """
+        self.metric_name = self.declare_parameter(
             'metric', 'trace_xy').get_parameter_value().string_value
-        threshold = self.declare_parameter(
-            'threshold', 2.0).get_parameter_value().double_value
-        consecutive_count = int(self.declare_parameter(
+        self.threshold = float(self.declare_parameter(
+            'threshold', 2.0).get_parameter_value().double_value)
+        self.consecutive_count = int(self.declare_parameter(
             'consecutive_count', 3).get_parameter_value().integer_value)
-        monitor_topic = self.declare_parameter(
-            'monitor_topic', '/amcl_pose').get_parameter_value().string_value
-        initializer_type = self.declare_parameter(
+        self.initializer_type = self.declare_parameter(
             'initializer.type', 'service').get_parameter_value().string_value
-        initializer_service = self.declare_parameter(
-            'initializer.service_name', '/gnss_amcl_initializer_node/request_reinit').get_parameter_value().string_value
-        initializer_topic = self.declare_parameter(
-            'initializer.topic_name', '/initialpose').get_parameter_value().string_value
-        call_timeout = float(self.declare_parameter(
+        self.call_timeout = float(self.declare_parameter(
             'initializer.call_timeout_sec', 5.0).get_parameter_value().double_value)
         self._recovery_backoff = float(self.declare_parameter(
             'recovery_backoff_sec', 60.0).get_parameter_value().double_value)
         self._max_retries = int(self.declare_parameter(
             'max_retries', 3).get_parameter_value().integer_value)
-        min_interval = float(self.declare_parameter(
+        self.min_interval = float(self.declare_parameter(
             'min_interval_between_events', 0.0).get_parameter_value().double_value)
 
-        self.metric_name = metric
-        self.threshold = float(threshold)
+        # detector config
+        self.detector = ConsecutiveThresholdDetector(metric_name=self.metric_name, threshold=self.threshold,
+                                                     consecutive_count=self.consecutive_count, min_interval_between_events=self.min_interval)
 
-        # components
-        self.detector = ConsecutiveThresholdDetector(
-            metric_name=metric, threshold=self.threshold, consecutive_count=consecutive_count, min_interval_between_events=min_interval)
-
-        if initializer_type == 'topic':
-            self.recovery_handler = InitialPosePublisherHandler(
-                self, topic_name=initializer_topic)
-        else:
-            # default: try to call service, fallback to topic
-            self.recovery_handler = GnssAmclInitializerHandler(
-                self, service_name=initializer_service, fallback_topic=initializer_topic, call_timeout_sec=call_timeout)
-
-        self._last_recovery_time = 0.0
-
-        # subscription
+    def _init_communications(self) -> None:
+        """
+        Initialize ROS publishers/subscriptions/clients and recovery handler.
+        """
         self.subscription = self.create_subscription(
-            PoseWithCovarianceStamped, monitor_topic, self._on_amcl_pose, 10)
-        self.subscription  # prevent unused
+            PoseWithCovarianceStamped, 'amcl_pose', self._on_amcl_pose, 10)
 
-        self.get_logger().info(
-            f"amcl_watchdog started: metric={metric} threshold={self.threshold} consecutive_count={consecutive_count}")
+        # Recovery handler selection
+        if self.initializer_type == 'service':
+            self.recovery_handler = GnssAmclInitializerHandler(
+                self, service_name='request_reinit', call_timeout_sec=self.call_timeout)
+        else:
+            self.get_logger().error(
+                f"Unknown initializer.type '{self.initializer_type}'; no recovery handler configured")
+            raise RuntimeError(
+                f"Unknown initializer.type '{self.initializer_type}'")
 
     def _on_amcl_pose(self, msg: PoseWithCovarianceStamped) -> None:
         # safe compute metric
+        # If we're already performing recovery, ignore incoming pose samples.
+        if self._in_recovery:
+            return
         try:
             metric_value = compute(self.metric_name, msg.pose.covariance)
         except Exception as e:
@@ -89,10 +96,13 @@ class AmclWatchdogNode(Node):
             self.get_logger().info("Recovery suppressed due to backoff")
             return
 
-        # run recovery in background thread to avoid blocking subscription callbacks
-        t = threading.Thread(target=self._run_recovery,
-                             args=(msg, event), daemon=True)
-        t.start()
+        # Run recovery synchronously. While recovery is running, incoming
+        # amcl_pose messages are ignored (see _in_recovery flag above).
+        self._in_recovery = True
+        try:
+            self._run_recovery(msg, event)
+        finally:
+            self._in_recovery = False
 
     def _run_recovery(self, amcl_msg: PoseWithCovarianceStamped, event) -> None:
         self.get_logger().info(

@@ -213,7 +213,8 @@ def generate_launch_description():
         output='screen',
         parameters=[{'use_sim_time': os.environ.get(
             'SIMULATION', 'false').lower() == 'true'}],
-        remappings=remappings
+        remappings=remappings + [('amcl_pose', 'amcl_pose_origin'),
+                                 ('request_reinit', '/gnss_amcl_initializer_node/request_reinit')]
     )
 
     amcl_watchdog_node_timer = TimerAction(
@@ -244,6 +245,6 @@ def generate_launch_description():
 
     ld.add_action(change_amcl_publish_state_node)
     ld.add_action(gnss_amcl_initializer_node_timer)
-    # ld.add_action(amcl_watchdog_node_timer)
+    ld.add_action(amcl_watchdog_node_timer)
 
     return ld
