@@ -10,7 +10,7 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 
 from .metrics import compute
 from .detectors import ConsecutiveThresholdDetector
-from .handlers import GnssAmclInitializerHandler, InitialPosePublisherHandler
+from .handlers import GnssAmclInitializerHandler
 from .types import RecoveryContext
 
 
