@@ -2,7 +2,6 @@
 
 This module is imported by the installed script wrapper so that package
 """
-from typing import Optional
 import time
 
 from rclpy.node import Node

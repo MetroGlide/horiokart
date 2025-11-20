@@ -22,10 +22,6 @@ class ConsecutiveThresholdDetector(AnomalyDetector):
 
     def feed(self, value: float) -> Optional[AnomalyEvent]:
         now = time.time()
-        if value is None:
-            # ignore
-            self._count = 0
-            return None
         if value > self.threshold:
             self._count += 1
         else:

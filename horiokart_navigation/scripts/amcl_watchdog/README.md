@@ -5,7 +5,7 @@
 主な機能
 - `/amcl_pose` を購読して共分散から監視指標（デフォルト: trace_xy）を計算
 - 連続 N 回のしきい値超過で異常と判定し、再初期化ハンドラを呼び出す
-- デフォルトでは `gnss_amcl_initializer`（サービス呼び出し）を試行し、無ければ `/initialpose` にフォールバック publish
+- デフォルトでは `gnss_amcl_initializer`（サービス呼び出し）を試行します（フォールバック publish は未実装）
 
 使い方（概要）
 1. ワークスペースをビルドして source する
@@ -15,10 +15,8 @@
 - `metric` : `trace_xy` | `determinant_xy` | `max_eigenvalue_xy`（デフォルト `trace_xy`）
 - `threshold` : float（デフォルト `2.0`、metric に対応する単位）
 - `consecutive_count` : int（デフォルト `3`）
-- `monitor_topic` : string（デフォルト `/amcl_pose`）
 - `initializer.type` : `service` | `topic`（デフォルト `service`）
-- `initializer.service_name` : string（デフォルト `/gnss_amcl_initializer/trigger`）
-- `initializer.topic_name` : string（デフォルト `/initialpose`）
+- `initializer.service_name` : string（デフォルト `/gnss_amcl_initializer_node/request_reinit`）
 - `recovery_backoff_sec` : float（デフォルト `60.0`）
 - `max_retries` : int（デフォルト `3`）
 
@@ -26,7 +24,7 @@
 - 実際の `gnss_amcl_initializer` のサービス名/型が異なる場合は、launch で `initializer.service_name` を合わせるか、ハンドラを調整してください。
 
 開発者向け
-- コードは `scripts/amcl_watchdog` 以下にあります: `amcl_watchdog_node.py`, `metrics.py`, `detectors.py`, `handlers.py`, `types.py`。
+- 実装コードは `horiokart_navigation/amcl_watchdog/` パッケージ内にあります: `metrics.py`, `detectors.py`, `handlers.py`, `types.py` など。`scripts/amcl_watchdog/amcl_watchdog_node.py` はラッパースクリプトです。
 - 異常判定ロジックや再設定ハンドラは簡単に差し替え可能です。
 
 処理の流れ（ASCII アート）
@@ -71,13 +69,8 @@
 		     (ログ/診断出力)
 			     |
 			     v
-		   +--------------------+
-		   | HealthManager /    | <-- backoff, retry制御, フラッピング抑止
-		   | ログ/警告/監視      |
-		   +--------------------+
-```
-
-注記:
-- `AnomalyDetector` や `RecoveryHandler` は差し替え可能な設計です。
+		   +-------------------------------+
+		   | AmclWatchdogNode              | <-- backoff, retry制御, フラッピング抑止, ログ/警告/監視
+		   +-------------------------------+
 - `gnss_amcl_initializer` のサービス仕様に合わせて `RecoveryHandler` を調整してください。
 
