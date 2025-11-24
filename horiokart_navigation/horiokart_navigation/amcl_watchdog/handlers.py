@@ -27,13 +27,15 @@ class GnssAmclInitializerHandler(RecoveryHandler):
         self._call_timeout_sec = float(call_timeout_sec)
         self._client = None
         if self._service_name:
-            self._client = self._node.create_client(Trigger, self._service_name)
+            self._client = self._node.create_client(
+                Trigger, self._service_name)
 
     def attempt_recovery(self, ctx: RecoveryContext) -> RecoveryResult:
         if not self._service_name:
             return RecoveryResult(success=False, message='no service_name configured')
         if self._client is None:
-            self._client = self._node.create_client(Trigger, self._service_name)
+            self._client = self._node.create_client(
+                Trigger, self._service_name)
         if not self._client.wait_for_service(timeout_sec=1.0):
             return RecoveryResult(success=False, message=f'service {self._service_name} not available')
 

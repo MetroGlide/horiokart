@@ -3,6 +3,7 @@
 This module is imported by the installed script wrapper so that package
 """
 import time
+import threading
 
 from rclpy.node import Node
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -72,6 +73,17 @@ class AmclWatchdogNode(Node):
             raise RuntimeError(
                 f"Unknown initializer.type '{self.initializer_type}'")
 
+        # NOTE:
+        # The current implementation performs recovery by calling the
+        # configured handler synchronously. To avoid blocking the node's
+        # main executor and to prevent races when waiting on service
+        # futures, recovery is executed in a background thread (see
+        # _on_amcl_pose). A more robust long-term approach is to refactor
+        # recovery to a fully asynchronous model where service futures are
+        # managed by the node's executor (e.g. storing futures and
+        # processing them in timers or via executor callbacks) instead of
+        # using blocking waits like `spin_until_future_complete`.
+
     def _on_amcl_pose(self, msg: PoseWithCovarianceStamped) -> None:
         # safe compute metric
         # If we're already performing recovery, ignore incoming pose samples.
@@ -95,13 +107,21 @@ class AmclWatchdogNode(Node):
             self.get_logger().info("Recovery suppressed due to backoff")
             return
 
-        # Run recovery synchronously. While recovery is running, incoming
-        # amcl_pose messages are ignored (see _in_recovery flag above).
-        self._in_recovery = True
-        try:
-            self._run_recovery(msg, event)
-        finally:
-            self._in_recovery = False
+        # Run recovery in a background thread to avoid blocking the main
+        # rclpy spin loop. The handler may perform blocking service waits
+        # (via spin_until_future_complete); running it in a separate
+        # thread prevents interference with the node's executor.
+
+        def _recovery_worker(amcl_msg: PoseWithCovarianceStamped, ev):
+            self._in_recovery = True
+            try:
+                self._run_recovery(amcl_msg, ev)
+            finally:
+                self._in_recovery = False
+
+        t = threading.Thread(target=_recovery_worker,
+                             args=(msg, event), daemon=True)
+        t.start()
 
     def _run_recovery(self, amcl_msg: PoseWithCovarianceStamped, event) -> None:
         self.get_logger().info(
