@@ -68,14 +68,6 @@ amcl:
     set_initial_pose: true # Causes AMCL to set initial pose from the initial_pose* parameters instead of waiting for the initial_pose message.
     initial_pose: {x: 0.0, y: 0.0, z: 0.0, yaw: 0.0} # X, Y, Z, and yaw coordinates of initial pose (meters and radians) of robot base frame in global frame.
 
-amcl_map_client:
-  ros__parameters:
-    use_sim_time: False
-
-amcl_rclcpp_node:
-  ros__parameters:
-    use_sim_time: False
-
 bt_navigator:
   ros__parameters:
     use_sim_time: False
@@ -120,10 +112,6 @@ bt_navigator:
     - nav2_planner_selector_bt_node
     - nav2_controller_selector_bt_node
     - nav2_goal_checker_selector_bt_node
-
-bt_navigator_rclcpp_node:
-  ros__parameters:
-    use_sim_time: False
 
 controller_server:
   ros__parameters:
@@ -242,10 +230,6 @@ controller_server:
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
       
-controller_server_rclcpp_node:
-  ros__parameters:
-    use_sim_time: False
-
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -262,12 +246,7 @@ local_costmap:
       # robot_radius: 0.4
       footprint: "[[0.4, 0.3], [0.4, -0.3], [-0.2, -0.3], [-0.2, 0.3]]"
 
-      # plugins: ["obstacle_layer", "voxel_layer", "denoise_layer", "inflation_layer"]
-      # plugins: ["obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
-      # plugins: ["top_obstacle_layer", "obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
       plugins: ["top_obstacle_layer", "obstacle_layer", "denoise_layer", "inflation_layer"]
-      # plugins: ["obstacle_layer", "depth_voxel_layer", "inflation_layer"]
-      # plugins: ["obstacle_layer", "voxel_layer", "inflation_layer"]
 
       denoise_layer:
         plugin: "nav2_costmap_2d::DenoiseLayer"
@@ -364,10 +343,7 @@ global_costmap:
       resolution: 0.05
       track_unknown_space: true
 
-      # plugins: ["static_layer", "obstacle_layer", "voxel_layer", "inflation_layer"]
-      # plugins: ["static_layer", "top_obstacle_layer", "obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
       plugins: ["static_layer", "top_obstacle_layer", "obstacle_layer", "denoise_layer", "inflation_layer"]
-      # plugins: ["static_layer", "depth_voxel_layer", "inflation_layer"]
 
       filters: ["speed_filter"]
 
@@ -485,7 +461,6 @@ map_saver:
 
 planner_server:
   ros__parameters:
-    # expected_planner_frequency: 10.0
     expected_planner_frequency: 1.0
     use_sim_time: False
     planner_plugins: ["GridBased"]
@@ -494,31 +469,6 @@ planner_server:
       tolerance: 0.5
       use_astar: false
       allow_unknown: true
-
-planner_server_rclcpp_node:
-  ros__parameters:
-    use_sim_time: False
-
-recoveries_server:
-  ros__parameters:
-    costmap_topic: local_costmap/costmap_raw
-    footprint_topic: local_costmap/published_footprint
-    cycle_frequency: 10.0
-    recovery_plugins: ["spin", "backup", "wait"]
-    spin:
-      plugin: "nav2_recoveries/Spin"
-    backup:
-      plugin: "nav2_recoveries/BackUp"
-    wait:
-      plugin: "nav2_recoveries/Wait"
-    global_frame: odom
-    robot_base_frame: base_link
-    transform_timeout: 0.1
-    use_sim_time: true
-    simulate_ahead_time: 2.0
-    max_rotational_vel: 0.5
-    min_rotational_vel: 0.4
-    rotational_acc_lim: 1.6
 
 robot_state_publisher:
   ros__parameters:
@@ -530,10 +480,8 @@ costmap_filter_info_server:
     type: 1
     filter_info_topic: "/costmap_filter_info"
     mask_topic: "/local_costmap/costmap"
-    ## base: 100.0
-    ## multiplier: -1.0
     base: 100.0
-    multiplier: -0.8
+    multiplier: -0.6
   
 collision_detector:
   ros__parameters:
@@ -570,3 +518,11 @@ collision_detector:
       type: "scan"
       topic: "scan_front_lidar"
       enabled: True
+
+# https://docs.nav2.org/configuration/packages/configuring-velocity-smoother.html
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: False
+
+    max_velocity: [2.0, 2.0, 3.0] # x, y, theta. Purpose: set high value to ignore limit
+    min_velocity: [-2.0, -2.0, -3.0] # x, y, theta. Purpose: set high value to ignore limit
