@@ -224,12 +224,14 @@ class NavPVTHandler(BaseGNSSHandler):
 
         # Use validated global default covariance and override entries using NavPVT fields
         cov = list(self.params['default_covariance'])
+        _scale = 1.5
+        _bias = 1.5  # [m]
         if msg.h_acc is not None and msg.h_acc > 0:
             pos_std = (msg.h_acc / 1000.0) * \
                 self.params['navpvt_hacc_to_pos_std_scale']
             pos_var = pos_std * pos_std
-            cov[0] = pos_var
-            cov[7] = pos_var
+            cov[0] = pos_var * _scale + _bias ** 2
+            cov[7] = pos_var * _scale + _bias ** 2
         if msg.v_acc is not None and msg.v_acc > 0:
             z_std = (msg.v_acc / 1000.0) * \
                 self.params['navpvt_vacc_to_pos_std_scale']
@@ -491,6 +493,10 @@ class GNSSOdometryNode(Node):
         # should honor that contract. Use the handler-provided covariance
         # directly (copy to a list to avoid shared-mutable structures).
         odom.pose.covariance = list(handler_result.covariance)
+        threshold = 10.0  # [m] 異常に大きな分散はpublishしない
+        if odom.pose.covariance[0] + odom.pose.covariance[7] > threshold ** 2:
+            self.get_logger().warn(f"cov too large: {odom.pose.covariance}")
+            return
         self.odom_pub.publish(odom)
 
     def utm_to_map(self, utm_x, utm_y):
