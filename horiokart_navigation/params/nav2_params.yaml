@@ -331,7 +331,7 @@ global_costmap:
   global_costmap:
     ros__parameters:
       map_topic: /planning_map
-      update_frequency: 1.0
+      update_frequency: 10.0
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
@@ -524,5 +524,5 @@ velocity_smoother:
   ros__parameters:
     use_sim_time: False
 
-    max_velocity: [2.0, 2.0, 3.0] # x, y, theta. Purpose: set high value to ignore limit
-    min_velocity: [-2.0, -2.0, -3.0] # x, y, theta. Purpose: set high value to ignore limit
+    # max_velocity: [0.5, 2.0, 3.0] # x, y, theta. Purpose: set high value to ignore limit
+    # min_velocity: [-0.5, -2.0, -3.0] # x, y, theta. Purpose: set high value to ignore limit
