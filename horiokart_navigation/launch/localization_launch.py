@@ -246,6 +246,6 @@ def generate_launch_description():
 
     ld.add_action(change_amcl_publish_state_node)
     ld.add_action(gnss_amcl_initializer_node_timer)
-    ld.add_action(amcl_watchdog_node_timer)
+    # ld.add_action(amcl_watchdog_node_timer)
 
     return ld
