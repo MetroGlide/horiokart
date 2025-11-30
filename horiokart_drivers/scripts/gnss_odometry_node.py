@@ -494,7 +494,7 @@ class GNSSOdometryNode(Node):
         # directly (copy to a list to avoid shared-mutable structures).
         odom.pose.covariance = list(handler_result.covariance)
         threshold = 10.0  # [m] 異常に大きな分散はpublishしない
-        if odom.pose.covariance[0] ** 2 + odom.pose.covariance[7] ** 2 > threshold ** 2:
+        if odom.pose.covariance[0] + odom.pose.covariance[7] > threshold ** 2:
             self.get_logger().warn(f"cov too large: {odom.pose.covariance}")
             return
         self.odom_pub.publish(odom)
