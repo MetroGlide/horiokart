@@ -23,8 +23,10 @@ from nav_msgs.msg import Odometry
 from std_srvs.srv import SetBool
 import tf_transformations
 import tf2_ros
+import yaml
 from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import Quaternion
+from std_msgs.msg import String
 from dataclasses import dataclass
 from typing import List, Optional, Any, Type
 import numpy as np
@@ -36,14 +38,54 @@ from ublox_msgs.msg import NavPVT
 
 
 class TransformManager:
-    # static_transformはパラメータで与える対応点リストからのみ推定
+    # 複数の static_transform を管理し、ラベルで切替可能にする
     def __init__(self, params):
-        self.static_transform = params.get('static_transform', None)
+        # 単一の static_transform (x,y,yaw) — 現在アクティブなものを保持
+        self.static_transform = None
+        # 全 transform を辞書 label -> (x,y,yaw) で保持
+        self.transforms = {}
+        # 現在のラベル名
+        self.active_label = None
         # パラメータで与える対応点リスト（例: list of [utm_x, utm_y, odom_x, odom_y]）
         self.correspondences = params.get('correspondences', None)
 
     def set_static_transform(self, x, y, yaw):
         self.static_transform = (x, y, yaw)
+
+    def load_transforms_from_file(self, path):
+        # YAML ファイルを読み、transforms をロードする
+        try:
+            with open(path, 'r') as f:
+                data = yaml.safe_load(f)
+        except Exception:
+            return False
+
+        if not data:
+            return False
+
+        transforms = {}
+        entries = data.get('transforms') or []
+        for e in entries:
+            label = e.get('label')
+            tf = e.get('transform')
+            if label and tf and len(tf) == 3:
+                transforms[label] = (float(tf[0]), float(tf[1]), float(tf[2]))
+
+        if transforms:
+            self.transforms = transforms
+            return True
+        return False
+
+    def set_active_label(self, label):
+        # アクティブラベルを切替え、static_transform を更新する
+        if label not in self.transforms:
+            return False
+        self.active_label = label
+        self.static_transform = self.transforms[label]
+        return True
+
+    def get_labels(self):
+        return list(self.transforms.keys())
 
     def estimate_transform_from_correspondences(self):
         # パラメータで与えられた対応点リストからstatic_transformを推定
@@ -329,6 +371,13 @@ class GNSSOdometryNode(Node):
             ],
         }
 
+        # 複数 transform を定義した YAML ファイル (相対パス可)
+        params['static_transforms_file'] = self.declare_parameter(
+            'static_transforms_file', '/root/ros2_data/map/gnss_to_map_static_transforms.yaml').get_parameter_value().string_value
+        # 起動時に選択するラベル (空ならファイル内の最初を使用)
+        params['static_transform_label'] = self.declare_parameter(
+            'static_transform_label', '').get_parameter_value().string_value
+
         if params.get('is_test_data'):
             params['correspondences'] = [
                 # 平行移動+回転（45度, x=1, y=2）を含む理想的なテストデータ
@@ -380,26 +429,67 @@ class GNSSOdometryNode(Node):
 
         self.create_subscription(msg_type, topic, self._on_gnss_msg, 10)
 
-        # 対応点が2点以上あればstatic_transformを自動推定
-        if self.transform_manager.correspondences is not None and len(self.transform_manager.correspondences) >= 2:
-            est = self.transform_manager.estimate_transform_from_correspondences()
+        # 暫定: ラベル切替は std_msgs/String トピックで受け付ける
+        self.create_subscription(
+            String, '/gnss/select_static_transform', self._on_select_label, 10)
 
-            if est is not None:
-                self.transform_manager.set_static_transform(*est)
-                self.get_logger().info(
-                    f"static_transform estimated from correspondences: x={est[0]:.6f}, y={est[1]:.6f}, yaw={est[2]:.6f}")
+        # static_transforms_file を読み込んで初期ラベルを選択
+        st_file = self.params.get('static_transforms_file')
+        chosen_label = self.params.get('static_transform_label')
+        loaded = False
+        try:
+            loaded = self.transform_manager.load_transforms_from_file(st_file)
+        except Exception as e:
+            self.get_logger().warn(
+                f"Failed to load static transforms file {st_file}: {e}")
 
+        if loaded:
+            labels = self.transform_manager.get_labels()
+            if not chosen_label and labels:
+                chosen_label = labels[0]
+            if chosen_label:
+                ok = self.transform_manager.set_active_label(chosen_label)
+                if ok:
+                    self.get_logger().info(
+                        f"Active static transform set to label '{chosen_label}' from {st_file}")
+                else:
+                    self.get_logger().warn(
+                        f"Label '{chosen_label}' not found in {st_file}")
+        else:
+            # 既存の対応点からの推定を試みる（従来の挙動、フォールバック）
+            # 対応点が2点以上あればstatic_transformを自動推定
+            if self.transform_manager.correspondences is not None and len(self.transform_manager.correspondences) >= 2:
+                est = self.transform_manager.estimate_transform_from_correspondences()
+
+                if est is not None:
+                    self.transform_manager.set_static_transform(*est)
+                    self.get_logger().info(
+                        f"static_transform estimated from correspondences: x={est[0]:.6f}, y={est[1]:.6f}, yaw={est[2]:.6f}")
+
+                else:
+                    self.transform_manager.static_transform = (0.0, 0.0, 0.0)
+                    self.get_logger().info('static_transform estimation failed. Initializing with (0,0,0).')
             else:
                 self.transform_manager.static_transform = (0.0, 0.0, 0.0)
-                self.get_logger().info('static_transform estimation failed. Initializing with (0,0,0).')
-        else:
-            self.transform_manager.static_transform = (0.0, 0.0, 0.0)
-            self.get_logger().info('static_transform is not specified. Initializing with (0,0,0).')
+                self.get_logger().info('static_transform is not specified. Initializing with (0,0,0).')
 
-        # 初期static transformをpublish
         self.publish_static_transform()
-
         self._tested = False
+
+    def _on_select_label(self, msg: String):
+        # トピックでラベルを受け取り切替える（暫定実装）
+        label = msg.data if hasattr(msg, 'data') else None
+        if not label:
+            self.get_logger().warn('Received empty label on /gnss/select_static_transform')
+            return
+        ok = self.transform_manager.set_active_label(label)
+        if ok:
+            self.get_logger().info(
+                f"Switched active static transform to label '{label}'")
+            self.publish_static_transform()
+        else:
+            self.get_logger().warn(
+                f"Requested label '{label}' not found among available labels: {self.transform_manager.get_labels()}")
 
     def publish_static_transform(self):
         # static_transform (UTM→map) をtfでpublish
