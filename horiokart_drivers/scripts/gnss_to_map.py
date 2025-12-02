@@ -102,6 +102,12 @@ def parse_args():
                         help='rosbag開始からの経過秒で抽出開始 (float seconds, optional)')
     parser.add_argument('--end-time', type=float, default=None,
                         help='rosbag開始からの経過秒で抽出終了 (float seconds, optional)')
+    parser.add_argument('--gnss-only', action='store_true',
+                        help='map に依存せず UTM 座標のまま透過画像のみを出力します')
+    parser.add_argument('--utm-resolution', type=float, default=1.0,
+                        help='--gnss-only 時の解像度 [m/pix] (default: 1.0)')
+    parser.add_argument('--utm-margin', type=float, default=2.0,
+                        help='--gnss-only 時の余白 [m] (default: 2.0)')
     return parser.parse_args()
 
 # --- rosbag2_pyによるNavSatFix抽出 ---
@@ -289,6 +295,46 @@ def main():
     utm_proj = pyproj.Proj(proj='utm', zone=args.utm_zone,
                            ellps='WGS84', south=False)
     utm_points = [wgs84_to_utm(msg, utm_proj) for msg in navsat_msgs]
+
+    # If --gnss-only: produce transparent image using UTM coordinates directly
+    if args.gnss_only:
+        if not utm_points:
+            print("No GNSS points found in bag; nothing to do.")
+            return
+        utm_xs = [p[0] for p in utm_points]
+        utm_ys = [p[1] for p in utm_points]
+        min_x = min(utm_xs)
+        max_x = max(utm_xs)
+        min_y = min(utm_ys)
+        max_y = max(utm_ys)
+        margin = args.utm_margin
+        min_x -= margin
+        max_x += margin
+        min_y -= margin
+        max_y += margin
+
+        new_w = int(math.ceil((max_x - min_x) / args.utm_resolution))
+        new_h = int(math.ceil((max_y - min_y) / args.utm_resolution))
+        new_origin = [min_x, min_y, 0.0]
+        print(
+            f"UTM-only 画像サイズ: {new_w}x{new_h}, origin: {new_origin}, resolution: {args.utm_resolution}")
+
+        # transparent base image
+        new_img = Image.new('RGBA', (new_w, new_h), (0, 0, 0, 0))
+
+        # plot UTM points directly (reuse existing plotting function)
+        img_trans = plot_points_on_transparent(
+            utm_points, navsat_msgs, navstatus_for_navsat, new_origin, args.utm_resolution, (new_w, new_h))
+
+        out_trans_path = os.path.join(
+            args.output_dir, 'gnss_points_transparent_utm.png')
+        img_trans.save(out_trans_path)
+        print(f"Saved UTM transparent GNSS image: {out_trans_path}")
+
+        # save UTM points yaml
+        save_points_yaml(utm_points, os.path.join(
+            args.output_dir, 'gnss_points_utm.yaml'))
+        return
 
     # 3. static transforms YAML から transform を取得 (labelで選択)
     transforms_yaml_path = os.path.join(
