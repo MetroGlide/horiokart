@@ -57,7 +57,14 @@ class TransformManager:
         try:
             with open(path, 'r') as f:
                 data = yaml.safe_load(f)
-        except Exception:
+        except FileNotFoundError as e:
+            print(f"[TransformManager] File not found: {e}")
+            return False
+        except PermissionError as e:
+            print(f"[TransformManager] Permission error: {e}")
+            return False
+        except yaml.YAMLError as e:
+            print(f"[TransformManager] YAML error: {e}")
             return False
 
         if not data:
@@ -478,8 +485,8 @@ class GNSSOdometryNode(Node):
 
     def _on_select_label(self, msg: String):
         # トピックでラベルを受け取り切替える（暫定実装）
-        label = msg.data if hasattr(msg, 'data') else None
-        if not label:
+        label = msg.data
+        if label is None or label == '':
             self.get_logger().warn('Received empty label on /gnss/select_static_transform')
             return
         ok = self.transform_manager.set_active_label(label)

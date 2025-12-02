@@ -47,8 +47,11 @@ def read_map_yaml(map_yaml_path):
         if not os.path.isabs(image_path):
             image_path = os.path.join(
                 os.path.dirname(map_yaml_path), image_path)
-        img = Image.open(image_path)
-        _, image_height = img.size
+        try:
+            img = Image.open(image_path)
+            _, image_height = img.size
+        except Exception as e:
+            raise RuntimeError(f"Failed to open image file '{image_path}' referenced in map YAML '{map_yaml_path}': {e}")
     return resolution, origin, image_height
 
 
