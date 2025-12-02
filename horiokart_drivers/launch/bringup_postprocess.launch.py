@@ -104,6 +104,8 @@ def generate_launch_description():
                     "navpvt_hacc_to_pos_std_scale": 1.0,
                     "navpvt_vacc_to_pos_std_scale": 1.0,
                     "navpvt_headacc_to_yaw_std_scale": 1.5,
+
+                    "static_transform_label": "kakunin_start_area",
                 }],
                 remappings=[
                     ("/ublox/navpvt", "/navpvt"),
