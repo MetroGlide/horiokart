@@ -85,14 +85,16 @@
 
   <xacro:macro name="realsense_d435i" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' size='0.02 0.05 0.02' ">
 
+    <xacro:include filename="$(find realsense2_description)/urdf/_d435.urdf.xacro" />
+
     <xacro:unless value="${attach_to == ''}">
 
       <!-- <joint name="${prefix}rs_d435i_link_joint" type="fixed"> -->
-      <joint name="${prefix}camera_link_joint" type="fixed">
+      <joint name="${prefix}camera_link_base_joint" type="fixed">
 
         <parent link="${attach_to}"/>
 
-        <child link="${prefix}camera_link"/>
+        <child link="${prefix}camera_link_base"/>
         <!-- <child link="${prefix}rs_d435i_link"/> -->
 
         <origin xyz="${xyz}" rpy="${rpy}"/>
@@ -100,7 +102,7 @@
     </xacro:unless>
 
     <!-- <link name="${prefix}rs_d435i_link"> -->
-    <link name="${prefix}camera_link">
+    <link name="${prefix}camera_link_base">
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0"/>
         <geometry>
@@ -108,6 +110,13 @@
         </geometry>
       </visual>
     </link>
+
+    <xacro:sensor_d435 parent="${prefix}camera_link_base" name="camera" use_nominal_extrinsics="true" add_plug="false" use_mesh="false">
+      <!-- Provide required 'origin' block expected by the sensor_d435 macro -->
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:sensor_d435>
+
+    
 
   </xacro:macro>
 
