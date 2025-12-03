@@ -657,21 +657,16 @@ class WaypointsFollowerNode(Node):
         elif OnReachedAction.SELECT_GNSS_TRANSFORM_LABEL == on_reached_action:
             # Publish the GNSS transform label associated with this waypoint
             label = getattr(waypoint, 'gnss_transform_label', '')
-            if label is None or label == "":
+            if not label:
                 self.get_logger().warn(
                     f"Waypoint {waypoint.index} has no gnss_transform_label set")
                 return
 
             msg = String()
             msg.data = label
-            try:
-                self._select_static_transform_pub.publish(msg)
-                self.get_logger().info(
-                    f"Published GNSS transform label '{label}' to /gnss_odometry_node/select_static_transform")
-            except Exception as e:
-                self.get_logger().error(
-                    f"Failed to publish GNSS transform label '{label}': {e}")
-
+            self._select_static_transform_pub.publish(msg)
+            self.get_logger().info(
+                f"Published GNSS transform label '{label}' to /gnss_odometry_node/select_static_transform")
     def _on_reached(self, waypoint: Waypoint):
         for on_reached_action in waypoint.on_reached_action:
             self._on_reached_action(waypoint, on_reached_action)
