@@ -17,8 +17,11 @@ class OnReachedAction(enum.Enum):
     AMCL_OFF = "amcl_off"
     GPS_ON = "gps_on"
     GPS_OFF = "gps_off"
+
     # TODO: work in progress
     WAIT_ALL_ACTION_DONE = "wait_all_action_done"
+
+    SELECT_GNSS_TRANSFORM_LABEL = "select_gnss_transform_label"
 
     @classmethod
     def get_all_values(cls):
@@ -32,6 +35,8 @@ class Waypoint:
 
     reach_tolerance: float  # not through only
     on_reached_action: List[OnReachedAction]
+
+    gnss_transform_label: str = ""
 
     is_through_point: bool = True
     localization_map_yaml: str = ""
@@ -55,6 +60,7 @@ class Waypoint:
             },
             'reach_tolerance': self.reach_tolerance,
             'on_reached_action': self._on_reached_action_to_string_list(),
+            'gnss_transform_label': self.gnss_transform_label,
             "is_through_point": self.is_through_point,
             'localization_map_yaml': self.localization_map_yaml,
             'planning_map_yaml': self.planning_map_yaml,
@@ -127,6 +133,7 @@ class WaypointsLoader:
                         OnReachedAction(action)
                         for action in waypoint['on_reached_action']
                     ],
+                    gnss_transform_label=waypoint['gnss_transform_label'] if 'gnss_transform_label' in waypoint else "",
                     localization_map_yaml=waypoint['localization_map_yaml'] if 'localization_map_yaml' in waypoint else "",
                     planning_map_yaml=waypoint['planning_map_yaml'] if 'planning_map_yaml' in waypoint else "",
                     is_through_point=waypoint['is_through_point'] if 'is_through_point' in waypoint else True,

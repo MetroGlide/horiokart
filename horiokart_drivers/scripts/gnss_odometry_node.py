@@ -438,7 +438,7 @@ class GNSSOdometryNode(Node):
 
         # 暫定: ラベル切替は std_msgs/String トピックで受け付ける
         self.create_subscription(
-            String, '/gnss/select_static_transform', self._on_select_label, 10)
+            String, '~/select_static_transform', self._on_select_label, 10)
 
         # static_transforms_file を読み込んで初期ラベルを選択
         st_file = self.params.get('static_transforms_file')
