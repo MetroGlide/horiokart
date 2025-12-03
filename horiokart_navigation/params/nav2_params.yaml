@@ -246,7 +246,7 @@ local_costmap:
       # robot_radius: 0.4
       footprint: "[[0.4, 0.3], [0.4, -0.3], [-0.2, -0.3], [-0.2, 0.3]]"
 
-      plugins: ["top_obstacle_layer", "obstacle_layer", "denoise_layer", "inflation_layer"]
+      plugins: ["top_obstacle_layer", "obstacle_layer", "depth_voxel_layer", "denoise_layer", "inflation_layer"]
 
       denoise_layer:
         plugin: "nav2_costmap_2d::DenoiseLayer"
@@ -308,8 +308,9 @@ local_costmap:
         mark_threshold: 0
         observation_sources: depth_camera
         depth_camera:
-          topic: /rs_d435i/depth/color/points
-          max_obstacle_height: 2.0
+          topic: /camera/depth/points_postprocessed
+          max_obstacle_height: 1.5
+          min_obstacle_height: 0.1
           clearing: True
           marking: True
           data_type: "PointCloud2"
