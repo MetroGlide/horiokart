@@ -101,8 +101,8 @@ add_executable(${DEPTH_POSTPROCESS_EXECUTABLE_NAME}
   src/depth_postprocess/depth_postprocessor.cpp
 )
 target_include_directories(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} PRIVATE include)
-ament_target_dependencies(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} ${DEPENDENCIES})
 target_link_libraries(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} ${PCL_LIBRARIES})
+ament_target_dependencies(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} ${DEPENDENCIES})
 
 ################################################################################
 # Install

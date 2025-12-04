@@ -116,8 +116,6 @@
       <origin xyz="0 0 0" rpy="0 0 0"/>
     </xacro:sensor_d435>
 
-    
-
   </xacro:macro>
 
 </robot>
