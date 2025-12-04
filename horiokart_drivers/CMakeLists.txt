@@ -29,6 +29,8 @@ find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
 find_package(pcl_ros REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io filters)
 
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -39,6 +41,7 @@ find_package(tf2_geometry_msgs REQUIRED)
 ################################################################################
 include_directories(
   include
+  ${PCL_INCLUDE_DIRS}
 )
 
 add_library(${PROJECT_NAME}_lib
@@ -69,6 +72,8 @@ set(DEPENDENCIES
   "tf2_geometry_msgs"
 
   "pcl_ros"
+  "pcl_conversions"
+  "PCL"
 )
 
 target_link_libraries(${PROJECT_NAME}_lib)
@@ -89,6 +94,16 @@ add_executable(${PCL_DOWNSAMPLING_EXECUTABLE_NAME} src/pcl_downsampling_node.cpp
 target_link_libraries(${PCL_DOWNSAMPLING_EXECUTABLE_NAME} ${PROJECT_NAME}_lib)
 ament_target_dependencies(${PCL_DOWNSAMPLING_EXECUTABLE_NAME} ${DEPENDENCIES})
 
+# depth_postprocess node
+set(DEPTH_POSTPROCESS_EXECUTABLE_NAME "depth_postprocess_node")
+add_executable(${DEPTH_POSTPROCESS_EXECUTABLE_NAME}
+  src/depth_postprocess/depth_postprocess_node.cpp
+  src/depth_postprocess/depth_postprocessor.cpp
+)
+target_include_directories(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} PRIVATE include)
+target_link_libraries(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} ${PCL_LIBRARIES})
+ament_target_dependencies(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} ${DEPENDENCIES})
+
 ################################################################################
 # Install
 ################################################################################
@@ -105,6 +120,10 @@ install(TARGETS ${MOTOR_DRIVER_EXECUTABLE_NAME}
 )
 
 install(TARGETS ${PCL_DOWNSAMPLING_EXECUTABLE_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS ${DEPTH_POSTPROCESS_EXECUTABLE_NAME}
   DESTINATION lib/${PROJECT_NAME}
 )
 

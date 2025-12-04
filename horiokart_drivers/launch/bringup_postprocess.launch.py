@@ -145,6 +145,33 @@ def generate_launch_description():
                 )
             ),
 
+            # Depth postprocess node: statistical outlier removal + voxel downsampling
+            Node(
+                package=pkg_name,
+                executable="depth_postprocess_node",
+                name="depth_postprocess_node",
+                output="screen",
+                parameters=[{
+                    # Voxel grid leaf size in meters
+                    "voxel_leaf_size": 0.05,
+                    # Enable statistical outlier removal (bool)
+                    "use_statistical_outlier_removal": True,
+                    # Mean K for StatisticalOutlierRemoval (int)
+                    "sor_mean_k": 50,
+                    # Stddev multiplier threshold for outlier removal (float)
+                    "sor_std_mul": 1.0,
+                    # Use simulation time if requested
+                    "use_sim_time": simulation_arg.launch_config,
+                }],
+                remappings=[
+                    ("points", "/camera/camera/depth/color/points"),
+                    ("points_filtered", "/camera/depth/points_postprocessed"),
+                ],
+                condition=launch.conditions.IfCondition(
+                    use_realsense_arg.launch_config
+                ),
+            ),
+
         ]
     )
 

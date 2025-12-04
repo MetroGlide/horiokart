@@ -189,6 +189,7 @@ def generate_launch_description():
 
                     "depth_module.depth_profile": "848x480x6",
                     "rgb_camera.color_profile": "1280x720x6",
+                    "publish_tf": "false",
 
                 }.items(),
                 condition=launch.conditions.IfCondition(

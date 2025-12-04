@@ -4,3 +4,4 @@
 /nmea_sentence
 /gps/fix
 /navpvt
+/camera/camera/depth/color/points
