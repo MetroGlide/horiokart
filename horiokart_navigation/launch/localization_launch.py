@@ -171,14 +171,31 @@ def generate_launch_description():
         ],
     )
 
+    # change_amcl_publish_state_node = Node(
+    #     package='horiokart_drivers',
+    #     executable='pose_with_cov_publish_controller_node.py',
+    #     name='amcl_publish_controller_node',
+    #     output='screen',
+    #     remappings=[("pose_with_cov_origin", "amcl_pose_origin"),
+    #                 ("pose_with_cov", "amcl_pose")]
+    # )
+
     change_amcl_publish_state_node = Node(
         package='horiokart_drivers',
-        executable='pose_with_cov_publish_controller_node.py',
+        executable='generic_publish_controller_node.py',
         name='amcl_publish_controller_node',
+        parameters=[{
+            "msg_module": "geometry_msgs.msg",
+            "msg_class": "PoseWithCovarianceStamped",
+            "publish": False,
+            "queue_size": 1,
+            "use_sim_time": os.environ.get('SIMULATION', 'false').lower() == 'true',
+        }],
         output='screen',
         remappings=[("pose_with_cov_origin", "amcl_pose_origin"),
                     ("pose_with_cov", "amcl_pose")]
     )
+
     gnss_amcl_initializer_node = Node(
         package='horiokart_navigation',
         executable='gnss_amcl_initializer_node.py',

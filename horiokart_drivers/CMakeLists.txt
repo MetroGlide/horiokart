@@ -173,6 +173,10 @@ install(PROGRAMS
   scripts/gnss_odometry_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
+install(PROGRAMS
+  scripts/generic_publish_controller_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 ################################################################################
 # Macro for ament package
