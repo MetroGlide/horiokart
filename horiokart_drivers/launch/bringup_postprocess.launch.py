@@ -105,6 +105,13 @@ def generate_launch_description():
                     "navpvt_vacc_to_pos_std_scale": 1.0,
                     "navpvt_headacc_to_yaw_std_scale": 1.5,
 
+                    "min_publish_distance": 1.0,  # [m]
+
+                    # Heading estimator parameters
+                    "heading_source": "computed",  # 'navpvt' or 'computed'
+                    "computed_heading_min_distance": 0.6,  # [m]
+                    "computed_heading_smoothing_alpha": 0.6,
+
                     "static_transform_label": "kakunin_start_area",
                 }],
                 remappings=[
