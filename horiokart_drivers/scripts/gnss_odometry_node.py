@@ -341,7 +341,7 @@ class NavPVTHandler(BaseGNSSHandler):
 
         # Use validated global default covariance and override entries using NavPVT fields
         cov = list(self.params['default_covariance'])
-        _scale = 1.5
+        _scale = 3.0
         _bias = 1.5  # [m]
         if msg.h_acc is not None and msg.h_acc > 0:
             pos_std = (msg.h_acc / 1000.0) * \
