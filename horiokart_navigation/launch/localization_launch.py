@@ -192,8 +192,8 @@ def generate_launch_description():
             "use_sim_time": os.environ.get('SIMULATION', 'false').lower() == 'true',
         }],
         output='screen',
-        remappings=[("pose_with_cov_origin", "amcl_pose_origin"),
-                    ("pose_with_cov", "amcl_pose")]
+        remappings=[("input_topic", "amcl_pose_origin"),
+                    ("output_topic", "amcl_pose")]
     )
 
     gnss_amcl_initializer_node = Node(
