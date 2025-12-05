@@ -109,41 +109,83 @@ def generate_launch_description():
                 }],
                 remappings=[
                     ("/ublox/navpvt", "/navpvt"),
+                    ("/odom/gps", "/odom/gps_origin"),
                 ],
                 condition=launch.conditions.IfCondition(
                     use_gps_arg.launch_config),
             ),
 
-            # for converting Realsense pointcloud to laser scan
+            #################################################
+            # Publish controller nodes
+            #################################################
+
+            # Generic publish controller for GPS odometry
             Node(
-                package="pointcloud_to_laserscan",
-                executable="pointcloud_to_laserscan_node",
-                name="pointcloud_to_laserscan_node",
+                package=pkg_name,
+                executable="generic_publish_controller_node.py",
+                name="gnss_odom_publish_controller_node",
                 output="screen",
                 parameters=[{
-                    "target_frame": "base_footprint",
-                    "transform_tolerance": 0.5,
-                    "min_height": 0.3,
-                    "max_height": 1.5,
-                    "angle_min": -3.14,
-                    "angle_max": 3.14,
-                    "angle_increment": 0.0058,
-                    "scan_time": 0.1,
-                    "range_min": 0.01,
-                    "range_max": 3.0,
-                    # "use_sim_time": simulation_arg.launch_config,
-                    "use_sim_time": True,
-                    "use_inf": True,
-                    "inf_epsilon": 1.0,
+                    "msg_module": "nav_msgs.msg",
+                    "msg_class": "Odometry",
+                    "publish": True,
+                    "queue_size": 1,
+                    "use_sim_time": simulation_arg.launch_config,
                 }],
                 remappings=[
-                    ("cloud_in", "/camera/camera/depth/color/points"),
-                    ("scan", "/scan_from_realsense"),
+                    ("input_topic", "/odom/gps_origin"),
+                    ("output_topic", "/odom/gps"),
                 ],
                 condition=launch.conditions.IfCondition(
-                    use_realsense_arg.launch_config
-                )
+                    use_gps_arg.launch_config
+                ),
             ),
+
+            Node(
+                package="horiokart_drivers",
+                executable="lidar_publish_controller_node.py",
+                name="front_lidar_publish_controller_node",
+                output="screen",
+                parameters=[{
+                }],
+                remappings=[("scan_origin", "scan_front_lidar_origin"),
+                            ("scan", "scan_front_lidar")],
+                condition=launch.conditions.IfCondition(
+                    use_lidar_arg.launch_config),
+            ),
+
+            #################################################
+
+            # for converting Realsense pointcloud to laser scan
+            # Node(
+            #     package="pointcloud_to_laserscan",
+            #     executable="pointcloud_to_laserscan_node",
+            #     name="pointcloud_to_laserscan_node",
+            #     output="screen",
+            #     parameters=[{
+            #         "target_frame": "base_footprint",
+            #         "transform_tolerance": 0.5,
+            #         "min_height": 0.3,
+            #         "max_height": 1.5,
+            #         "angle_min": -3.14,
+            #         "angle_max": 3.14,
+            #         "angle_increment": 0.0058,
+            #         "scan_time": 0.1,
+            #         "range_min": 0.01,
+            #         "range_max": 3.0,
+            #         # "use_sim_time": simulation_arg.launch_config,
+            #         "use_sim_time": True,
+            #         "use_inf": True,
+            #         "inf_epsilon": 1.0,
+            #     }],
+            #     remappings=[
+            #         ("cloud_in", "/camera/camera/depth/color/points"),
+            #         ("scan", "/scan_from_realsense"),
+            #     ],
+            #     condition=launch.conditions.IfCondition(
+            #         use_realsense_arg.launch_config
+            #     )
+            # ),
 
             # Depth postprocess node: statistical outlier removal + voxel downsampling
             Node(
