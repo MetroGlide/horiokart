@@ -39,7 +39,10 @@ def read_map_yaml(map_yaml_path):
     with open(map_yaml_path, 'r') as f:
         data = yaml.safe_load(f)
     # Expect keys: resolution, origin (x,y,yaw), image
-    resolution = float(data.get('resolution'))
+    resolution_val = data.get('resolution')
+    if resolution_val is None:
+        raise ValueError(f"Missing required 'resolution' key in map YAML file: {map_yaml_path}")
+    resolution = float(resolution_val)
     origin = data.get('origin', [0.0, 0.0, 0.0])
     image_path = data.get('image', None)
     image_height = None

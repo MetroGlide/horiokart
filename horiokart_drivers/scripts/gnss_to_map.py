@@ -320,7 +320,6 @@ def main():
             f"UTM-only 画像サイズ: {new_w}x{new_h}, origin: {new_origin}, resolution: {args.utm_resolution}")
 
         # transparent base image
-        new_img = Image.new('RGBA', (new_w, new_h), (0, 0, 0, 0))
 
         # plot UTM points directly (reuse existing plotting function)
         img_trans = plot_points_on_transparent(

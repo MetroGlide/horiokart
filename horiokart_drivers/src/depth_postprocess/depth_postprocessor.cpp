@@ -29,7 +29,7 @@ bool DepthPostprocessor::process(
   try {
     pcl::fromROSMsg(input, cloud);
   } catch (const std::exception & e) {
-    (void)e;
+    std::cerr << "Exception during point cloud conversion: " << e.what() << std::endl;
     return false;
   }
 

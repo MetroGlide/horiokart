@@ -133,10 +133,10 @@ class WaypointsLoader:
                         OnReachedAction(action)
                         for action in waypoint['on_reached_action']
                     ],
-                    gnss_transform_label=waypoint['gnss_transform_label'] if 'gnss_transform_label' in waypoint else "",
-                    localization_map_yaml=waypoint['localization_map_yaml'] if 'localization_map_yaml' in waypoint else "",
-                    planning_map_yaml=waypoint['planning_map_yaml'] if 'planning_map_yaml' in waypoint else "",
-                    is_through_point=waypoint['is_through_point'] if 'is_through_point' in waypoint else True,
+                    gnss_transform_label=waypoint.get('gnss_transform_label', ""),
+                    localization_map_yaml=waypoint.get('localization_map_yaml', ""),
+                    planning_map_yaml=waypoint.get('planning_map_yaml', ""),
+                    is_through_point=waypoint.get('is_through_point', True),
                 )
             )
 
