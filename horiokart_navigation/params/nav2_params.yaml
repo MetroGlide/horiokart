@@ -312,7 +312,7 @@ local_costmap:
         observation_sources: depth_camera
         depth_camera:
           # topic: /camera/depth/points_postprocessed
-          topic: /camera/depth/depth/color/points
+          topic: /camera/camera/depth/color/points
           max_obstacle_height: 1.5
           min_obstacle_height: 0.1
           clearing: True

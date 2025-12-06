@@ -496,7 +496,7 @@ class WaypointsFollowerNode(Node):
                 self.ServiceFuture(future, "load_planning_map", self.get_logger(),
                                    callback=self._reload_map_response_callback))
 
-        self.get_logger().info(f"Reload map action resistered")
+        self.get_logger().info(f"Reload map action registered")
 
     def _on_reach_action_gps_on_off(self, waypoint: Waypoint, state: bool):
         self._change_gnss_publish_state_srv_client.wait_for_service()
