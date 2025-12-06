@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 
 import launch
 from launch import LaunchDescription
@@ -25,10 +26,20 @@ def generate_launch_description():
     launch_argument_creator = launch_argument.LaunchArgumentCreator()
 
     map_path_arg = launch_argument_creator.create(
-        "map_path", default=EnvironmentVariable("LOCALIZATION_MAP_PATH")
+        # "map_path", default=EnvironmentVariable("LOCALIZATION_MAP_PATH")
+        "map_path",
+        default=os.path.join(
+            os.environ.get("MAP_PATH", "/root/ros2_data/map"),
+            "localization_1.yaml"
+        )
     )
     planning_map_path_arg = launch_argument_creator.create(
-        "planning_map_path", default=EnvironmentVariable("PLANNING_MAP_PATH")
+        # "planning_map_path", default=EnvironmentVariable("PLANNING_MAP_PATH")
+        "planning_map_path",
+        default=os.path.join(
+            os.environ.get("MAP_PATH", "/root/ros2_data/map"),
+            "planning_3.yaml"
+        )
     )
     simulation_arg = launch_argument_creator.create(
         "simulation", default=EnvironmentVariable("SIMULATION")
@@ -41,7 +52,7 @@ def generate_launch_description():
 
     use_ekf_arg = launch_argument_creator.create(
         "use_ekf", default="True")
-        # "use_ekf", default="False")
+    # "use_ekf", default="False")
     ekf_params_file_arg = launch_argument_creator.create(
         "ekf_params_file", default="ekf_global.yaml")
     ekf_odom_topic_arg = launch_argument_creator.create(
