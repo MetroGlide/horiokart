@@ -99,18 +99,6 @@ def generate_launch_description():
                 condition=launch.conditions.IfCondition(
                     use_lidar_arg.launch_config),
             ),
-            Node(
-                package="horiokart_drivers",
-                executable="lidar_publish_controller_node.py",
-                name="front_lidar_publish_controller_node",
-                output="screen",
-                parameters=[{
-                }],
-                remappings=[("scan_origin", "scan_front_lidar_origin"),
-                            ("scan", "scan_front_lidar")],
-                condition=launch.conditions.IfCondition(
-                    use_lidar_arg.launch_config),
-            ),
 
             # RPLidar top
             Node(
@@ -189,6 +177,7 @@ def generate_launch_description():
 
                     "depth_module.depth_profile": "848x480x6",
                     "rgb_camera.color_profile": "1280x720x6",
+                    "publish_tf": "false",
 
                 }.items(),
                 condition=launch.conditions.IfCondition(

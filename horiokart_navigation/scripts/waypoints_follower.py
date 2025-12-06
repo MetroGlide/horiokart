@@ -10,7 +10,7 @@ from geometry_msgs.msg import PoseStamped, Point, Quaternion, PoseWithCovariance
 from visualization_msgs.msg import MarkerArray, Marker
 from nav_msgs.msg import Path
 from std_srvs.srv import Trigger, SetBool
-from std_msgs.msg import Int16
+from std_msgs.msg import Int16, String
 
 from action_msgs.msg import GoalStatus
 
@@ -255,6 +255,12 @@ class WaypointsFollowerNode(Node):
             '~/waypoints_markers',
             1)
 
+        # Publisher to request selection of GNSS->map static transform by label
+        self._select_static_transform_pub = self.create_publisher(
+            String,
+            '/gnss_odometry_node/select_static_transform',
+            1)
+
         self.publish_waypoints_markers()
 
         self._stop_request = True
@@ -290,8 +296,8 @@ class WaypointsFollowerNode(Node):
         self._change_amcl_publish_state_srv_client = self.create_client(
             SetBool, "amcl_publish_controller_node/change_publish_state")
 
-        self._change_gps_resistration_state_srv_client = self.create_client(
-            SetBool, "gps_transform_node/set_resistration_mode")
+        self._change_gnss_publish_state_srv_client = self.create_client(
+            SetBool, "gnss_odom_publish_controller_node/change_publish_state")
 
         self._amcl_initialpose_publisher = self.create_publisher(
             PoseWithCovarianceStamped,
@@ -415,7 +421,7 @@ class WaypointsFollowerNode(Node):
         distance = self.get_distance(waypoint)
         if waypoint.is_through_point and distance <= self.through_point_tolerance:
             self.get_logger().info(
-                f"Reach point! Distance remaining: {distance}. Through point tolerance: {self.through_point_tolerance}")
+                f"Reach point! Distance remaining: {distance:.3f}. Through point tolerance: {self.through_point_tolerance}")
             return True
         elif distance <= waypoint.reach_tolerance:
             self.get_logger().info(
@@ -490,14 +496,14 @@ class WaypointsFollowerNode(Node):
                 self.ServiceFuture(future, "load_planning_map", self.get_logger(),
                                    callback=self._reload_map_response_callback))
 
-        self.get_logger().info(f"Reload map action resistered")
+        self.get_logger().info(f"Reload map action registered")
 
     def _on_reach_action_gps_on_off(self, waypoint: Waypoint, state: bool):
-        self._change_gps_resistration_state_srv_client.wait_for_service()
+        self._change_gnss_publish_state_srv_client.wait_for_service()
         request = SetBool.Request()
         request.data = state
 
-        future = self._change_gps_resistration_state_srv_client.call_async(
+        future = self._change_gnss_publish_state_srv_client.call_async(
             request)
 
         self._on_reached_actions_progress_list.append(
@@ -505,7 +511,7 @@ class WaypointsFollowerNode(Node):
                 future,
                 "change_gps_state",
                 self.get_logger(),
-                callback=self._change_gps_resistration_state_callback
+                callback=self._change_gnss_publish_state_callback
             )
         )
 
@@ -566,7 +572,7 @@ class WaypointsFollowerNode(Node):
             self.ServiceFuture(future, "change_amcl_publish_state", self.get_logger(),
                                callback=self._change_amcl_publish_state_callback))
 
-    def _change_gps_resistration_state_callback(self, response, logger):
+    def _change_gnss_publish_state_callback(self, response, logger):
         if response.success:
             logger.info(f"Change gps publish state success")
         else:
@@ -625,13 +631,13 @@ class WaypointsFollowerNode(Node):
             self.get_logger().info(
                 f"OnReachedAction: GPS on"
             )
-            self._on_reach_action_gps_on_off(waypoint, False)
+            self._on_reach_action_gps_on_off(waypoint, True)
 
         elif OnReachedAction.GPS_OFF == on_reached_action:
             self.get_logger().info(
                 f"OnReachedAction: GPS off"
             )
-            self._on_reach_action_gps_on_off(waypoint, True)
+            self._on_reach_action_gps_on_off(waypoint, False)
         # TODO: work in progress
         elif OnReachedAction.WAIT_ALL_ACTION_DONE == on_reached_action:
             self.get_logger().info(
@@ -647,6 +653,20 @@ class WaypointsFollowerNode(Node):
                     f"Waiting for {len(self._on_reached_actions_progress_list)} actions to complete"
                 )
                 self._stop_request = True
+
+        elif OnReachedAction.SELECT_GNSS_TRANSFORM_LABEL == on_reached_action:
+            # Publish the GNSS transform label associated with this waypoint
+            label = getattr(waypoint, 'gnss_transform_label', '')
+            if not label:
+                self.get_logger().warn(
+                    f"Waypoint {waypoint.index} has no gnss_transform_label set")
+                return
+
+            msg = String()
+            msg.data = label
+            self._select_static_transform_pub.publish(msg)
+            self.get_logger().info(
+                f"Published GNSS transform label '{label}' to /gnss_odometry_node/select_static_transform")
 
     def _on_reached(self, waypoint: Waypoint):
         for on_reached_action in waypoint.on_reached_action:
@@ -673,7 +693,7 @@ class WaypointsFollowerNode(Node):
         current_waypoint = self.waypoint_manager.get_waypoint()
 
         if not self._check_reached(waypoint=current_waypoint):
-            self.get_logger().log(f"running to {self.waypoint_manager.get_current_index()}. Distance remaining: {self._waypoints_follower.current_following_status.distance_remaining} m",
+            self.get_logger().log(f"running to {self.waypoint_manager.get_current_index()}. Distance remaining: {self._waypoints_follower.current_following_status.distance_remaining:.3f} m",
                                   LoggingSeverity.INFO, throttle_duration_sec=2.0, throttle_time_source_type=self.get_clock())
             return
 

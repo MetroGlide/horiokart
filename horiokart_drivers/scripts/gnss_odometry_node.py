@@ -23,8 +23,10 @@ from nav_msgs.msg import Odometry
 from std_srvs.srv import SetBool
 import tf_transformations
 import tf2_ros
+import yaml
 from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import Quaternion
+from std_msgs.msg import String
 from dataclasses import dataclass
 from typing import List, Optional, Any, Type
 import numpy as np
@@ -36,14 +38,61 @@ from ublox_msgs.msg import NavPVT
 
 
 class TransformManager:
-    # static_transformはパラメータで与える対応点リストからのみ推定
+    # 複数の static_transform を管理し、ラベルで切替可能にする
     def __init__(self, params):
-        self.static_transform = params.get('static_transform', None)
+        # 単一の static_transform (x,y,yaw) — 現在アクティブなものを保持
+        self.static_transform = None
+        # 全 transform を辞書 label -> (x,y,yaw) で保持
+        self.transforms = {}
+        # 現在のラベル名
+        self.active_label = None
         # パラメータで与える対応点リスト（例: list of [utm_x, utm_y, odom_x, odom_y]）
         self.correspondences = params.get('correspondences', None)
 
     def set_static_transform(self, x, y, yaw):
         self.static_transform = (x, y, yaw)
+
+    def load_transforms_from_file(self, path):
+        # YAML ファイルを読み、transforms をロードする
+        try:
+            with open(path, 'r') as f:
+                data = yaml.safe_load(f)
+        except FileNotFoundError as e:
+            print(f"[TransformManager] File not found: {e}")
+            return False
+        except PermissionError as e:
+            print(f"[TransformManager] Permission error: {e}")
+            return False
+        except yaml.YAMLError as e:
+            print(f"[TransformManager] YAML error: {e}")
+            return False
+
+        if not data:
+            return False
+
+        transforms = {}
+        entries = data.get('transforms') or []
+        for e in entries:
+            label = e.get('label')
+            tf = e.get('transform')
+            if label and tf and len(tf) == 3:
+                transforms[label] = (float(tf[0]), float(tf[1]), float(tf[2]))
+
+        if transforms:
+            self.transforms = transforms
+            return True
+        return False
+
+    def set_active_label(self, label):
+        # アクティブラベルを切替え、static_transform を更新する
+        if label not in self.transforms:
+            return False
+        self.active_label = label
+        self.static_transform = self.transforms[label]
+        return True
+
+    def get_labels(self):
+        return list(self.transforms.keys())
 
     def estimate_transform_from_correspondences(self):
         # パラメータで与えられた対応点リストからstatic_transformを推定
@@ -91,6 +140,74 @@ class OdometryManager:
         # 引数: longitude (deg), latitude (deg)
         x, y = self.utm_proj(longitude, latitude)
         return x, y
+
+
+class HeadingEstimator:
+    """
+    Compute and smooth heading from consecutive positions.
+
+    Usage:
+      est = HeadingEstimator(min_distance_m=0.5, smoothing_alpha=0.6)
+      yaw = est.update(x, y, timestamp_sec)  # returns smoothed yaw [rad] or None
+    """
+
+    def __init__(self, min_distance_m: float = 0.5, smoothing_alpha: float = 0.6):
+        self.min_distance = float(min_distance_m)
+        self.alpha = float(smoothing_alpha)
+        self._last_pos = None  # (x, y)
+        self._last_time = None
+        self._sin = 0.0
+        self._cos = 0.0
+
+    def reset(self):
+        self._last_pos = None
+        self._last_time = None
+        self._sin = 0.0
+        self._cos = 0.0
+
+    def update(self, x: float, y: float, timestamp: Optional[float] = None) -> Optional[float]:
+        """
+        Update with new position (map frame). If movement since last
+        position exceeds min_distance, compute raw heading and apply
+        circular EMA smoothing. Returns smoothed yaw (rad) or None if
+        insufficient movement.
+        """
+        if self._last_pos is None:
+            self._last_pos = (x, y)
+            self._last_time = timestamp
+            return None
+
+        dx = x - self._last_pos[0]
+        dy = y - self._last_pos[1]
+        dist = math.hypot(dx, dy)
+        if dist < self.min_distance:
+            return None
+
+        raw_yaw = math.atan2(dy, dx)
+        s = math.sin(raw_yaw)
+        c = math.cos(raw_yaw)
+
+        if self._sin == 0.0 and self._cos == 0.0:
+            self._sin = s
+            self._cos = c
+        else:
+            a = self.alpha
+            self._sin = a * s + (1 - a) * self._sin
+            self._cos = a * c + (1 - a) * self._cos
+
+        smoothed = math.atan2(self._sin, self._cos)
+
+        # update last pos/time
+        self._last_pos = (x, y)
+        self._last_time = timestamp
+
+        return smoothed
+
+    def get_last_yaw(self) -> Optional[float]:
+        """Return the last smoothed yaw [rad] if available, else None."""
+        if self._sin == 0.0 and self._cos == 0.0:
+            return None
+        return math.atan2(self._sin, self._cos)
 
 
 # --- GNSS Handler Abstractions (single-file implementation) ---
@@ -224,12 +341,14 @@ class NavPVTHandler(BaseGNSSHandler):
 
         # Use validated global default covariance and override entries using NavPVT fields
         cov = list(self.params['default_covariance'])
+        _scale = 3.0
+        _bias = 1.5  # [m]
         if msg.h_acc is not None and msg.h_acc > 0:
             pos_std = (msg.h_acc / 1000.0) * \
                 self.params['navpvt_hacc_to_pos_std_scale']
             pos_var = pos_std * pos_std
-            cov[0] = pos_var
-            cov[7] = pos_var
+            cov[0] = pos_var * _scale + _bias ** 2
+            cov[7] = pos_var * _scale + _bias ** 2
         if msg.v_acc is not None and msg.v_acc > 0:
             z_std = (msg.v_acc / 1000.0) * \
                 self.params['navpvt_vacc_to_pos_std_scale']
@@ -296,6 +415,14 @@ class GNSSOdometryNode(Node):
             # apply_heading_add_pi: bool, add 180 deg (pi rad) to heading when True
             'apply_heading_add_pi': self.declare_parameter('apply_heading_add_pi', False).get_parameter_value().bool_value,
 
+            # Heading source selection: 'navpvt' uses handler-provided heading,
+            # 'computed' computes heading from consecutive GNSS positions.
+            'heading_source': self.declare_parameter('heading_source', 'navpvt').get_parameter_value().string_value,
+            # Minimum movement [m] required to compute heading from positions.
+            'computed_heading_min_distance': self.declare_parameter('computed_heading_min_distance', 0.5).get_parameter_value().double_value,
+            # Smoothing alpha for computed-heading circular EMA (0..1)
+            'computed_heading_smoothing_alpha': self.declare_parameter('computed_heading_smoothing_alpha', 0.6).get_parameter_value().double_value,
+
             # --- Covariance source parameters ---
             # NavPVT-based covariance parameters
             # navpvt_hacc_to_pos_std_scale: unitless scale applied to hAcc (mm -> m) to derive pos std [m]
@@ -319,6 +446,10 @@ class GNSSOdometryNode(Node):
             # ignore altitude and set alt_m=None. Default: False (disabled).
             'use_altitude': self.declare_parameter('use_altitude', False).get_parameter_value().bool_value,
 
+            # Minimum movement distance [m] required to publish a new GNSS odometry message.
+            # When the robot is effectively stationary, messages closer than this
+            # distance to the last published position will be suppressed.
+            'min_publish_distance': self.declare_parameter('min_publish_distance', 0.5).get_parameter_value().double_value,
             # 対応点リストは list of [utm_x, utm_y, odom_x, odom_y] で与える (単位: m)
             'correspondences': [
                 # [UTM座標系(x, y), map座標系(x, y)]
@@ -326,6 +457,13 @@ class GNSSOdometryNode(Node):
                 [416896.252099, 3993539.142067, 18.218765, 56.421684],
             ],
         }
+
+        # 複数 transform を定義した YAML ファイル (相対パス可)
+        params['static_transforms_file'] = self.declare_parameter(
+            'static_transforms_file', '/root/ros2_data/map/gnss_to_map_static_transforms.yaml').get_parameter_value().string_value
+        # 起動時に選択するラベル (空ならファイル内の最初を使用)
+        params['static_transform_label'] = self.declare_parameter(
+            'static_transform_label', '').get_parameter_value().string_value
 
         if params.get('is_test_data'):
             params['correspondences'] = [
@@ -344,6 +482,22 @@ class GNSSOdometryNode(Node):
 
         # Store params centrally so code uses self.params.get(...) when accessing parameters
         self.params = params
+        # Last published position in map frame (x, y). Used to suppress publishes
+        # when movement since last publish is below `min_publish_distance`.
+        self._last_published_map_pos = None
+        # Heading estimator instance for computed headings
+        self.heading_estimator = HeadingEstimator(
+            min_distance_m=self.params.get(
+                'computed_heading_min_distance', 0.5),
+            smoothing_alpha=self.params.get(
+                'computed_heading_smoothing_alpha', 0.6),
+        )
+        self.get_logger().info(
+            f"heading mode: {self.params.get('heading_source')}")
+        self.get_logger().info(
+            f"computed heading min distance: {self.params.get('computed_heading_min_distance')} m")
+        self.get_logger().info(
+            f"min publish distance: {self.params.get('min_publish_distance')} m")
         # Validate default_covariance once during init. Handlers and publish
         # logic assume this is a length-36 array; fail early if misconfigured.
         default_cov = self.params.get('default_covariance')
@@ -378,26 +532,67 @@ class GNSSOdometryNode(Node):
 
         self.create_subscription(msg_type, topic, self._on_gnss_msg, 10)
 
-        # 対応点が2点以上あればstatic_transformを自動推定
-        if self.transform_manager.correspondences is not None and len(self.transform_manager.correspondences) >= 2:
-            est = self.transform_manager.estimate_transform_from_correspondences()
+        # 暫定: ラベル切替は std_msgs/String トピックで受け付ける
+        self.create_subscription(
+            String, '~/select_static_transform', self._on_select_label, 10)
 
-            if est is not None:
-                self.transform_manager.set_static_transform(*est)
-                self.get_logger().info(
-                    f"static_transform estimated from correspondences: x={est[0]:.6f}, y={est[1]:.6f}, yaw={est[2]:.6f}")
+        # static_transforms_file を読み込んで初期ラベルを選択
+        st_file = self.params.get('static_transforms_file')
+        chosen_label = self.params.get('static_transform_label')
+        loaded = False
+        try:
+            loaded = self.transform_manager.load_transforms_from_file(st_file)
+        except Exception as e:
+            self.get_logger().warn(
+                f"Failed to load static transforms file {st_file}: {e}")
 
+        if loaded:
+            labels = self.transform_manager.get_labels()
+            if not chosen_label and labels:
+                chosen_label = labels[0]
+            if chosen_label:
+                ok = self.transform_manager.set_active_label(chosen_label)
+                if ok:
+                    self.get_logger().info(
+                        f"Active static transform set to label '{chosen_label}' from {st_file}")
+                else:
+                    self.get_logger().warn(
+                        f"Label '{chosen_label}' not found in {st_file}")
+        else:
+            # 既存の対応点からの推定を試みる（従来の挙動、フォールバック）
+            # 対応点が2点以上あればstatic_transformを自動推定
+            if self.transform_manager.correspondences is not None and len(self.transform_manager.correspondences) >= 2:
+                est = self.transform_manager.estimate_transform_from_correspondences()
+
+                if est is not None:
+                    self.transform_manager.set_static_transform(*est)
+                    self.get_logger().info(
+                        f"static_transform estimated from correspondences: x={est[0]:.6f}, y={est[1]:.6f}, yaw={est[2]:.6f}")
+
+                else:
+                    self.transform_manager.static_transform = (0.0, 0.0, 0.0)
+                    self.get_logger().info('static_transform estimation failed. Initializing with (0,0,0).')
             else:
                 self.transform_manager.static_transform = (0.0, 0.0, 0.0)
-                self.get_logger().info('static_transform estimation failed. Initializing with (0,0,0).')
-        else:
-            self.transform_manager.static_transform = (0.0, 0.0, 0.0)
-            self.get_logger().info('static_transform is not specified. Initializing with (0,0,0).')
+                self.get_logger().info('static_transform is not specified. Initializing with (0,0,0).')
 
-        # 初期static transformをpublish
         self.publish_static_transform()
-
         self._tested = False
+
+    def _on_select_label(self, msg: String):
+        # トピックでラベルを受け取り切替える（暫定実装）
+        label = msg.data
+        if label is None or label == '':
+            self.get_logger().warn('Received empty label on /gnss/select_static_transform')
+            return
+        ok = self.transform_manager.set_active_label(label)
+        if ok:
+            self.get_logger().info(
+                f"Switched active static transform to label '{label}'")
+            self.publish_static_transform()
+        else:
+            self.get_logger().warn(
+                f"Requested label '{label}' not found among available labels: {self.transform_manager.get_labels()}")
 
     def publish_static_transform(self):
         # static_transform (UTM→map) をtfでpublish
@@ -468,30 +663,80 @@ class GNSSOdometryNode(Node):
         odom.pose.pose.position.y = map_y
         odom.pose.pose.position.z = handler_result.alt_m if handler_result.alt_m is not None else 0.0
 
-        # Orientation: prefer quaternion from handler, else yaw
-        if handler_result.quaternion is not None:
-            odom.pose.pose.orientation = handler_result.quaternion
-        elif handler_result.yaw_rad is not None:
-            q = tf_transformations.quaternion_from_euler(
-                0, 0, handler_result.yaw_rad)
-            odom.pose.pose.orientation.x = q[0]
-            odom.pose.pose.orientation.y = q[1]
-            odom.pose.pose.orientation.z = q[2]
-            odom.pose.pose.orientation.w = q[3]
+        # Orientation selection logic (only 'navpvt' or 'computed'):
+        heading_src = str(self.params.get('heading_source'))
+        yaw_available = False
+        if heading_src == 'navpvt':
+            if handler_result.quaternion is not None:
+                odom.pose.pose.orientation = handler_result.quaternion
+                yaw_available = True
+            elif handler_result.yaw_rad is not None:
+                q = tf_transformations.quaternion_from_euler(
+                    0, 0, handler_result.yaw_rad)
+                odom.pose.pose.orientation.x = q[0]
+                odom.pose.pose.orientation.y = q[1]
+                odom.pose.pose.orientation.z = q[2]
+                odom.pose.pose.orientation.w = q[3]
+                yaw_available = True
+            else:
+                yaw_available = False
+        elif heading_src == 'computed':
+            # Compute heading using HeadingEstimator
+            ts = self._get_msg_time(
+                handler_result.source_msg) if handler_result.source_msg is not None else None
+            computed = self.heading_estimator.update(map_x, map_y, ts)
+            yaw_to_use = computed
+            if yaw_to_use is not None:
+                q = tf_transformations.quaternion_from_euler(
+                    0, 0, float(yaw_to_use))
+                odom.pose.pose.orientation.x = q[0]
+                odom.pose.pose.orientation.y = q[1]
+                odom.pose.pose.orientation.z = q[2]
+                odom.pose.pose.orientation.w = q[3]
+                yaw_available = True
+            else:
+                yaw_available = False
         else:
-            # No orientation available: set neutral quaternion
-            q = tf_transformations.quaternion_from_euler(0, 0, 0.0)
-            odom.pose.pose.orientation.x = q[0]
-            odom.pose.pose.orientation.y = q[1]
-            odom.pose.pose.orientation.z = q[2]
-            odom.pose.pose.orientation.w = q[3]
+            # Unsupported mode
+            yaw_available = False
+            raise RuntimeError(f"Unsupported heading_source: {heading_src}")
+
+        # If yaw is not available, do not publish. This prevents emitting
+        # odometry with neutral (0.0) orientation that can cause sudden
+        # yaw jumps when a real heading later becomes available.
+        if not yaw_available:
+            self.get_logger().debug(
+                f"Skipping GNSS odom publish: yaw unavailable (heading_source={heading_src})")
+            return
 
         # Covariance: handler must provide a 36-element covariance. The
         # parameter 'default_covariance' was validated at init; handlers
         # should honor that contract. Use the handler-provided covariance
         # directly (copy to a list to avoid shared-mutable structures).
         odom.pose.covariance = list(handler_result.covariance)
+        threshold = 7.0  # [m] 異常に大きな分散はpublishしない
+        if odom.pose.covariance[0] + odom.pose.covariance[7] > threshold ** 2:
+            self.get_logger().warn(
+                f"cov too large: xx+yy={odom.pose.covariance[0]:.1f}+{odom.pose.covariance[7]:.1f} > {threshold**2:.1f}, skip publish")
+            return
+        # Suppress publishing when movement since last published position
+        # is below the configured `min_publish_distance` (useful for
+        # avoiding GNSS noise when the robot is stationary).
+        min_dist = float(self.params.get('min_publish_distance'))
+        if min_dist > 0.0:
+            last = self._last_published_map_pos
+            if last is not None:
+                dx = map_x - last[0]
+                dy = map_y - last[1]
+                dist = math.hypot(dx, dy)
+                if dist < min_dist:
+                    self.get_logger().debug(
+                        f"Skipping GNSS odom publish: moved {dist:.3f}m < min_publish_distance {min_dist:.3f}m")
+                    return
+
+        # Publish and record last published position
         self.odom_pub.publish(odom)
+        self._last_published_map_pos = (map_x, map_y)
 
     def utm_to_map(self, utm_x, utm_y):
         # static_transform (map = R*utm + t) を適用
@@ -502,6 +747,18 @@ class GNSSOdometryNode(Node):
         map_x = x + math.cos(yaw) * utm_x - math.sin(yaw) * utm_y
         map_y = y + math.sin(yaw) * utm_x + math.cos(yaw) * utm_y
         return map_x, map_y
+
+    def _get_msg_time(self, msg) -> float:
+        # Return message timestamp as float seconds. If message has header.stamp,
+        # prefer that; otherwise, fall back to current time.
+        try:
+            if hasattr(msg, 'header') and hasattr(msg.header, 'stamp'):
+                s = msg.header.stamp
+                return float(s.sec) + float(s.nanosec) * 1e-9
+        except Exception:
+            pass
+        now = self.get_clock().now().to_msg()
+        return float(now.sec) + float(now.nanosec) * 1e-9
 
     def test_transform_accuracy(self):
         # estimate_transform_from_correspondences実行後、correspondencesで変換の確からしさを評価

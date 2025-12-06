@@ -141,7 +141,9 @@ def generate_launch_description():
                 arguments=['--ros-args', '--log-level', log_level],
                 parameters=[{'use_sim_time': use_sim_time},
                             {'autostart': autostart},
-                            {'node_names': lifecycle_nodes}])
+                            {'node_names': lifecycle_nodes},
+                            {'bond_timeout': 0.0},
+                            ])
         ]
     )
 
@@ -171,14 +173,31 @@ def generate_launch_description():
         ],
     )
 
+    # change_amcl_publish_state_node = Node(
+    #     package='horiokart_drivers',
+    #     executable='pose_with_cov_publish_controller_node.py',
+    #     name='amcl_publish_controller_node',
+    #     output='screen',
+    #     remappings=[("pose_with_cov_origin", "amcl_pose_origin"),
+    #                 ("pose_with_cov", "amcl_pose")]
+    # )
+
     change_amcl_publish_state_node = Node(
         package='horiokart_drivers',
-        executable='pose_with_cov_publish_controller_node.py',
+        executable='generic_publish_controller_node.py',
         name='amcl_publish_controller_node',
+        parameters=[{
+            "msg_module": "geometry_msgs.msg",
+            "msg_class": "PoseWithCovarianceStamped",
+            "publish": False,
+            "queue_size": 1,
+            "use_sim_time": os.environ.get('SIMULATION', 'false').lower() == 'true',
+        }],
         output='screen',
-        remappings=[("pose_with_cov_origin", "amcl_pose_origin"),
-                    ("pose_with_cov", "amcl_pose")]
+        remappings=[("input_topic", "amcl_pose_origin"),
+                    ("output_topic", "amcl_pose")]
     )
+
     gnss_amcl_initializer_node = Node(
         package='horiokart_navigation',
         executable='gnss_amcl_initializer_node.py',
@@ -246,6 +265,6 @@ def generate_launch_description():
 
     ld.add_action(change_amcl_publish_state_node)
     ld.add_action(gnss_amcl_initializer_node_timer)
-    ld.add_action(amcl_watchdog_node_timer)
+    # ld.add_action(amcl_watchdog_node_timer)
 
     return ld

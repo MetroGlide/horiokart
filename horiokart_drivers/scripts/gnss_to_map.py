@@ -6,17 +6,15 @@ import pyproj
 import yaml
 import math
 
+# ROS / rosbag imports
+import rosbag2_py
+from rclpy.serialization import deserialize_message
+from ublox_msgs.msg import NavSTATUS
+from sensor_msgs.msg import NavSatFix
 
-def extract_navstatus_from_bag(bag_path, topic):
-    try:
-        import rosbag2_py
-    except ImportError:
-        raise ImportError(
-            "rosbag2_pyが必要です。pip install rosbag2_py でインストールしてください。")
-    from ublox_msgs.msg import NavSTATUS
-    import rclpy.serialization
-    from rclpy.serialization import deserialize_message
 
+def extract_navstatus_from_bag(bag_path, topic, start_time=None, end_time=None):
+    # uses module-level imports: rosbag2_py, NavSTATUS, deserialize_message
     storage_options = rosbag2_py.StorageOptions(
         uri=bag_path, storage_id='sqlite3')
     converter_options = rosbag2_py.ConverterOptions('', '')
@@ -26,8 +24,19 @@ def extract_navstatus_from_bag(bag_path, topic):
     type_map = {t.name: t.type for t in topic_types}
 
     msgs = []
+    base_time_ns = None
     while reader.has_next():
         (topic_name, data, t) = reader.read_next()
+        if base_time_ns is None:
+            base_time_ns = t
+        # t is in nanoseconds
+        elapsed_sec = (t - base_time_ns) / 1e9
+        # skip before start_time
+        if start_time is not None and elapsed_sec < start_time:
+            continue
+        # stop after end_time (sequential reader: safe to break)
+        if end_time is not None and elapsed_sec > end_time:
+            break
         if topic_name == topic:
             msg = deserialize_message(data, NavSTATUS)
             msgs.append(msg)
@@ -69,41 +78,43 @@ def match_navstatus_to_navsatfix(navsat_msgs, navstatus_msgs):
 def parse_args():
     parser = argparse.ArgumentParser(
         description="rosbagのNavSatFixをmap座標に変換し画像化")
-    parser.add_argument('--transform', type=float, nargs=3,
-                        default=[4013878.997909, 104375.799266, 1.70080],
-                        metavar=('X', 'Y', 'YAW'), help='UTM→map変換行列 [x y yaw]')
     parser.add_argument('--bag', type=str,
-                        default="/root/ros2_data/rosbag/TC2025/20251004/rosbag2_2025_10_04-02_19_02",
+                        default="/root/ros2_data/rosbag/20251129/rosbag2_2025_11_29-04_25_25/",
                         help='rosbag2ディレクトリ')
-    parser.add_argument('--map-img', type=str,
-                        default="/root/ros2_data/map_20251004/map1/map.pgm",
-                        help='map画像パス')
-    parser.add_argument('--map-yaml', type=str,
-                        default="/root/ros2_data/map_20251004/map1/map.yaml",
-                        help='map.yamlパス')
+    parser.add_argument('--input-dir', type=str,
+                        default="/root/ros2_data/map",
+                        help='mapやstatic transformの入力ディレクトリ (default: /root/ros2_data/map)')
+    parser.add_argument('--label', type=str,
+                        required=True,
+                        help='generate_static_transforms.py の output にある transform の label を指定')
+    parser.add_argument('--static-transforms', type=str,
+                        default="gnss_to_map_static_transforms.yaml",
+                        help='generate_static_transforms.py が出力する transforms YAML ファイル名 (input-dirと結合して使用)')
     parser.add_argument('--output-dir', type=str,
-                        default="/root/ros2_data/map_20251004/map_gnss",
+                        default="/root/ros2_data/map/map_gnss",
                         help='画像保存先ディレクトリ')
     parser.add_argument('--topic', type=str,
                         default="/gps/fix",
                         help='NavSatFixトピック名')
     parser.add_argument('--utm-zone', type=int, default=54,
                         help='UTMゾーン番号')
+    parser.add_argument('--start-time', type=float, default=None,
+                        help='rosbag開始からの経過秒で抽出開始 (float seconds, optional)')
+    parser.add_argument('--end-time', type=float, default=None,
+                        help='rosbag開始からの経過秒で抽出終了 (float seconds, optional)')
+    parser.add_argument('--gnss-only', action='store_true',
+                        help='map に依存せず UTM 座標のまま透過画像のみを出力します')
+    parser.add_argument('--utm-resolution', type=float, default=1.0,
+                        help='--gnss-only 時の解像度 [m/pix] (default: 1.0)')
+    parser.add_argument('--utm-margin', type=float, default=2.0,
+                        help='--gnss-only 時の余白 [m] (default: 2.0)')
     return parser.parse_args()
 
 # --- rosbag2_pyによるNavSatFix抽出 ---
 
 
-def extract_navsatfix_from_bag(bag_path, topic):
-    try:
-        import rosbag2_py
-    except ImportError:
-        raise ImportError(
-            "rosbag2_pyが必要です。pip install rosbag2_py でインストールしてください。")
-    from sensor_msgs.msg import NavSatFix
-    import rclpy.serialization
-    from rclpy.serialization import deserialize_message
-
+def extract_navsatfix_from_bag(bag_path, topic, start_time=None, end_time=None):
+    # uses module-level imports: rosbag2_py, NavSatFix, deserialize_message
     storage_options = rosbag2_py.StorageOptions(
         uri=bag_path, storage_id='sqlite3')
     converter_options = rosbag2_py.ConverterOptions('', '')
@@ -113,8 +124,16 @@ def extract_navsatfix_from_bag(bag_path, topic):
     type_map = {t.name: t.type for t in topic_types}
 
     msgs = []
+    base_time_ns = None
     while reader.has_next():
         (topic_name, data, t) = reader.read_next()
+        if base_time_ns is None:
+            base_time_ns = t
+        elapsed_sec = (t - base_time_ns) / 1e9
+        if start_time is not None and elapsed_sec < start_time:
+            continue
+        if end_time is not None and elapsed_sec > end_time:
+            break
         if topic_name == topic:
             msg = deserialize_message(data, NavSatFix)
             msgs.append(msg)
@@ -139,13 +158,31 @@ def utm_to_map(utm_x, utm_y, transform):
 # --- map画像・yamlからorigin, resolution取得 ---
 
 
-def load_map_and_params(map_img_path, map_yaml_path):
+def load_map_and_params(map_yaml_path):
     with open(map_yaml_path, 'r') as f:
         yml = yaml.safe_load(f)
     origin = yml['origin']  # [x, y, theta]
     resolution = yml['resolution']
-    img = Image.open(map_img_path).convert('RGBA')
-    return img, origin, resolution
+    image_entry = yml.get('image')
+    if not image_entry:
+        raise RuntimeError(f"map yaml {map_yaml_path} に 'image' エントリがありません")
+    # image_entry may be relative to the map_yaml location
+    if not os.path.isabs(image_entry):
+        image_path = os.path.join(os.path.dirname(map_yaml_path), image_entry)
+    else:
+        image_path = image_entry
+    img = Image.open(image_path).convert('RGBA')
+    return img, origin, resolution, os.path.basename(image_path)
+
+
+def load_static_transforms(transforms_yaml_path):
+    if not os.path.isfile(transforms_yaml_path):
+        raise FileNotFoundError(
+            f"static transforms yaml not found: {transforms_yaml_path}")
+    with open(transforms_yaml_path, 'r') as f:
+        data = yaml.safe_load(f)
+    transforms = data.get('transforms', []) if data else []
+    return transforms
 
 # --- map座標→画像ピクセル座標 ---
 
@@ -168,6 +205,12 @@ def plot_points_on_transparent(map_points, navsat_msgs, navstatus_msgs, origin, 
         navstatus = navstatus_msgs[i] if navstatus_msgs else None
         color = GPS_FIX_COLORS.get(
             getattr(navstatus, 'gps_fix', None), (255, 0, 0, 255))
+
+        # draw point
+        draw.ellipse(
+            [(px-radius, py-radius), (px+radius, py+radius)], fill=color)
+
+        # draw covariance ellipse
         if hasattr(msg, 'position_covariance') and msg.position_covariance[0] > 0 and msg.position_covariance[4] > 0:
             cov_x = msg.position_covariance[0]
             cov_y = msg.position_covariance[4]
@@ -177,8 +220,6 @@ def plot_points_on_transparent(map_points, navsat_msgs, navstatus_msgs, origin, 
             ellipse_ry = int(1 * sigma_y / resolution)
             draw.ellipse([(px-ellipse_rx, py-ellipse_ry), (px+ellipse_rx,
                          py+ellipse_ry)], outline=(0, 0, 255, 128), width=2)
-        draw.ellipse(
-            [(px-radius, py-radius), (px+radius, py+radius)], fill=color)
     return img
 
 # --- map画像にプロット ---
@@ -193,6 +234,12 @@ def plot_points_on_map(map_img, map_points, navsat_msgs, navstatus_msgs, origin,
         navstatus = navstatus_msgs[i] if navstatus_msgs else None
         color = GPS_FIX_COLORS.get(
             getattr(navstatus, 'gps_fix', None), (255, 0, 0, 255))
+
+        # draw point
+        draw.ellipse(
+            [(px-radius, py-radius), (px+radius, py+radius)], fill=color)
+
+        # draw covariance ellipse
         if hasattr(msg, 'position_covariance') and msg.position_covariance[0] > 0 and msg.position_covariance[4] > 0:
             cov_x = msg.position_covariance[0]
             cov_y = msg.position_covariance[4]
@@ -202,8 +249,19 @@ def plot_points_on_map(map_img, map_points, navsat_msgs, navstatus_msgs, origin,
             ellipse_ry = int(1 * sigma_y / resolution)
             draw.ellipse([(px-ellipse_rx, py-ellipse_ry), (px+ellipse_rx,
                          py+ellipse_ry)], outline=(0, 0, 255, 128), width=2)
-        draw.ellipse(
-            [(px-radius, py-radius), (px+radius, py+radius)], fill=color)
+
+            # draw covariance value text.
+            cov_text = f"{cov_x*10000:.2f}cm², {cov_y*10000:.2f}cm²"
+            # draw.text((px + ellipse_rx + 2, py - ellipse_ry - 2),
+            #           cov_text, fill=(0, 0, 0, 255))
+        else:
+            if hasattr(msg, 'position_covariance'):
+                print(
+                    f"Warning: NavSatFix msg {i} has non-positive covariance values. Covariance: {msg.position_covariance}")
+            else:
+                print(
+                    f"Warning: NavSatFix msg {i} has no covariance information")
+
     return img
 
 # --- 座標リストをyaml保存 ---
@@ -221,12 +279,14 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
 
     # 1. rosbagからNavSatFix抽出
-    navsat_msgs = extract_navsatfix_from_bag(args.bag, args.topic)
+    navsat_msgs = extract_navsatfix_from_bag(
+        args.bag, args.topic, start_time=args.start_time, end_time=args.end_time)
     print(f"NavSatFix msgs: {len(navsat_msgs)}件")
 
     # NavStatusトピック名（仮: /ublox_gps/navstatus）
     navstatus_topic = '/navstatus'
-    navstatus_msgs = extract_navstatus_from_bag(args.bag, navstatus_topic)
+    navstatus_msgs = extract_navstatus_from_bag(
+        args.bag, navstatus_topic, start_time=args.start_time, end_time=args.end_time)
     print(f"NavStatus msgs: {len(navstatus_msgs)}件")
     navstatus_for_navsat = match_navstatus_to_navsatfix(
         navsat_msgs, navstatus_msgs)
@@ -236,12 +296,77 @@ def main():
                            ellps='WGS84', south=False)
     utm_points = [wgs84_to_utm(msg, utm_proj) for msg in navsat_msgs]
 
-    # 3. UTM→map
-    map_points = [utm_to_map(ux, uy, args.transform) for ux, uy in utm_points]
+    # If --gnss-only: produce transparent image using UTM coordinates directly
+    if args.gnss_only:
+        if not utm_points:
+            print("No GNSS points found in bag; nothing to do.")
+            return
+        utm_xs = [p[0] for p in utm_points]
+        utm_ys = [p[1] for p in utm_points]
+        min_x = min(utm_xs)
+        max_x = max(utm_xs)
+        min_y = min(utm_ys)
+        max_y = max(utm_ys)
+        margin = args.utm_margin
+        min_x -= margin
+        max_x += margin
+        min_y -= margin
+        max_y += margin
 
-    # 4. map画像・yaml取得
-    map_img, origin, resolution = load_map_and_params(
-        args.map_img, args.map_yaml)
+        new_w = int(math.ceil((max_x - min_x) / args.utm_resolution))
+        new_h = int(math.ceil((max_y - min_y) / args.utm_resolution))
+        new_origin = [min_x, min_y, 0.0]
+        print(
+            f"UTM-only 画像サイズ: {new_w}x{new_h}, origin: {new_origin}, resolution: {args.utm_resolution}")
+
+        # transparent base image
+
+        # plot UTM points directly (reuse existing plotting function)
+        img_trans = plot_points_on_transparent(
+            utm_points, navsat_msgs, navstatus_for_navsat, new_origin, args.utm_resolution, (new_w, new_h))
+
+        out_trans_path = os.path.join(
+            args.output_dir, 'gnss_points_transparent_utm.png')
+        img_trans.save(out_trans_path)
+        print(f"Saved UTM transparent GNSS image: {out_trans_path}")
+
+        # save UTM points yaml
+        save_points_yaml(utm_points, os.path.join(
+            args.output_dir, 'gnss_points_utm.yaml'))
+        return
+
+    # 3. static transforms YAML から transform を取得 (labelで選択)
+    transforms_yaml_path = os.path.join(
+        args.input_dir, args.static_transforms)
+    transforms = load_static_transforms(transforms_yaml_path)
+    # label に一致する transform を探す
+    selected_transform = None
+    selected_map_name = None
+    for t in transforms:
+        if t.get('label') == args.label:
+            selected_transform = t.get('transform')
+            selected_map_name = t.get('map_name')
+            break
+    if selected_transform is None:
+        if len(transforms) == 1:
+            selected_transform = transforms[0].get('transform')
+            selected_map_name = transforms[0].get('map_name')
+            print(
+                f"label に一致する transform が見つからなかったため、唯一の transform (label={transforms[0].get('label')}) を使用します")
+        else:
+            raise RuntimeError(
+                f"label={args.label} に一致する transform が {transforms_yaml_path} に見つかりません")
+
+    # 4. UTM→map
+    map_points = [utm_to_map(ux, uy, selected_transform)
+                  for ux, uy in utm_points]
+
+    # 5. map画像・yaml取得 (map yamlは input-dir と結合して読み込む)
+    if not selected_map_name:
+        raise RuntimeError("selected_map_name が未設定です")
+    map_yaml_path = os.path.join(args.input_dir, selected_map_name)
+    map_img, origin, resolution, map_image_name = load_map_and_params(
+        map_yaml_path)
     map_w, map_h = map_img.size
 
     # 5. GNSS点群の描画範囲を計算
@@ -285,8 +410,8 @@ def main():
 
     # 10. 新しいmap.yamlも保存（ベースマップ情報も追記）
     base_map_info = {
-        'base_map_image': os.path.basename(args.map_img),
-        'base_map_yaml': os.path.basename(args.map_yaml),
+        'base_map_image': map_image_name,
+        'base_map_yaml': os.path.basename(selected_map_name),
         'base_map_origin': origin,
         'base_map_resolution': resolution,
         'base_map_size': [map_w, map_h],
