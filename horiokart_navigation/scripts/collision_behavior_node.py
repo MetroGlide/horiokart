@@ -79,15 +79,15 @@ class CollisionBehavior(Node):
         ).value
         self._back_up_distance = self.declare_parameter(
             'back_up_distance',
-            1.0  # m
+            2.0  # m
         ).value
         self._back_up_velocity = self.declare_parameter(
             'back_up_velocity',
-            0.2  # m/s
+            0.25  # m/s
         ).value
         self._back_up_theta_velocity = self.declare_parameter(
             'back_up_theta_velocity',
-            0.2  # rad
+            0.6  # rad
         ).value
         self._controller_rate = self.declare_parameter(
             'controller_rate',
@@ -95,7 +95,7 @@ class CollisionBehavior(Node):
         ).value
         self._retry_max_count = self.declare_parameter(
             'retry_max_count',
-            3
+            10
         ).value
         self._retry_count = 0
 
