@@ -29,8 +29,8 @@
   <xacro:lidar_2d prefix="top_" attach_to="top_frame_link" xyz="0 0 0.03" rpy="0 0 ${pi}"/>
   <xacro:lidar_3d prefix="livox_" attach_to="top_frame_link" xyz="0 0 0.06" rpy="0 0 0"/>
 
-  <xacro:realsense_d435i prefix="" attach_to="top_frame_link" xyz="0.020 0 -0.230" rpy="0 0.288 0"/>
-  <!-- <xacro:realsense_d435 prefix="" attach_to="top_frame_link" xyz="0.01 0 -0.02" rpy="0 0.35 0"/> -->
+  <!-- <xacro:realsense_d435i prefix="" attach_to="top_frame_link" xyz="0.020 0 -0.230" rpy="0 0.288 0"/> -->
+  <xacro:realsense_d435i prefix="" attach_to="top_frame_link" xyz="0.020 0 -0.230" rpy="0 0.27 0"/>
 
 
 </robot>
