@@ -26,6 +26,14 @@ RUN apt-get update \
   ros-${ROS_DISTRO}-imu-tools \
   ros-${ROS_DISTRO}-rmw-cyclonedds-cpp
 
+### Install Gazebo Fortress and ROS-GZ bridge
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+  ros-${ROS_DISTRO}-ros-gz-sim \
+  ros-${ROS_DISTRO}-ros-gz-bridge \
+  ros-${ROS_DISTRO}-ros-gz-image \
+  ros-${ROS_DISTRO}-ros-gz-interfaces
+
 RUN pip3 install -U transforms3d
 
 ### For visualize tools bug fix 

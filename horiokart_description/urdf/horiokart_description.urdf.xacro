@@ -5,11 +5,13 @@
   <xacro:include filename="$(find horiokart_description)/urdf/robot_base.urdf.xacro" />
   <xacro:include filename="$(find horiokart_description)/urdf/sensors.xacro"/>
 
-  <xacro:horiokart_base/>
+  <xacro:arg name="simulation" default="false"/>
+
+  <xacro:horiokart_base simulation="$(arg simulation)"/>
 
   <!-- <xacro:lidar_2d prefix="front_" attach_to="base_link" xyz="0.31 0 0.15"  rpy="0 0 0"/> -->
-  <xacro:lidar_2d prefix="front_" attach_to="base_link" xyz="0.32 0 0.15" rpy="0 0 ${pi}"/>
-  <xacro:gps prefix="" attach_to="base_link" xyz="0.26 -0.13 0.33" rpy="0 0 0"/>
+  <xacro:lidar_2d prefix="front_" attach_to="base_link" xyz="0.32 0 0.15" rpy="0 0 ${pi}" simulation="$(arg simulation)" sensor_name="front"/>
+  <xacro:gps prefix="" attach_to="base_link" xyz="0.26 -0.13 0.33" rpy="0 0 0" simulation="$(arg simulation)"/>
 
   <!-- top frame for sensors -->
   <joint name="top_frame_link_joint" type="fixed">
@@ -26,11 +28,11 @@
     </visual>
   </link>
 
-  <xacro:lidar_2d prefix="top_" attach_to="top_frame_link" xyz="0 0 0.03" rpy="0 0 ${pi}"/>
+  <xacro:lidar_2d prefix="top_" attach_to="top_frame_link" xyz="0 0 0.03" rpy="0 0 ${pi}" simulation="$(arg simulation)" sensor_name="top"/>
   <xacro:lidar_3d prefix="livox_" attach_to="top_frame_link" xyz="0 0 0.06" rpy="0 0 0"/>
 
   <!-- <xacro:realsense_d435i prefix="" attach_to="top_frame_link" xyz="0.020 0 -0.230" rpy="0 0.288 0"/> -->
-  <xacro:realsense_d435i prefix="" attach_to="top_frame_link" xyz="0.020 0 -0.230" rpy="0 0.27 0"/>
+  <xacro:realsense_d435i prefix="" attach_to="top_frame_link" xyz="0.020 0 -0.230" rpy="0 0.27 0" simulation="$(arg simulation)"/>
 
 
 </robot>
