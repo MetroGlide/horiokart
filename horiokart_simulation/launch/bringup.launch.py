@@ -9,6 +9,7 @@ from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
     Command,
+    EnvironmentVariable,
     FindExecutable,
     LaunchConfiguration,
     PathJoinSubstitution,
@@ -30,6 +31,11 @@ def generate_launch_description():
     spawn_z_arg = DeclareLaunchArgument("spawn_z", default_value="0.05")
     spawn_yaw_arg = DeclareLaunchArgument("spawn_yaw", default_value="0.0")
     headless_arg = DeclareLaunchArgument("headless", default_value="false")
+    publish_gazebo_tf_arg = DeclareLaunchArgument(
+        "publish_gazebo_tf",
+        default_value=EnvironmentVariable(
+            "PUBLISH_GAZEBO_TF", default_value="false"),
+    )
 
     robot_description = Command([
         FindExecutable(name="xacro"),
@@ -47,6 +53,7 @@ def generate_launch_description():
         executable="robot_state_publisher",
         parameters=[
             {"robot_description": robot_description, "use_sim_time": True}],
+        condition=IfCondition(LaunchConfiguration("publish_gazebo_tf")),
     )
 
     gz_sim_headless = IncludeLaunchDescription(
@@ -74,7 +81,7 @@ def generate_launch_description():
         executable="create",
         arguments=[
             "-name", LaunchConfiguration("robot_name"),
-            "-topic", "robot_description",
+            "-string", robot_description,
             "-x", LaunchConfiguration("spawn_x"),
             "-y", LaunchConfiguration("spawn_y"),
             "-z", LaunchConfiguration("spawn_z"),
@@ -99,6 +106,7 @@ def generate_launch_description():
         spawn_z_arg,
         spawn_yaw_arg,
         headless_arg,
+        publish_gazebo_tf_arg,
         robot_state_publisher,
         gz_sim_headless,
         gz_sim_gui,
