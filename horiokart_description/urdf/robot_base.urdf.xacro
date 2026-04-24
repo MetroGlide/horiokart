@@ -2,8 +2,9 @@
 
 <robot xmlns:xacro="http://ros.org/wiki/xacro" name="horiokart">
 
-  <xacro:macro name="box_inertia" params="m x y z">
+  <xacro:macro name="box_inertia" params="m x y z cx:=0 cy:=0 cz:=0">
     <inertial>
+      <origin xyz="${cx} ${cy} ${cz}" rpy="0 0 0"/>
       <mass value="${m}"/>
       <inertia ixx="${m*(y*y+z*z)/12}" ixy="0" ixz="0"
                iyy="${m*(x*x+z*z)/12}" iyz="0"
@@ -54,7 +55,7 @@
           <box size="0.6 0.4 0.3"/>
         </geometry>
       </collision>
-      <xacro:box_inertia m="20.0" x="0.6" y="0.4" z="0.3"/>
+      <xacro:box_inertia m="20.0" x="0.6" y="0.4" z="0.3" cx="-0.2" cy="0" cz="0.1"/>
     </link>
 
     <joint name="right_wheel_joint" type="continuous">
