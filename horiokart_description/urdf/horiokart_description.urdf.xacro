@@ -10,7 +10,10 @@
   <xacro:horiokart_base simulation="$(arg simulation)"/>
 
   <!-- <xacro:lidar_2d prefix="front_" attach_to="base_link" xyz="0.31 0 0.15"  rpy="0 0 0"/> -->
-  <xacro:lidar_2d prefix="front_" attach_to="base_link" xyz="0.32 0 0.15" rpy="0 0 ${pi}" simulation="$(arg simulation)" sensor_name="front"/>
+  <!-- RPLiDAR A1M8: 8kHz sampling, 5.5Hz scan, 0.15-12.0m range, 360 samples/scan (1deg resolution) -->
+  <xacro:lidar_2d prefix="front_" attach_to="base_link" xyz="0.32 0 0.15" rpy="0 0 ${pi}" simulation="$(arg simulation)" sensor_name="front"
+    sim_update_rate="5.5" sim_samples="360" sim_min_range="0.15" sim_max_range="12.0" sim_range_resolution="0.01"
+    sim_noise_mean="0.0" sim_noise_stddev="0.015"/>
   <xacro:gps prefix="" attach_to="base_link" xyz="0.26 -0.13 0.33" rpy="0 0 0" simulation="$(arg simulation)"/>
 
   <!-- top frame for sensors -->
@@ -28,7 +31,10 @@
     </visual>
   </link>
 
-  <xacro:lidar_2d prefix="top_" attach_to="top_frame_link" xyz="0 0 0.03" rpy="0 0 ${pi}" simulation="$(arg simulation)" sensor_name="top"/>
+  <!-- RPLiDAR S2: 32kHz sampling, 10Hz scan, 0.05-30.0m range, 3200 samples/scan (0.1125deg resolution) -->
+  <xacro:lidar_2d prefix="top_" attach_to="top_frame_link" xyz="0 0 0.03" rpy="0 0 ${pi}" simulation="$(arg simulation)" sensor_name="top"
+    sim_update_rate="10" sim_samples="3200" sim_min_range="0.05" sim_max_range="30.0" sim_range_resolution="0.01"
+    sim_noise_mean="0.0" sim_noise_stddev="0.020"/>
   <xacro:lidar_3d prefix="livox_" attach_to="top_frame_link" xyz="0 0 0.06" rpy="0 0 0"/>
 
   <!-- <xacro:realsense_d435i prefix="" attach_to="top_frame_link" xyz="0.020 0 -0.230" rpy="0 0.288 0"/> -->
