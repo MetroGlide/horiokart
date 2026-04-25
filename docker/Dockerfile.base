@@ -25,8 +25,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 RUN pip3 install --no-cache-dir -U transforms3d
 
 # --- pre-copy: 依存解決ファイルのみ先にコピー（キャッシュ最適化）---
-# make build 実行時に docker/collect_deps.sh が docker/deps/ に自動収集する。
-# docker/deps/ が空の場合も COPY は .gitkeep により成功し、後段でフォールバックする。
+# make build 実行時に docker/collect_deps.sh が docker/deps/ を準備する。
+# ここでは事前に用意された内容のみをコピーし、後段で全ソースを反映する。
 COPY docker/deps/ /app/
 
 WORKDIR /root/ros2_ws/src
