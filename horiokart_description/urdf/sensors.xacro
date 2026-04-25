@@ -2,7 +2,7 @@
 
 <robot xmlns:xacro="http://ros.org/wiki/xacro" name="horiokart_v2">
 
-  <xacro:macro name="lidar_2d" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' length='0.05' radius='0.05' ">
+  <xacro:macro name="lidar_2d" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' length='0.05' radius='0.05' simulation:=false sensor_name:='lidar' sim_update_rate:=10 sim_samples:=360 sim_min_range:=0.1 sim_max_range:=30.0 sim_range_resolution:=0.01 sim_noise_mean:=0.0 sim_noise_stddev:=0.0 ">
 
     <xacro:unless value="${attach_to == ''}">
       <joint name="${prefix}lrf_link_joint" type="fixed">
@@ -19,6 +19,38 @@
         </geometry>
       </visual>
     </link>
+
+    <xacro:if value="${simulation}">
+      <gazebo reference="${prefix}lrf_link">
+        <sensor name="${sensor_name}_lidar" type="gpu_lidar">
+          <update_rate>${sim_update_rate}</update_rate>
+          <topic>/${sensor_name}_lidar_scan</topic>
+          <ignition_frame_id>${prefix}lrf_link</ignition_frame_id>
+          <lidar>
+            <scan>
+              <horizontal>
+                <samples>${sim_samples}</samples>
+                <resolution>1</resolution>
+                <min_angle>-3.14159</min_angle>
+                <max_angle>3.14159</max_angle>
+              </horizontal>
+            </scan>
+            <range>
+              <min>${sim_min_range}</min>
+              <max>${sim_max_range}</max>
+              <resolution>${sim_range_resolution}</resolution>
+            </range>
+            <noise>
+              <type>gaussian</type>
+              <mean>${sim_noise_mean}</mean>
+              <stddev>${sim_noise_stddev}</stddev>
+            </noise>
+          </lidar>
+          <always_on>true</always_on>
+          <visualize>true</visualize>
+        </sensor>
+      </gazebo>
+    </xacro:if>
 
   </xacro:macro>
 
@@ -42,7 +74,7 @@
 
   </xacro:macro>
 
-  <xacro:macro name="gps" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' length='0.05' radius='0.05' ">
+  <xacro:macro name="gps" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' length='0.05' radius='0.05' simulation:=false ">
 
     <xacro:unless value="${attach_to == ''}">
       <joint name="${prefix}gps_link_joint" type="fixed">
@@ -59,6 +91,17 @@
         </geometry>
       </visual>
     </link>
+
+    <xacro:if value="${simulation}">
+      <gazebo reference="${prefix}gps_link">
+        <sensor name="navsat" type="navsat">
+          <update_rate>1</update_rate>
+          <topic>/navsat</topic>
+          <ignition_frame_id>${prefix}gps_link</ignition_frame_id>
+          <always_on>true</always_on>
+        </sensor>
+      </gazebo>
+    </xacro:if>
 
   </xacro:macro>
 
@@ -83,7 +126,7 @@
 
   </xacro:macro>
 
-  <xacro:macro name="realsense_d435i" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' size='0.02 0.05 0.02' ">
+  <xacro:macro name="realsense_d435i" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' size='0.02 0.05 0.02' simulation:=false ">
 
     <xacro:include filename="$(find realsense2_description)/urdf/_d435.urdf.xacro" />
 
@@ -111,10 +154,34 @@
       </visual>
     </link>
 
-    <xacro:sensor_d435 parent="${prefix}camera_link_base" name="camera" use_nominal_extrinsics="true" add_plug="false" use_mesh="false">
-      <!-- Provide required 'origin' block expected by the sensor_d435 macro -->
-      <origin xyz="0 0 0" rpy="0 0 0"/>
-    </xacro:sensor_d435>
+    <xacro:unless value="${simulation}">
+      <xacro:sensor_d435 parent="${prefix}camera_link_base" name="camera" use_nominal_extrinsics="true" add_plug="false" use_mesh="false">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+      </xacro:sensor_d435>
+    </xacro:unless>
+
+    <xacro:if value="${simulation}">
+      <gazebo reference="${prefix}camera_link_base">
+        <sensor name="rgbd_camera" type="rgbd_camera">
+          <update_rate>6</update_rate>
+          <topic>/rgbd_camera</topic>
+          <ignition_frame_id>${prefix}camera_link_base</ignition_frame_id>
+          <camera>
+            <horizontal_fov>1.5184</horizontal_fov>
+            <image>
+              <width>848</width>
+              <height>480</height>
+            </image>
+            <clip>
+              <near>0.1</near>
+              <far>10.0</far>
+            </clip>
+          </camera>
+          <always_on>true</always_on>
+          <visualize>true</visualize>
+        </sensor>
+      </gazebo>
+    </xacro:if>
 
   </xacro:macro>
 

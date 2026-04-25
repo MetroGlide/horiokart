@@ -1,35 +1,63 @@
+x-base: &base
+  image: horiokart_dev
+  build:
+    context: .
+    dockerfile: "docker/Dockerfile.base"
+    args:
+      ROS_DISTRO: humble
+  tty: true
+  network_mode: "host"
+  privileged: true
+  env_file:
+    - .env
+  volumes:
+    - /tmp/.X11-unix:/tmp/.X11-unix
+    - $HOME/.Xauthority/:/root/.Xauthority
+    - ./:/app/
+    - ./log/ros:/root/.ros/log
+    - /dev:/dev
+    - ${HOME}/ros2_data:/root/ros2_data
+
+x-simulation-base: &simulation-base
+  <<: *base
+  environment:
+    - DISPLAY=${DISPLAY}
+    - PYTHONUNBUFFERED=1
+    - SIMULATION=true
+    - IGN_GAZEBO_RESOURCE_PATH=/root/.ignition/fuel
+  volumes:
+    - /tmp/.X11-unix:/tmp/.X11-unix
+    - $HOME/.Xauthority/:/root/.Xauthority
+    - ./:/app/
+    - ./log/ros:/root/.ros/log
+    - /dev:/dev
+    - ${HOME}/ros2_data:/root/ros2_data
+    - ${HOME}/.ignition:/root/.ignition
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: 1
+            capabilities: [ gpu ]
+
 services:
   develop:
-    image: horiokart_dev
-    build:
-      context: .
-      dockerfile: "docker/Dockerfile.base"
-      args:
-        ROS_DISTRO: humble
-
-    tty: true
-    network_mode: "host"
-    privileged: true
+    <<: *base
     environment:
       - DISPLAY=${DISPLAY}
       - PYTHONUNBUFFERED=1
-
-    env_file:
-      - .env
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix
-      - $HOME/.Xauthority/:/root/.Xauthority
-      - ./:/app/
-      - ./log/ros:/root/.ros/log
-      - /dev:/dev
-      - ${HOME}/ros2_data:/root/ros2_data
-
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-
     command: "/app/docker/docker-entrypoint.sh"
+
+  simulation-dev:
+    <<: *simulation-base
+    command: "/app/docker/docker-entrypoint.sh"
+
+  gazebo-simulation:
+    <<: *simulation-base
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        ros2 launch horiokart_simulation bringup.launch.py
+      "
