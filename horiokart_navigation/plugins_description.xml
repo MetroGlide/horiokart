@@ -1,9 +1,0 @@
-<library path="horiokart_navigation">
-
-  <class name="nav2_rviz_plugins/Navigation 2"
-         type="nav2_rviz_plugins::Nav2Panel"
-         base_class_type="rviz_common::Panel">
-    <description>The rviz2 panel.</description>
-  </class>
-
-</library>
