@@ -46,7 +46,7 @@
               <stddev>${sim_noise_stddev}</stddev>
             </noise>
           </lidar>
-          <alwaysOn>true</alwaysOn>
+          <always_on>true</always_on>
           <visualize>true</visualize>
         </sensor>
       </gazebo>
@@ -98,7 +98,7 @@
           <update_rate>1</update_rate>
           <topic>/navsat</topic>
           <ignition_frame_id>${prefix}gps_link</ignition_frame_id>
-          <alwaysOn>true</alwaysOn>
+          <always_on>true</always_on>
         </sensor>
       </gazebo>
     </xacro:if>
@@ -177,7 +177,7 @@
               <far>10.0</far>
             </clip>
           </camera>
-          <alwaysOn>true</alwaysOn>
+          <always_on>true</always_on>
           <visualize>true</visualize>
         </sensor>
       </gazebo>
