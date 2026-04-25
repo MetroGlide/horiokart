@@ -33,6 +33,8 @@ docker/Dockerfile.base
 
 ## イメージのビルド
 
+### make を使う場合（推奨）
+
 ```bash
 make build svc=slam              # slam / navigation / rosbag-replay 用（runtime イメージ）
 make build svc=gazebo-simulation # Gazebo シミュレーション用（simulation イメージ）
@@ -42,6 +44,26 @@ make build-no-cache svc=slam     # キャッシュ無効でビルド
 ```
 
 `make build` は `docker/collect_deps.sh` を自動実行し、依存解決ファイル（`package.xml` 等）を事前収集してキャッシュを最適化します。
+
+### Docker コマンドを直接使う場合
+
+`make` を使わない場合は、先に依存ファイルを手動で収集してからビルドしてください。
+
+```bash
+# 依存ファイルの収集（package.xml / *.rosinstall / requirements.txt 等を docker/deps/ に集める）
+bash docker/collect_deps.sh
+
+# ビルド（--target でステージを指定）
+docker compose -f compose.yaml build slam              # runtime イメージ
+docker compose -f compose.yaml build gazebo-simulation # simulation イメージ
+docker compose -f compose.yaml build develop           # develop イメージ
+
+# キャッシュ無効でビルド
+docker compose -f compose.yaml build --no-cache slam
+
+# GPU override を適用してビルド（Nvidia の例）
+docker compose -f compose.yaml -f compose.gpu.nvidia.yaml build gazebo-simulation
+```
 
 ## 各サービスの起動
 
