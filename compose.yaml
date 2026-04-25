@@ -19,6 +19,30 @@ x-runtime-base: &runtime-base
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
 
+x-develop-base: &develop-base
+  build:
+    context: .
+    dockerfile: "docker/Dockerfile.base"
+    args:
+      ROS_DISTRO: humble
+    target: develop
+  image: horiokart_develop
+  tty: true
+  network_mode: "host"
+  privileged: true
+  env_file:
+    - .env
+  environment:
+    - DISPLAY=${DISPLAY}
+    - PYTHONUNBUFFERED=1
+  volumes:
+    - /tmp/.X11-unix:/tmp/.X11-unix
+    - $HOME/.Xauthority/:/root/.Xauthority
+    - ./:/app/
+    - ./log/ros:/root/.ros/log
+    - /dev:/dev
+    - ${HOME}/ros2_data:/root/ros2_data
+
 x-simulation-base: &simulation-base
   build:
     context: .
@@ -52,6 +76,7 @@ services:
     environment:
       - DISPLAY=${DISPLAY}
       - PYTHONUNBUFFERED=1
+      - USE_RVIZ=false
     command: >
       bash -c "
         source /opt/ros/humble/setup.bash &&
@@ -64,6 +89,7 @@ services:
     environment:
       - DISPLAY=${DISPLAY}
       - PYTHONUNBUFFERED=1
+      - USE_RVIZ=false
     command: >
       bash -c "
         source /opt/ros/humble/setup.bash &&
@@ -77,6 +103,7 @@ services:
       - DISPLAY=${DISPLAY}
       - PYTHONUNBUFFERED=1
       - SIMULATION=true
+      - USE_RVIZ=false
     command: >
       bash -c "
         source /opt/ros/humble/setup.bash &&
@@ -94,26 +121,36 @@ services:
       "
 
   develop:
-    build:
-      context: .
-      dockerfile: "docker/Dockerfile.base"
-      args:
-        ROS_DISTRO: humble
-      target: develop
-    image: horiokart_develop
-    tty: true
-    network_mode: "host"
-    privileged: true
-    env_file:
-      - .env
+    <<: *develop-base
+    command: "/app/docker/docker-entrypoint.sh"
+
+  rviz2-slam:
+    <<: *develop-base
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        rviz2 --display-config /app/horiokart_slam/rviz/rviz.rviz
+      "
+
+  rviz2-navigation:
+    <<: *develop-base
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        rviz2 --display-config /app/horiokart_navigation/rviz/rviz.rviz
+      "
+
+  rviz:
+    <<: *develop-base
     environment:
       - DISPLAY=${DISPLAY}
       - PYTHONUNBUFFERED=1
-    volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix
-      - $HOME/.Xauthority/:/root/.Xauthority
-      - ./:/app/
-      - ./log/ros:/root/.ros/log
-      - /dev:/dev
-      - ${HOME}/ros2_data:/root/ros2_data
-    command: "/app/docker/docker-entrypoint.sh"
+      - RVIZ_CONFIG=${RVIZ_CONFIG:-}
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        rviz2 $${RVIZ_CONFIG:+--display-config $$RVIZ_CONFIG}
+      "
