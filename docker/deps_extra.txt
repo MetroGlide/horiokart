@@ -1,0 +1,6 @@
+# collect_deps.sh が自動収集できないファイルをここに列挙してください。
+# プロジェクトルートからの相対パスで記載します。
+# 例:
+# some_package/custom_config.yaml
+docker/vcs_import.py
+docker/pip_requirements.py

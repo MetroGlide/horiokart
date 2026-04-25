@@ -1,0 +1,5 @@
+services:
+  gazebo-simulation:
+    devices:
+      - /dev/kfd
+      - /dev/dri

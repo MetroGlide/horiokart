@@ -2,6 +2,7 @@
 # Prerequisites
 *.d
 
+docker/deps/
 # Compiled Object files
 *.slo
 *.lo
