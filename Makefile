@@ -1,8 +1,6 @@
 USE_GPU := $(shell grep -E '^USE_GPU=' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
 USE_GPU ?= none
 
-RVIZ_CONFIG := $(shell grep -E '^RVIZ_CONFIG=' .env 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
-
 COMPOSE_BASE := docker compose -f compose.yaml
 
 ifeq ($(USE_GPU),nvidia)

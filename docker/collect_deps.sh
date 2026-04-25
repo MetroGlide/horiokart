@@ -9,17 +9,16 @@ EXTRA_FILE="${SCRIPT_DIR}/deps_extra.txt"
 EXCLUDE_DIRS=(".git" "docker" "log" "nav2_pkg")
 
 build_prune_args() {
-  local args=()
+  prune_args=()
   for d in "${EXCLUDE_DIRS[@]}"; do
-    args+=(-path "${ROOT_DIR}/${d}" -prune -o)
+    prune_args+=(-path "${ROOT_DIR}/${d}" -prune -o)
   done
-  echo "${args[@]}"
 }
 
 rm -rf "${DEPS_DIR}"
 mkdir -p "${DEPS_DIR}"
 
-prune_args=($(build_prune_args))
+build_prune_args
 
 while IFS= read -r src; do
   rel="${src#${ROOT_DIR}/}"
