@@ -16,7 +16,6 @@ endif()
 # Find ament packages and libraries for ament and system dependencies
 ################################################################################
 find_package(ament_cmake REQUIRED)
-find_package(ament_cmake_python REQUIRED)
 
 find_package(rclcpp REQUIRED)
 find_package(rclpy REQUIRED)
@@ -130,8 +129,6 @@ install(TARGETS ${DEPTH_POSTPROCESS_EXECUTABLE_NAME}
 ################################################################################
 # for python nodes
 ################################################################################
-ament_python_install_package(${PROJECT_NAME})
-
 install(PROGRAMS
   scripts/odometry_tf_broadcaster_node.py
   DESTINATION lib/${PROJECT_NAME}
@@ -142,10 +139,6 @@ install(PROGRAMS
 )
 install(PROGRAMS
   scripts/odom_offset_republisher.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-install(PROGRAMS
-  scripts/gps_transform_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 install(PROGRAMS

@@ -9,7 +9,7 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Envi
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 
-from horiokart_drivers import launch_argument
+from horiokart_utils import launch_argument
 
 
 def generate_launch_description():
@@ -38,7 +38,7 @@ def generate_launch_description():
         "planning_map_path",
         default=os.path.join(
             os.environ.get("MAP_PATH", "/root/ros2_data/map"),
-            "planning_3.yaml"
+            "planning_1.yaml"
         )
     )
     simulation_arg = launch_argument_creator.create(

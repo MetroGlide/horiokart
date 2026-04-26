@@ -14,7 +14,7 @@ from launch_ros.actions import Node, LifecycleNode
 
 import lifecycle_msgs.msg
 
-from horiokart_navigation.launch_argument import LaunchArgumentCreator
+from horiokart_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():

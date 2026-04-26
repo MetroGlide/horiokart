@@ -12,7 +12,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.logging import get_logger
 from ament_index_python.packages import get_package_share_directory
 
-from horiokart_navigation import launch_argument
+from horiokart_utils import launch_argument
 
 
 def get_record_dir_name():

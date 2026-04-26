@@ -9,7 +9,7 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 
-from horiokart_drivers.launch_argument import LaunchArgumentCreator
+from horiokart_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():

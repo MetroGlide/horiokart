@@ -16,7 +16,6 @@ endif()
 # Find ament packages and libraries for ament and system dependencies
 ################################################################################
 find_package(ament_cmake REQUIRED)
-find_package(ament_cmake_python REQUIRED)
 
 ################################################################################
 # Install
@@ -24,11 +23,6 @@ find_package(ament_cmake_python REQUIRED)
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
-
-################################################################################
-# for python nodes
-################################################################################
-ament_python_install_package(${PROJECT_NAME})
 
 ################################################################################
 # Macro for ament package

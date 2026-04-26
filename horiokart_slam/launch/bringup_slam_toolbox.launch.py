@@ -10,13 +10,14 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Envi
 from launch_ros.actions import Node
 from nav2_common.launch import HasNodeParams, RewrittenYaml
 
-from horiokart_slam.launch_argument import LaunchArgumentCreator
+from horiokart_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():
 
     # Getting directories and launch-files
     pkg_dir = get_package_share_directory('horiokart_slam')
+    utils_pkg_dir = get_package_share_directory('horiokart_utils')
     slam_toolbox_dir = get_package_share_directory('slam_toolbox')
     slam_launch_file = os.path.join(
         slam_toolbox_dir, 'launch', 'online_sync_launch.py')
@@ -97,8 +98,12 @@ def generate_launch_description():
 
     record_bag_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_dir, 'launch', 'record_bag.launch.py')
+            os.path.join(utils_pkg_dir, 'launch', 'record_bag.launch.py')
         ),
+        launch_arguments={
+            'caller_pkg_name': 'horiokart_slam',
+            'record_bag_base_name': 'slam_',
+        }.items(),
         condition=IfCondition(record_bag_arg.launch_config),
     )
 

@@ -7,7 +7,7 @@ from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 
-from horiokart_drivers import launch_argument
+from horiokart_utils import launch_argument
 
 
 def generate_launch_description():

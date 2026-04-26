@@ -12,6 +12,8 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
 
+  <exec_depend>horiokart_utils</exec_depend>
+
   <exec_depend>navigation2</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
 
