@@ -146,10 +146,6 @@ install(PROGRAMS
   DESTINATION lib/${PROJECT_NAME}
 )
 install(PROGRAMS
-  scripts/pc_downsampling_node.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-install(PROGRAMS
   scripts/odom_covariance_override_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
