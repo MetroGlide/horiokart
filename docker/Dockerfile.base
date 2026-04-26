@@ -2,9 +2,11 @@
 ARG ROS_DISTRO=humble
 
 # ==============================================================================
-# Stage: runtime
+# Stage: runtime-base
+# apt / pip / pre-copy / vcs_import(||true) / rosdep(||true) をキャッシュ層として分離
+# ソースコード変更でこの層が無効化されないようにする
 # ==============================================================================
-FROM ros:${ROS_DISTRO} AS runtime
+FROM ros:${ROS_DISTRO} AS runtime-base
 
 ARG ROS_DISTRO
 ARG DEBIAN_FRONTEND=noninteractive
@@ -41,6 +43,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   && rosdep update --rosdistro ${ROS_DISTRO} \
   && rosdep install -yir --from-paths src --rosdistro ${ROS_DISTRO} || true
 
+# ==============================================================================
+# Stage: runtime
+# ==============================================================================
+FROM runtime-base AS runtime
+
+ARG ROS_DISTRO
+ARG DEBIAN_FRONTEND=noninteractive
+
 # --- full copy: 全ソースをコピーして確実にビルド ---
 COPY . /app
 RUN rm -rf /app/docker/deps/
@@ -59,10 +69,12 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc \
   && echo "source /root/ros2_ws/install/setup.bash" >> ~/.bashrc
 
 # ==============================================================================
-# Stage: develop
+# Stage: develop-pkgs
+# develop 系で使うaptパッケージのキャッシュ層（runtime変更の影響を受けない）
 # ==============================================================================
-FROM runtime AS develop
+FROM runtime-base AS develop-pkgs
 
+ARG ROS_DISTRO
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -77,9 +89,22 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   ros-${ROS_DISTRO}-rqt ros-${ROS_DISTRO}-rqt-*
 
 # ==============================================================================
-# Stage: simulation
+# Stage: develop
 # ==============================================================================
-FROM develop AS simulation
+FROM develop-pkgs AS develop
+
+ARG ROS_DISTRO
+
+COPY --from=runtime /root/ros2_ws/install /root/ros2_ws/install
+
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc \
+  && echo "source /root/ros2_ws/install/setup.bash" >> ~/.bashrc
+
+# ==============================================================================
+# Stage: simulation-pkgs
+# simulation 系で使うaptパッケージのキャッシュ層（runtime変更の影響を受けない）
+# ==============================================================================
+FROM develop-pkgs AS simulation-pkgs
 
 ARG ROS_DISTRO
 ARG DEBIAN_FRONTEND=noninteractive
@@ -101,5 +126,24 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   && apt-get upgrade -y \
   && apt-get autoremove --purge -y
 
+# ==============================================================================
+# Stage: simulation
+# ==============================================================================
+FROM simulation-pkgs AS simulation
+
+ARG ROS_DISTRO
+
+COPY --from=runtime /app /app
+COPY --from=runtime /root/ros2_ws/src /root/ros2_ws/src
+
 WORKDIR /root/ros2_ws
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get update \
+  && rosdep update --rosdistro ${ROS_DISTRO} \
+  && rosdep install -yir --from-paths src --rosdistro ${ROS_DISTRO}
+
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && colcon build --symlink-install
+
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc \
+  && echo "source /root/ros2_ws/install/setup.bash" >> ~/.bashrc
