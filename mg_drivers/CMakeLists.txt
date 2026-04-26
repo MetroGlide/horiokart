@@ -1,0 +1,174 @@
+################################################################################
+# Set minimum required version of cmake, project name and compile options
+################################################################################
+cmake_minimum_required(VERSION 3.5)
+project(mg_drivers)
+
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+################################################################################
+# Find ament packages and libraries for ament and system dependencies
+################################################################################
+find_package(ament_cmake REQUIRED)
+
+find_package(rclcpp REQUIRED)
+find_package(rclpy REQUIRED)
+
+find_package(rcutils REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+find_package(pcl_ros REQUIRED)
+find_package(pcl_conversions REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common io filters)
+
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+
+################################################################################
+# Build
+################################################################################
+include_directories(
+  include
+  ${PCL_INCLUDE_DIRS}
+)
+
+add_library(${PROJECT_NAME}_lib
+  "src/base/serial_communicator.cpp"
+  "src/base/serial_communicator2.cpp"
+
+  "src/devices/motor_driver.cpp"
+  "src/sensors/wheel_odometry.cpp"
+
+  "src/motor_driver_node.cpp"
+  "src/wheel_odometry_node.cpp"
+
+  "src/pcl_downsampling_node.cpp"
+)
+
+set(DEPENDENCIES
+  "rclcpp"
+  "rcutils"
+
+  "std_msgs"
+  "std_srvs"
+  "geometry_msgs"
+  "nav_msgs"
+  "sensor_msgs"
+
+  "tf2"
+  "tf2_ros"
+  "tf2_geometry_msgs"
+
+  "pcl_ros"
+  "pcl_conversions"
+  "PCL"
+)
+
+target_link_libraries(${PROJECT_NAME}_lib)
+ament_target_dependencies(${PROJECT_NAME}_lib ${DEPENDENCIES})
+
+set(WHEEL_ODOMETRY_EXECUTABLE_NAME "wheel_odometry_node")
+add_executable(${WHEEL_ODOMETRY_EXECUTABLE_NAME} src/wheel_odometry_node.cpp)
+target_link_libraries(${WHEEL_ODOMETRY_EXECUTABLE_NAME} ${PROJECT_NAME}_lib)
+ament_target_dependencies(${WHEEL_ODOMETRY_EXECUTABLE_NAME} ${DEPENDENCIES})
+
+set(MOTOR_DRIVER_EXECUTABLE_NAME "motor_driver_node")
+add_executable(${MOTOR_DRIVER_EXECUTABLE_NAME} src/motor_driver_node.cpp)
+target_link_libraries(${MOTOR_DRIVER_EXECUTABLE_NAME} ${PROJECT_NAME}_lib)
+ament_target_dependencies(${MOTOR_DRIVER_EXECUTABLE_NAME} ${DEPENDENCIES})
+
+set(PCL_DOWNSAMPLING_EXECUTABLE_NAME "pcl_downsampling_node")
+add_executable(${PCL_DOWNSAMPLING_EXECUTABLE_NAME} src/pcl_downsampling_node.cpp)
+target_link_libraries(${PCL_DOWNSAMPLING_EXECUTABLE_NAME} ${PROJECT_NAME}_lib)
+ament_target_dependencies(${PCL_DOWNSAMPLING_EXECUTABLE_NAME} ${DEPENDENCIES})
+
+# depth_postprocess node
+set(DEPTH_POSTPROCESS_EXECUTABLE_NAME "depth_postprocess_node")
+add_executable(${DEPTH_POSTPROCESS_EXECUTABLE_NAME}
+  src/depth_postprocess/depth_postprocess_node.cpp
+  src/depth_postprocess/depth_postprocessor.cpp
+)
+target_include_directories(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} PRIVATE include)
+target_link_libraries(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} ${PCL_LIBRARIES})
+ament_target_dependencies(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} ${DEPENDENCIES})
+
+################################################################################
+# Install
+################################################################################
+install(DIRECTORY launch params
+  DESTINATION share/${PROJECT_NAME}
+)
+
+install(TARGETS ${WHEEL_ODOMETRY_EXECUTABLE_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS ${MOTOR_DRIVER_EXECUTABLE_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS ${PCL_DOWNSAMPLING_EXECUTABLE_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS ${DEPTH_POSTPROCESS_EXECUTABLE_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+################################################################################
+# for python nodes
+################################################################################
+install(PROGRAMS
+  scripts/odometry_tf_broadcaster_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(PROGRAMS
+  scripts/pc_resource_publisher_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(PROGRAMS
+  scripts/odom_offset_republisher.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(PROGRAMS
+  scripts/initialpose_to_setpose.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(PROGRAMS
+  scripts/odom_covariance_override_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(PROGRAMS
+  scripts/lidar_publish_controller_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(PROGRAMS
+  scripts/pose_with_cov_publish_controller_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(PROGRAMS
+  scripts/gnss_odometry_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+install(PROGRAMS
+  scripts/generic_publish_controller_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+################################################################################
+# Macro for ament package
+################################################################################
+ament_export_include_directories(include)
+ament_package()

@@ -30,11 +30,11 @@ RUN pip3 install --no-cache-dir -U transforms3d
 COPY docker/deps/ /app/
 
 WORKDIR /root/ros2_ws/src
-RUN ln -s /app ./horiokart
+RUN ln -s /app ./mg
 
 WORKDIR /root/ros2_ws
-RUN python3 /app/docker/vcs_import.py -s src/horiokart -r -o src || true
-RUN python3 /app/docker/pip_requirements.py -s src/horiokart -r || true
+RUN python3 /app/docker/vcs_import.py -s src/mg -r -o src || true
+RUN python3 /app/docker/pip_requirements.py -s src/mg -r || true
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
   apt-get update \
@@ -45,8 +45,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 COPY . /app
 RUN rm -rf /app/docker/deps/
 
-RUN python3 /app/docker/vcs_import.py -s src/horiokart -r -o src
-RUN python3 /app/docker/pip_requirements.py -s src/horiokart -r
+RUN python3 /app/docker/vcs_import.py -s src/mg -r -o src
+RUN python3 /app/docker/pip_requirements.py -s src/mg -r
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
   apt-get update \

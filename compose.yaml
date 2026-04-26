@@ -5,7 +5,7 @@ x-runtime-base: &runtime-base
     args:
       ROS_DISTRO: humble
     target: runtime
-  image: horiokart_runtime
+  image: mg_runtime
   tty: true
   network_mode: "host"
   privileged: true
@@ -15,7 +15,6 @@ x-runtime-base: &runtime-base
     - /tmp/.X11-unix:/tmp/.X11-unix
     - $HOME/.Xauthority/:/root/.Xauthority
     - ./:/app/
-    - ./log/ros:/root/.ros/log
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
 
@@ -26,7 +25,7 @@ x-develop-base: &develop-base
     args:
       ROS_DISTRO: humble
     target: develop
-  image: horiokart_develop
+  image: mg_develop
   tty: true
   network_mode: "host"
   privileged: true
@@ -39,7 +38,6 @@ x-develop-base: &develop-base
     - /tmp/.X11-unix:/tmp/.X11-unix
     - $HOME/.Xauthority/:/root/.Xauthority
     - ./:/app/
-    - ./log/ros:/root/.ros/log
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
 
@@ -50,7 +48,7 @@ x-simulation-base: &simulation-base
     args:
       ROS_DISTRO: humble
     target: simulation
-  image: horiokart_simulation
+  image: mg_simulation
   tty: true
   network_mode: "host"
   privileged: true
@@ -65,7 +63,6 @@ x-simulation-base: &simulation-base
     - /tmp/.X11-unix:/tmp/.X11-unix
     - $HOME/.Xauthority/:/root/.Xauthority
     - ./:/app/
-    - ./log/ros:/root/.ros/log
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
     - ${HOME}/.ignition:/root/.ignition
@@ -81,7 +78,7 @@ services:
       bash -c "
         source /opt/ros/humble/setup.bash &&
         source /root/ros2_ws/install/setup.bash &&
-        ros2 launch horiokart_bringup bringup_slam_toolbox.launch.py
+        ros2 launch mg_bringup bringup_slam_toolbox.launch.py
       "
 
   navigation:
@@ -94,7 +91,7 @@ services:
       bash -c "
         source /opt/ros/humble/setup.bash &&
         source /root/ros2_ws/install/setup.bash &&
-        ros2 launch horiokart_bringup bringup_navigation.launch.py
+        ros2 launch mg_bringup bringup_navigation.launch.py
       "
 
   rosbag-replay:
@@ -108,7 +105,7 @@ services:
       bash -c "
         source /opt/ros/humble/setup.bash &&
         source /root/ros2_ws/install/setup.bash &&
-        ros2 launch horiokart_navigation bag_play.launch.py
+        ros2 launch mg_navigation bag_play.launch.py
       "
 
   gazebo-simulation:
@@ -117,7 +114,7 @@ services:
       bash -c "
         source /opt/ros/humble/setup.bash &&
         source /root/ros2_ws/install/setup.bash &&
-        ros2 launch horiokart_simulation bringup.launch.py
+        ros2 launch mg_simulation bringup.launch.py
       "
 
   develop:
@@ -130,7 +127,7 @@ services:
       bash -c "
         source /opt/ros/humble/setup.bash &&
         source /root/ros2_ws/install/setup.bash &&
-        rviz2 --display-config /app/horiokart_slam/rviz/rviz.rviz
+        rviz2 --display-config /app/mg_slam/rviz/rviz.rviz
       "
 
   rviz2-navigation:
@@ -139,7 +136,7 @@ services:
       bash -c "
         source /opt/ros/humble/setup.bash &&
         source /root/ros2_ws/install/setup.bash &&
-        rviz2 --display-config /app/horiokart_navigation/rviz/rviz.rviz
+        rviz2 --display-config /app/mg_navigation/rviz/rviz.rviz
       "
 
   rviz:
