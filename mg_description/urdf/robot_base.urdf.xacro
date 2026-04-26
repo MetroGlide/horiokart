@@ -30,7 +30,7 @@
     </inertial>
   </xacro:macro>
 
-  <xacro:macro name="mg_base" params="simulation:=false" >
+  <xacro:macro name="robot_base" params="simulation:=false" >
     <!-- =============== Link & Joint =============== -->
     <!-- Base -->
     <link name="base_footprint">
