@@ -131,6 +131,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # ==============================================================================
 FROM simulation-pkgs AS simulation
 
+ARG DEBIAN_FRONTEND=noninteractive
 ARG ROS_DISTRO
 
 COPY --from=runtime /app /app
