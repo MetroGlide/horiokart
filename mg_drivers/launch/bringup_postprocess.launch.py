@@ -9,7 +9,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 
-from horiokart_utils.launch_argument import LaunchArgumentCreator
+from mg_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():
@@ -29,7 +29,7 @@ def generate_launch_description():
     use_gps_arg = launch_argument_creator.create(
         "use_gps", default="true")
 
-    pkg_name = "horiokart_drivers"
+    pkg_name = "mg_drivers"
     pkg_share = get_package_share_directory(pkg_name)
 
     sensors_processing_group = launch.actions.GroupAction(
@@ -149,7 +149,7 @@ def generate_launch_description():
             ),
 
             Node(
-                package="horiokart_drivers",
+                package="mg_drivers",
                 executable="lidar_publish_controller_node.py",
                 name="front_lidar_publish_controller_node",
                 output="screen",

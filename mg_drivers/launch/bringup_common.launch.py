@@ -8,7 +8,7 @@ from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 
-from horiokart_utils.launch_argument import LaunchArgumentCreator
+from mg_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():
@@ -20,7 +20,7 @@ def generate_launch_description():
     use_resource_pub_arg = launch_argument_creator.create(
         "use_resource_pub", default="true")
 
-    pkg_name = "horiokart_drivers"
+    pkg_name = "mg_drivers"
     pkg_share = get_package_share_directory(pkg_name)
 
     # Launch action group with ifconditions

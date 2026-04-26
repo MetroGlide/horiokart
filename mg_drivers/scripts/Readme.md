@@ -8,7 +8,7 @@ ros2 bag play --clock <bagfile> --remap /odom:=/odom_raw
 ```
 
 ```
-ros2 run horiokart_drivers odom_offset_republisher.py
+ros2 run mg_drivers odom_offset_republisher.py
 ```
 
 ### Gps transform node

@@ -14,7 +14,7 @@ from launch_ros.actions import Node, LifecycleNode
 
 import lifecycle_msgs.msg
 
-from horiokart_utils.launch_argument import LaunchArgumentCreator
+from mg_utils.launch_argument import LaunchArgumentCreator
 
 
 def get_map_group_action(index, map_yaml_path, simulation_arg):
@@ -62,7 +62,7 @@ def get_map_group_action(index, map_yaml_path, simulation_arg):
 
 def generate_launch_description():
     # Getting directories and launch-files
-    pkg_name = "horiokart_navigation"
+    pkg_name = "mg_navigation"
     pkg_dir = get_package_share_directory(pkg_name)
 
     rviz_config_dir = os.path.join(

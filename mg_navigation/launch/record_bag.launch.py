@@ -12,7 +12,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.logging import get_logger
 from ament_index_python.packages import get_package_share_directory
 
-from horiokart_utils import launch_argument
+from mg_utils import launch_argument
 
 
 def get_record_dir_name():
@@ -71,7 +71,7 @@ def get_topic_list(pkg_share):
 
 
 def generate_launch_description():
-    pkg_name = "horiokart_navigation"
+    pkg_name = "mg_navigation"
     pkg_share = get_package_share_directory(pkg_name)
 
     # Launch configurations

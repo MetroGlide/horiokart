@@ -9,11 +9,11 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 
-from horiokart_utils.launch_argument import LaunchArgumentCreator
+from mg_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():
-    pkg_name = "horiokart_simulator_client"
+    pkg_name = "mg_simulator_client"
     pkg_share = get_package_share_directory(pkg_name)
 
     # Launch arguments

@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Any, List
 import time
 
-from horiokart_navigation.waypoint import WaypointList, Waypoint, WaypointsLoader, OnReachedAction
+from mg_navigation.waypoint import WaypointList, Waypoint, WaypointsLoader, OnReachedAction
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -108,7 +108,7 @@ class WaypointsFollower:
         goal_msg.pose = waypoint.pose
         goal_msg.pose.header.stamp = self.node.get_clock().now().to_msg()
 
-        pkg_name = "horiokart_navigation"
+        pkg_name = "mg_navigation"
         # self.node.get_logger().info(f"pkg_name: {pkg_name}")
 
         goal_msg.behavior_tree = get_package_share_directory(

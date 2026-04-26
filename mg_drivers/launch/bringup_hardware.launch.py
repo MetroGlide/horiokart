@@ -8,7 +8,7 @@ from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 
-from horiokart_utils.launch_argument import LaunchArgumentCreator
+from mg_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():
@@ -16,9 +16,9 @@ def generate_launch_description():
 
     # Launch arguments
     device_name_arg = launch_argument_creator.create(
-        "device_name", default="/dev/ttyHoriokart-motordriver")
+        "device_name", default="/dev/ttyRobot-motordriver")
 
-    pkg_name = "horiokart_drivers"
+    pkg_name = "mg_drivers"
     pkg_share = get_package_share_directory(pkg_name)
 
     # Launch action group with ifconditions

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<robot xmlns:xacro="http://ros.org/wiki/xacro" name="horiokart_v2">
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="mg">
 
   <xacro:macro name="lidar_2d" params=" prefix:='' attach_to:='' rpy:='0 0 0' xyz:='0 0 0' length='0.05' radius='0.05' simulation:=false sensor_name:='lidar' sim_update_rate:=10 sim_samples:=360 sim_min_range:=0.1 sim_max_range:=30.0 sim_range_resolution:=0.01 sim_noise_mean:=0.0 sim_noise_stddev:=0.0 ">
 

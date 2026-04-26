@@ -17,14 +17,14 @@ from nav2_common.launch import RewrittenYaml, ReplaceString
 
 import lifecycle_msgs.msg
 
-from horiokart_utils.launch_argument import LaunchArgumentCreator
+from mg_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():
     # Getting directories and launch-files
-    pkg_dir = get_package_share_directory('horiokart_navigation')
+    pkg_dir = get_package_share_directory('mg_navigation')
     pkg_launch_dir = os.path.join(pkg_dir, 'launch')
-    utils_pkg_dir = get_package_share_directory('horiokart_utils')
+    utils_pkg_dir = get_package_share_directory('mg_utils')
 
     rviz_config_dir = os.path.join(
         pkg_dir, 'rviz', 'rviz.rviz')
@@ -94,7 +94,7 @@ def generate_launch_description():
             os.path.join(utils_pkg_dir, 'launch', 'record_bag.launch.py')
         ),
         launch_arguments={
-            'caller_pkg_name': 'horiokart_navigation',
+            'caller_pkg_name': 'mg_navigation',
             'record_bag_base_name': 'navigation_',
         }.items(),
         condition=IfCondition(record_bag_arg.launch_config),
@@ -151,7 +151,7 @@ def generate_launch_description():
 
         # Collision Avoidance Node
         Node(
-            package='horiokart_navigation',
+            package='mg_navigation',
             executable='collision_behavior_node.py',
             parameters=[configured_params],
             output='screen',
@@ -160,7 +160,7 @@ def generate_launch_description():
 
         # Waypoint Follower
         Node(
-            package='horiokart_navigation',
+            package='mg_navigation',
             executable='waypoints_follower.py',
             parameters=[configured_params],
             output='screen',

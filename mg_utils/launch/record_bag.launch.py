@@ -10,7 +10,7 @@ from launch.substitutions import EnvironmentVariable, LaunchConfiguration
 from launch.logging import get_logger
 from ament_index_python.packages import get_package_share_directory
 
-from horiokart_utils.launch_argument import LaunchArgumentCreator
+from mg_utils.launch_argument import LaunchArgumentCreator
 
 
 def get_record_dir_name():
@@ -91,7 +91,7 @@ def generate_launch_description():
 
     launch_argument_creator.create(
         "caller_pkg_name",
-        default="horiokart_navigation",
+        default="mg_navigation",
         description="Package name to load record_topic_list.txt from",
     )
     launch_argument_creator.create(

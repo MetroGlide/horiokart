@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<robot xmlns:xacro="http://ros.org/wiki/xacro" name="horiokart">
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="mg">
 
   <xacro:macro name="box_inertia" params="m x y z cx:=0 cy:=0 cz:=0">
     <inertial>
@@ -30,7 +30,7 @@
     </inertial>
   </xacro:macro>
 
-  <xacro:macro name="horiokart_base" params="simulation:=false" >
+  <xacro:macro name="mg_base" params="simulation:=false" >
     <!-- =============== Link & Joint =============== -->
     <!-- Base -->
     <link name="base_footprint">

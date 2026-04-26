@@ -13,7 +13,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    package_name = "horiokart_description"
+    package_name = "mg_description"
 
     simulation_arg = LaunchConfiguration('simulation')
     xacro_file_name = LaunchConfiguration('xacro_file_name')
@@ -54,7 +54,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'xacro_file_name',
-            default_value="horiokart_description.urdf.xacro",
+            default_value="mg_description.urdf.xacro",
             description='Xacro file to use for URDF'
         ),
         robot_state_publisher_node,

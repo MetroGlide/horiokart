@@ -1,4 +1,4 @@
-# horiokart
+# MG-01 (MetroGlide)
 
 自律移動台車ロボット開発プロジェクト。ROS2 (Humble) + Docker による実行環境を提供します。
 
@@ -111,7 +111,7 @@ make gazebo-simulation USE_GPU=amd
 `make rviz` で任意のコンフィグを使用するには `.env` に `RVIZ_CONFIG` を設定します。
 
 ```
-RVIZ_CONFIG=/root/ros2_ws/src/horiokart/horiokart_navigation/rviz/rviz.rviz
+RVIZ_CONFIG=/root/ros2_ws/src/mg/mg_navigation/rviz/rviz.rviz
 ```
 
 ### 開発
@@ -157,7 +157,7 @@ GPU override の対象サービスは `gazebo-simulation` のみです。
 
 | 変数                   | 説明                                                 | デフォルト               |
 | ---------------------- | ---------------------------------------------------- | ------------------------ |
-| `COMPOSE_PROJECT_NAME` | Compose プロジェクト名（コンテナ名のプレフィックス） | `horiokart`              |
+| `COMPOSE_PROJECT_NAME` | Compose プロジェクト名（コンテナ名のプレフィックス） | `mg`                     |
 | `USE_GPU`              | GPU の種類。`none` / `nvidia` / `amd`                | `none`                   |
 | `SIMULATION`           | シミュレーションモード。`true` / `false`             | `true`                   |
 | `USE_RVIZ`             | RViz2 を起動するか。`true` / `false`                 | `true`                   |

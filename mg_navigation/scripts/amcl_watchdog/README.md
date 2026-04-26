@@ -9,7 +9,7 @@
 
 使い方（概要）
 1. ワークスペースをビルドして source する
-2. launch ファイル `horiokart_navigation/launch/localization_launch.py` を使って起動すると、amcl_watchdog ノードがタイマーで起動されます（デフォルト設定）
+2. launch ファイル `mg_navigation/launch/localization_launch.py` を使って起動すると、amcl_watchdog ノードがタイマーで起動されます（デフォルト設定）
 
 主なパラメータ（ノード名: `amcl_watchdog`）
 - `metric` : `trace_xy` | `determinant_xy` | `max_eigenvalue_xy`（デフォルト `trace_xy`）
@@ -24,7 +24,7 @@
 - 実際の `gnss_amcl_initializer` のサービス名/型が異なる場合は、launch で `initializer.service_name` を合わせるか、ハンドラを調整してください。
 
 開発者向け
-- 実装コードは `horiokart_navigation/amcl_watchdog/` パッケージ内にあります: `metrics.py`, `detectors.py`, `handlers.py`, `types.py` など。`scripts/amcl_watchdog/amcl_watchdog_node.py` はラッパースクリプトです。
+- 実装コードは `mg_navigation/amcl_watchdog/` パッケージ内にあります: `metrics.py`, `detectors.py`, `handlers.py`, `types.py` など。`scripts/amcl_watchdog/amcl_watchdog_node.py` はラッパースクリプトです。
 - 異常判定ロジックや再設定ハンドラは簡単に差し替え可能です。
 
 処理の流れ（ASCII アート）

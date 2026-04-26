@@ -7,7 +7,7 @@ from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 
-from horiokart_utils import launch_argument
+from mg_utils import launch_argument
 
 
 def generate_launch_description():
@@ -29,7 +29,7 @@ def generate_launch_description():
     use_gps_arg = launch_argument_creator.create(
         "use_gps", default="true")
 
-    pkg_name = "horiokart_drivers"
+    pkg_name = "mg_drivers"
     pkg_share = get_package_share_directory(pkg_name)
 
     launch_sensors = IncludeLaunchDescription(

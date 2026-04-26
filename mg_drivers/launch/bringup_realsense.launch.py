@@ -10,7 +10,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 
-from horiokart_utils.launch_argument import LaunchArgumentCreator
+from mg_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():
@@ -24,7 +24,7 @@ def generate_launch_description():
         # "use_rs_d435i", default="true")
         "use_rs_d435i", default="false")
 
-    pkg_name = "horiokart_drivers"
+    pkg_name = "mg_drivers"
     pkg_share = get_package_share_directory(pkg_name)
 
     rs_pkg_name = "realsense2_camera"

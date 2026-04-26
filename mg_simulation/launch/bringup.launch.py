@@ -19,13 +19,13 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    pkg_sim = get_package_share_directory("horiokart_simulation")
+    pkg_sim = get_package_share_directory("mg_simulation")
 
     default_world = os.path.join(pkg_sim, "worlds", "warehouse.sdf")
 
     world_arg = DeclareLaunchArgument("world", default_value=default_world)
     robot_name_arg = DeclareLaunchArgument(
-        "robot_name", default_value="horiokart")
+        "robot_name", default_value="mg")
     spawn_x_arg = DeclareLaunchArgument("spawn_x", default_value="0.0")
     spawn_y_arg = DeclareLaunchArgument("spawn_y", default_value="0.0")
     spawn_z_arg = DeclareLaunchArgument("spawn_z", default_value="0.05")
@@ -41,9 +41,9 @@ def generate_launch_description():
         FindExecutable(name="xacro"),
         " ",
         PathJoinSubstitution([
-            FindPackageShare("horiokart_description"),
+            FindPackageShare("mg_description"),
             "urdf",
-            "horiokart_description.urdf.xacro",
+            "mg_description.urdf.xacro",
         ]),
         " simulation:=true",
     ])

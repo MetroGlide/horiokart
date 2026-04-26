@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(horiokart_simulation)
+project(mg_simulation)
 
 find_package(ament_cmake REQUIRED)
 

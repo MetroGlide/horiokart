@@ -174,7 +174,7 @@ def generate_launch_description():
     )
 
     change_amcl_publish_state_node = Node(
-        package='horiokart_drivers',
+        package='mg_drivers',
         executable='generic_publish_controller_node.py',
         name='amcl_publish_controller_node',
         parameters=[{
@@ -190,7 +190,7 @@ def generate_launch_description():
     )
 
     gnss_amcl_initializer_node = Node(
-        package='horiokart_navigation',
+        package='mg_navigation',
         executable='gnss_amcl_initializer_node.py',
         name='gnss_amcl_initializer_node',
         output='screen',
@@ -217,7 +217,7 @@ def generate_launch_description():
 
     # AMCL watchdog node: monitor amcl covariance and trigger reinitialization when needed
     amcl_watchdog_node = Node(
-        package='horiokart_navigation',
+        package='mg_navigation',
         executable='amcl_watchdog_node.py',
         name='amcl_watchdog_node',
         output='screen',

@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 
-<robot xmlns:xacro="http://ros.org/wiki/xacro" name="horiokart">
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="mg">
 
-  <xacro:include filename="$(find horiokart_description)/urdf/robot_base.urdf.xacro" />
-  <xacro:include filename="$(find horiokart_description)/urdf/sensors.xacro"/>
+  <xacro:include filename="$(find mg_description)/urdf/robot_base.urdf.xacro" />
+  <xacro:include filename="$(find mg_description)/urdf/sensors.xacro"/>
 
   <xacro:arg name="simulation" default="false"/>
 
-  <xacro:horiokart_base simulation="$(arg simulation)"/>
+  <xacro:mg_base simulation="$(arg simulation)"/>
 
   <!-- <xacro:lidar_2d prefix="front_" attach_to="base_link" xyz="0.31 0 0.15"  rpy="0 0 0"/> -->
   <!-- RPLiDAR A1M8: 8kHz sampling, 5.5Hz scan, 0.15-12.0m range, 360 samples/scan (1deg resolution) -->

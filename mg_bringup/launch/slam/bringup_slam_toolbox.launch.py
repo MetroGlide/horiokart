@@ -8,17 +8,17 @@ from launch.substitutions import LaunchConfiguration, EnvironmentVariable, PathJ
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 
-from horiokart_utils import launch_argument
+from mg_utils import launch_argument
 
 
 def generate_launch_description():
-    pkg_name = "horiokart_bringup"
+    pkg_name = "mg_bringup"
     pkg_share = get_package_share_directory(pkg_name)
 
-    drivers_pkg_name = "horiokart_drivers"
+    drivers_pkg_name = "mg_drivers"
     drivers_pkg_share = get_package_share_directory(drivers_pkg_name)
 
-    slam_pkg_name = "horiokart_slam"
+    slam_pkg_name = "mg_slam"
     slam_pkg_share = get_package_share_directory(slam_pkg_name)
 
     # Launch configurations

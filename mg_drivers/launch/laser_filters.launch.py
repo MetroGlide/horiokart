@@ -9,7 +9,7 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 
-from horiokart_utils.launch_argument import LaunchArgumentCreator
+from mg_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():
@@ -24,7 +24,7 @@ def generate_launch_description():
     top_laser_filter_yaml = launch_argument_creator.create(
         "top_laser_filter_yaml", default="top_laser_filter.yaml")
 
-    pkg_name = "horiokart_drivers"
+    pkg_name = "mg_drivers"
     pkg_share = get_package_share_directory(pkg_name)
     param_dir = "params"
 

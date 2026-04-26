@@ -10,7 +10,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
 
-from horiokart_utils.launch_argument import LaunchArgumentCreator
+from mg_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():
@@ -20,21 +20,21 @@ def generate_launch_description():
     use_odom_arg = launch_argument_creator.create(
         "use_odom", default="true")
     odom_port_arg = launch_argument_creator.create(
-        "odom_port", default="/dev/ttyHoriokart-odom")
+        "odom_port", default="/dev/ttyRobot-odom")
 
     use_lidar_arg = launch_argument_creator.create(
         "use_lidar", default="true")
     front_rplidar_port_arg = launch_argument_creator.create(
-        "front_rplidar_port", default="/dev/ttyHoriokart-frontlidar"
+        "front_rplidar_port", default="/dev/ttyRobot-frontlidar"
     )
     top_rplidar_port_arg = launch_argument_creator.create(
-        "top_rplidar_port", default="/dev/ttyHoriokart-toplidar"
+        "top_rplidar_port", default="/dev/ttyRobot-toplidar"
     )
 
     use_gps_arg = launch_argument_creator.create(
         "use_gps", default="true")
     gps_port_arg = launch_argument_creator.create(
-        "gps_port", default="/dev/ttyHoriokart-gps")
+        "gps_port", default="/dev/ttyRobot-gps")
     use_ubx_protocol_arg = launch_argument_creator.create(
         "use_ubx_protocol", default="true")
 
@@ -43,7 +43,7 @@ def generate_launch_description():
     use_rs_d435_arg = launch_argument_creator.create(
         "use_rs_d435", default="false")
 
-    pkg_name = "horiokart_drivers"
+    pkg_name = "mg_drivers"
     pkg_share = get_package_share_directory(pkg_name)
 
     # Launch action group with ifconditions

@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>horiokart_utils</name>
+  <name>mg_utils</name>
   <version>0.0.0</version>
   <description>
-    Horiokart common utilities shared across packages
+    MG common utilities shared across packages
   </description>
   <maintainer email="chuson@todo.todo">chuson</maintainer>
   <license>TODO</license>

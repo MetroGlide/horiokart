@@ -14,12 +14,12 @@ from launch_ros.actions import Node, LifecycleNode
 
 import lifecycle_msgs.msg
 
-from horiokart_utils.launch_argument import LaunchArgumentCreator
+from mg_utils.launch_argument import LaunchArgumentCreator
 
 
 def generate_launch_description():
     # Getting directories and launch-files
-    pkg_dir = get_package_share_directory('horiokart_navigation')
+    pkg_dir = get_package_share_directory('mg_navigation')
     nav2_bringup_dir = get_package_share_directory('nav2_bringup')
     nav2_launch_file_dir = os.path.join(nav2_bringup_dir, 'launch')
 
@@ -50,7 +50,7 @@ def generate_launch_description():
                   ('/tf_static', 'tf_static')]
 
     localcostmap_node = Node(
-        package='horiokart_navigation',
+        package='mg_navigation',
         executable='costmap_for_bag_play',
         name='local_costmap_',
         output='screen',
@@ -64,7 +64,7 @@ def generate_launch_description():
         ],
     )
     globalcostmap_node = Node(
-        package='horiokart_navigation',
+        package='mg_navigation',
         executable='costmap_for_bag_play',
         name='global_costmap_',
         output='screen',
