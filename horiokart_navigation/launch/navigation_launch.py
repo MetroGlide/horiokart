@@ -110,8 +110,7 @@ def generate_launch_description():
 
     declare_planning_map_yaml_cmd = DeclareLaunchArgument(
         'planning_map',
-        default_value=os.path.join(bringup_dir, 'map', 'map.yaml'),
-        description='Full path to map yaml file to load')
+        description='Full path to planning map yaml file to load')
 
     load_nodes = GroupAction(
         condition=IfCondition(PythonExpression(['not ', use_composition])),

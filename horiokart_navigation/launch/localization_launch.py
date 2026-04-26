@@ -173,15 +173,6 @@ def generate_launch_description():
         ],
     )
 
-    # change_amcl_publish_state_node = Node(
-    #     package='horiokart_drivers',
-    #     executable='pose_with_cov_publish_controller_node.py',
-    #     name='amcl_publish_controller_node',
-    #     output='screen',
-    #     remappings=[("pose_with_cov_origin", "amcl_pose_origin"),
-    #                 ("pose_with_cov", "amcl_pose")]
-    # )
-
     change_amcl_publish_state_node = Node(
         package='horiokart_drivers',
         executable='generic_publish_controller_node.py',
@@ -191,7 +182,7 @@ def generate_launch_description():
             "msg_class": "PoseWithCovarianceStamped",
             "publish": False,
             "queue_size": 1,
-            "use_sim_time": os.environ.get('SIMULATION', 'false').lower() == 'true',
+            "use_sim_time": use_sim_time,
         }],
         output='screen',
         remappings=[("input_topic", "amcl_pose_origin"),
@@ -204,8 +195,7 @@ def generate_launch_description():
         name='gnss_amcl_initializer_node',
         output='screen',
         parameters=[
-            {'use_sim_time': os.environ.get(
-                'SIMULATION', 'false').lower() == 'true',
+            {'use_sim_time': use_sim_time,
              'use_fixed_heading': False,
              'required_consecutive_good': 2,
              'override_pose_covariance': True,
@@ -216,7 +206,7 @@ def generate_launch_description():
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.06853891909122467
-            ]}
+             ]}
         ]
     )
 
@@ -231,8 +221,7 @@ def generate_launch_description():
         executable='amcl_watchdog_node.py',
         name='amcl_watchdog_node',
         output='screen',
-        parameters=[{'use_sim_time': os.environ.get(
-            'SIMULATION', 'false').lower() == 'true'}],
+        parameters=[{'use_sim_time': use_sim_time}],
         remappings=remappings + [('amcl_pose', 'amcl_pose_origin'),
                                  ('request_reinit', '/gnss_amcl_initializer_node/request_reinit')]
     )
