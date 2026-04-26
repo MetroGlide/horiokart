@@ -15,7 +15,6 @@ x-runtime-base: &runtime-base
     - /tmp/.X11-unix:/tmp/.X11-unix
     - $HOME/.Xauthority/:/root/.Xauthority
     - ./:/app/
-    - ./log/ros:/root/.ros/log
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
 
@@ -39,7 +38,6 @@ x-develop-base: &develop-base
     - /tmp/.X11-unix:/tmp/.X11-unix
     - $HOME/.Xauthority/:/root/.Xauthority
     - ./:/app/
-    - ./log/ros:/root/.ros/log
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
 
@@ -65,7 +63,6 @@ x-simulation-base: &simulation-base
     - /tmp/.X11-unix:/tmp/.X11-unix
     - $HOME/.Xauthority/:/root/.Xauthority
     - ./:/app/
-    - ./log/ros:/root/.ros/log
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
     - ${HOME}/.ignition:/root/.ignition
