@@ -719,6 +719,8 @@ class WaypointsFollowerNode(Node):
                 throttle_duration_sec=1.0, throttle_time_source_type=self.get_clock())
 
     def run(self):
+        if self.waypoint_manager is None:
+            return
         rate = 1 / 5.0
         self.timer = self.create_timer(rate, self._follow_waypoints)
 
