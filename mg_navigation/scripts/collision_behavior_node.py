@@ -13,7 +13,7 @@ from nav2_msgs.action import NavigateToPose
 from std_msgs.msg import Bool
 from geometry_msgs.msg import Twist
 
-from std_srvs.srv import Trigger
+from mg_msgs.msg import PauseRequest
 
 from tf2_ros.buffer import Buffer
 from tf2_ros.transform_listener import TransformListener
@@ -61,12 +61,6 @@ class CollisionBehavior(Node):
             1.0 / self._controller_rate,
             self._controller_main
         )
-
-        self.waypoint_follower_stop_future = None
-        while not self._waypoint_follower_stop_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().warn(
-                'Waypoint follower stop service not available, waiting again...'
-            )
 
         self.get_logger().info(
             'Collision behavior initialized.'
@@ -119,18 +113,23 @@ class CollisionBehavior(Node):
             1
         )
 
-        self._waypoint_follower_stop_client = self.create_client(
-            Trigger,
-            '/waypoint_follower_node/stop'
+        pause_request_topic = self.declare_parameter(
+            'pause_request_topic',
+            '/waypoint_sequencer_node/pause_request'
+        ).value
+        self._pause_request_pub = self.create_publisher(
+            PauseRequest,
+            pause_request_topic,
+            10,
         )
-        self._waypoint_follower_start_client = self.create_client(
-            Trigger,
-            '/waypoint_follower_node/start'
-        )
+        self._pause_request_timer = self.create_timer(
+            0.5, self._publish_pause_request)
+        self._collision_active = False
 
     def _collision_detector_subscriber_callback(self, msg: CollisionDetectorState):
         if msg.detections[0]:
             if self._same_detection_flag:
+                self._latest_msg = msg
                 return
 
             self._same_detection_flag = True
@@ -138,22 +137,11 @@ class CollisionBehavior(Node):
             if self._phase == self.Phase.NO_COLLISION or self._phase == self.Phase.UNKNOWN:
                 self._emergency_stop.data = True
                 self._emergency_stop_pub.publish(self._emergency_stop)
+                self._collision_active = True
 
                 self.get_logger().info(
                     'Collision detected. Emergency stop.'
                 )
-
-                if self._waypoint_follower_stop_client.wait_for_service(timeout_sec=1.0):
-                    waypoint_follower_stop_request = Trigger.Request()
-                    self.waypoint_follower_stop_future = self._waypoint_follower_stop_client.call_async(
-                        waypoint_follower_stop_request
-                    )
-
-                else:
-                    self.get_logger().error(
-                        'Failed to call waypoint follower stop service.'
-                    )
-                    self._reset_emergency()
 
         else:
             self._same_detection_flag = False
@@ -161,7 +149,7 @@ class CollisionBehavior(Node):
             if self._phase == self.Phase.UNKNOWN:
                 self._phase = self.Phase.NO_COLLISION
 
-            if not self._phase in [self.Phase.UNKNOWN, self.Phase.NO_COLLISION, self.Phase.FINISHED]:
+            if self._phase not in [self.Phase.UNKNOWN, self.Phase.NO_COLLISION, self.Phase.FINISHED]:
                 self._collision_resolved()
 
                 self.get_logger().info(
@@ -175,53 +163,36 @@ class CollisionBehavior(Node):
         self._emergency_stop.data = False
         self._emergency_stop_pub.publish(self._emergency_stop)
 
+    def _publish_pause_request(self):
+        if not self._collision_active:
+            return
+        msg = PauseRequest()
+        msg.requester_id = "collision_behavior"
+        msg.active = True
+        msg.heartbeat_period_s = 1.0
+        self._pause_request_pub.publish(msg)
+
     def _collision_resolved(self):
         self._phase = self.Phase.NO_COLLISION
+        self._collision_active = False
         self._reset_emergency()
+        msg = PauseRequest()
+        msg.requester_id = "collision_behavior"
+        msg.active = False
+        self._pause_request_pub.publish(msg)
 
-        if self._waypoint_follower_start_client.wait_for_service(timeout_sec=1.0):
-            waypoint_follower_start_request = Trigger.Request()
-            waypoint_follower_start_future = self._waypoint_follower_start_client.call_async(
-                waypoint_follower_start_request
-            )
-        else:
-            self.get_logger().error(
-                'Failed to call waypoint follower start service.'
-            )
-
-    def _check_stop_response_done(self):
-        if self.waypoint_follower_stop_future is None:
-            return
-        if not self.waypoint_follower_stop_future.done():
-            self.get_logger().info(
-                'Waiting for waypoint follower stop service response...'
-            )
-
-        if self.waypoint_follower_stop_future.result() is None:
-            return
-
-        if self.waypoint_follower_stop_future.result().success:
-            self.get_logger().info(
-                'Waypoint follower stop service succeeded.'
-            )
-
-            # initialize phase
-            self._phase = self.Phase.WAIT
-            self._wait_start_time = None
-            self._start_position = None
-            self._retry_count = 0
-            self._back_up_theta_velocity *= -1
-
-        else:
-            self.get_logger().error(
-                'Waypoint follower stop service failed.'
-            )
-            self._reset_emergency()
-
-        self.waypoint_follower_stop_future = None
+    def _enter_wait_phase(self):
+        self._phase = self.Phase.WAIT
+        self._wait_start_time = None
+        self._start_position = None
+        self._retry_count = 0
+        self._back_up_theta_velocity *= -1
 
     def _controller_main(self):
-        self._check_stop_response_done()
+        if self._collision_active and self._phase in [
+            self.Phase.NO_COLLISION, self.Phase.UNKNOWN
+        ]:
+            self._enter_wait_phase()
 
         if self._phase in [self.Phase.UNKNOWN, self.Phase.NO_COLLISION]:
             return

@@ -62,7 +62,7 @@ def get_map_group_action(index, map_yaml_path, simulation_arg):
 
 def generate_launch_description():
     # Getting directories and launch-files
-    pkg_name = "mg_navigation"
+    pkg_name = "mg_waypoint_navigation"
     pkg_dir = get_package_share_directory(pkg_name)
 
     rviz_config_dir = os.path.join(

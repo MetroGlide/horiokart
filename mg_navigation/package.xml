@@ -12,7 +12,9 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
 
+  <exec_depend>mg_msgs</exec_depend>
   <exec_depend>mg_utils</exec_depend>
+  <exec_depend>mg_waypoint_navigation</exec_depend>
 
   <exec_depend>navigation2</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
