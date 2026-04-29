@@ -214,7 +214,7 @@
             <image>
               <width>848</width>
               <height>480</height>
-              <format>L8</format>
+              <format>R8G8B8</format>
             </image>
             <clip>
               <near>0.01</near>
@@ -232,7 +232,7 @@
               <stddev>0.003</stddev>
             </noise>
           </camera>
-          <always_on>1</always_on>
+          <always_on>true</always_on>
           <update_rate>10</update_rate>
           <visualize>false</visualize>
           <topic>/rgbd_camera</topic>
