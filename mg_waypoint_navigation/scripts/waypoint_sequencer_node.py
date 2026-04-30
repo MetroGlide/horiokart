@@ -16,7 +16,7 @@ from mg_msgs.srv import StartSequence
 
 from mg_waypoint_navigation.waypoint import WaypointList, WaypointsLoader
 from mg_waypoint_navigation.waypoint_sequencer.fsm import WaypointSequencerFSM
-from mg_waypoint_navigation.waypoint_sequencer.states import SequencerState
+from mg_waypoint_navigation.waypoint_sequencer.states import CommandResult, SequencerState
 
 
 class WaypointSequencerNode(Node):
@@ -121,15 +121,15 @@ class WaypointSequencerNode(Node):
     def _on_start_srv(
         self, request: StartSequence.Request, response: StartSequence.Response
     ):
-        success, message = self._fsm.on_start(request.countdown_ms)
-        response.success = success
-        response.message = message
+        result = self._fsm.start(request.countdown_ms)
+        response.success = result.success
+        response.message = result.message
         return response
 
     def _on_stop_srv(self, request: Trigger.Request, response: Trigger.Response):
-        success, message = self._fsm.on_stop()
-        response.success = success
-        response.message = message
+        result = self._fsm.stop()
+        response.success = result.success
+        response.message = result.message
         return response
 
     # ------------------------------------------------------------------
@@ -144,7 +144,7 @@ class WaypointSequencerNode(Node):
             )
 
     def _on_pause_request(self, msg: PauseRequest):
-        self._fsm.on_pause_request(
+        self._fsm.pause_request(
             requester_id=msg.requester_id,
             active=msg.active,
             heartbeat_period_s=msg.heartbeat_period_s,
@@ -170,10 +170,7 @@ class WaypointSequencerNode(Node):
         msg.current_index = self._fsm.current_index
         msg.total_waypoints = self._fsm.total_waypoints
         msg.countdown_ms_remaining = self._fsm.countdown_ms_remaining
-        msg.is_paused = self._fsm.state in (
-            SequencerState.SUSPENDED,
-            SequencerState.SUSPENDED_UNRESPONSIVE,
-        )
+        msg.is_paused = self._fsm.state == SequencerState.SUSPENDED
         msg.pause_requesters = self._fsm.pause_requesters
         msg.distance_remaining = self._fsm.distance_remaining
         self._status_pub.publish(msg)

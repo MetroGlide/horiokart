@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 import time
-from typing import Callable, ClassVar, Dict, FrozenSet, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional
 
 import rclpy.node
 
@@ -13,7 +13,11 @@ from mg_waypoint_navigation.waypoint_sequencer.navigator import (
     NavigationResult,
     WaypointNavigator,
 )
-from mg_waypoint_navigation.waypoint_sequencer.states import SequencerState
+from mg_waypoint_navigation.waypoint_sequencer.states import (
+    ALLOWED_TRANSITIONS,
+    CommandResult,
+    SequencerState,
+)
 
 
 class CountdownTimer:
@@ -75,58 +79,12 @@ class PauseSlotManager:
 class WaypointSequencerFSM:
     """
     SequencerState の遷移と副作用を管理するFSM。
-    ROS通信は呼び出し元ノードが担い、FSMはコールバックで通知を受け取る。
-    """
 
-    _ALLOWED_TRANSITIONS: ClassVar[Dict[SequencerState, FrozenSet[SequencerState]]] = {
-        SequencerState.IDLE: frozenset({
-            SequencerState.COUNTDOWN,
-        }),
-        SequencerState.COUNTDOWN: frozenset({
-            SequencerState.NAVIGATING,
-            SequencerState.SUSPENDED,
-            SequencerState.IDLE,
-        }),
-        SequencerState.NAVIGATING: frozenset({
-            SequencerState.NAVIGATING,
-            SequencerState.EXECUTING_ACTIONS,
-            SequencerState.WAITING_TRIGGER,
-            SequencerState.GOAL_REACHED,
-            SequencerState.ERROR,
-            SequencerState.SUSPENDED,
-            SequencerState.IDLE,
-        }),
-        SequencerState.EXECUTING_ACTIONS: frozenset({
-            SequencerState.NAVIGATING,
-            SequencerState.WAITING_TRIGGER,
-            SequencerState.GOAL_REACHED,
-            SequencerState.SUSPENDED,
-            SequencerState.IDLE,
-        }),
-        SequencerState.WAITING_TRIGGER: frozenset({
-            SequencerState.COUNTDOWN,
-            SequencerState.SUSPENDED,
-            SequencerState.IDLE,
-        }),
-        SequencerState.GOAL_REACHED: frozenset({
-            SequencerState.COUNTDOWN,
-            SequencerState.IDLE,
-        }),
-        SequencerState.ERROR: frozenset({
-            SequencerState.IDLE,
-        }),
-        SequencerState.SUSPENDED: frozenset({
-            SequencerState.COUNTDOWN,
-            SequencerState.NAVIGATING,
-            SequencerState.WAITING_TRIGGER,
-            SequencerState.GOAL_REACHED,
-            SequencerState.IDLE,
-            SequencerState.SUSPENDED_UNRESPONSIVE,
-        }),
-        SequencerState.SUSPENDED_UNRESPONSIVE: frozenset({
-            SequencerState.IDLE,
-        }),
-    }
+    - 各遷移中状態(ON_STARTING/ON_ARRIVING)への入場は専用エントリー関数経由のみ。
+    - 処理完了後は内部コールバックで次の安定状態へ移行する。
+    - 外部から _transition() を呼ばない。
+    - IDLE は「未開始」と「途中ウェイポイントのトリガー待ち」を兼ねる（_current_index で区別）。
+    """
 
     def __init__(self, node: rclpy.node.Node):
         self._node = node
@@ -140,24 +98,12 @@ class WaypointSequencerFSM:
         self._current_index: int = 0
 
         self._stop_pending: bool = False
-        self._pause_pending: Optional[str] = None
+        self._pause_pending: bool = False
         self._pre_suspend_state: SequencerState = SequencerState.IDLE
         self._saved_countdown_ms: int = 0
 
-        self._countdown_timer = CountdownTimer(self._on_countdown_done)
+        self._countdown_timer = CountdownTimer(self._on_starting_done)
         self._pause_manager = PauseSlotManager(node)
-
-        self._pause_dispatch: Dict[SequencerState, Callable[[], None]] = {
-            SequencerState.COUNTDOWN: self._pause_from_countdown,
-            SequencerState.NAVIGATING: self._pause_from_navigating,
-            SequencerState.WAITING_TRIGGER: self._pause_from_waiting_trigger,
-        }
-        self._resume_dispatch: Dict[SequencerState, Callable[[], None]] = {
-            SequencerState.COUNTDOWN: self._resume_to_countdown,
-            SequencerState.NAVIGATING: self._resume_to_navigating,
-            SequencerState.EXECUTING_ACTIONS: self._resume_from_executing_actions,
-            SequencerState.WAITING_TRIGGER: self._resume_to_waiting_trigger,
-        }
 
         self._on_state_changed: Optional[Callable[[
             SequencerState], None]] = None
@@ -187,7 +133,7 @@ class WaypointSequencerFSM:
 
     @property
     def countdown_ms_remaining(self) -> int:
-        if self._state != SequencerState.COUNTDOWN:
+        if self._state != SequencerState.ON_STARTING:
             return 0
         return self._countdown_timer.remaining_ms
 
@@ -209,13 +155,9 @@ class WaypointSequencerFSM:
             self._current_index = 0
 
     def set_next_index(self, index: int) -> bool:
-        """IDLE / WAITING_TRIGGER / SUSPENDED 時のみインデックスを変更できる"""
+        """IDLE / SUSPENDED 時のみインデックスを変更できる"""
         with self._lock:
-            if self._state not in (
-                SequencerState.IDLE,
-                SequencerState.WAITING_TRIGGER,
-                SequencerState.SUSPENDED,
-            ):
+            if self._state not in (SequencerState.IDLE, SequencerState.SUSPENDED):
                 return False
             if index < 0 or index >= self._waypoints.get_size():
                 return False
@@ -226,60 +168,54 @@ class WaypointSequencerFSM:
     # 外部コマンド
     # ------------------------------------------------------------------
 
-    def on_start(self, countdown_ms: int) -> Tuple[bool, str]:
+    def start(self, countdown_ms: int) -> CommandResult:
         with self._lock:
             if self._state == SequencerState.IDLE:
                 if self._waypoints.get_size() == 0:
-                    return False, "No waypoints loaded"
-                self._start_countdown(countdown_ms)
-                return True, "OK"
+                    return CommandResult(False, "No waypoints loaded")
+                self._enter_on_starting(countdown_ms)
+                return CommandResult(True, "OK")
 
             if self._state == SequencerState.GOAL_REACHED:
                 self._current_index = 0
-                self._start_countdown(countdown_ms)
-                return True, "OK"
+                self._enter_on_starting(countdown_ms)
+                return CommandResult(True, "OK")
 
-            if self._state == SequencerState.WAITING_TRIGGER:
-                self._start_countdown(countdown_ms)
-                return True, "OK"
+            return CommandResult(False, f"Cannot start from state {self._state.value}")
 
-            return False, f"Cannot start from state {self._state.value}"
-
-    def on_stop(self) -> Tuple[bool, str]:
+    def stop(self) -> CommandResult:
         with self._lock:
             if self._state == SequencerState.IDLE:
-                return True, "Already idle"
+                return CommandResult(True, "Already idle")
 
-            if self._state == SequencerState.COUNTDOWN:
+            if self._state == SequencerState.ON_STARTING:
                 self._countdown_timer.cancel()
                 self._pause_manager.clear_all()
                 self._transition(SequencerState.IDLE)
-                return True, "OK"
+                return CommandResult(True, "OK")
 
             if self._state == SequencerState.NAVIGATING:
                 self._navigator.cancel()
                 self._pause_manager.clear_all()
                 self._transition(SequencerState.IDLE)
-                return True, "OK"
+                return CommandResult(True, "OK")
 
-            if self._state == SequencerState.EXECUTING_ACTIONS:
+            if self._state == SequencerState.ON_ARRIVING:
                 self._stop_pending = True
-                return True, "Stop deferred until actions complete"
+                return CommandResult(True, "Stop deferred until actions complete")
 
             if self._state in (
-                SequencerState.WAITING_TRIGGER,
                 SequencerState.SUSPENDED,
-                SequencerState.SUSPENDED_UNRESPONSIVE,
                 SequencerState.GOAL_REACHED,
                 SequencerState.ERROR,
             ):
                 self._pause_manager.clear_all()
                 self._transition(SequencerState.IDLE)
-                return True, "OK"
+                return CommandResult(True, "OK")
 
-            return False, f"Unhandled state {self._state.value}"
+            return CommandResult(False, f"Unhandled state {self._state.value}")
 
-    def on_pause_request(
+    def pause_request(
         self,
         requester_id: str,
         active: bool,
@@ -289,14 +225,37 @@ class WaypointSequencerFSM:
         with self._lock:
             if active:
                 self._pause_manager.add(requester_id, heartbeat_period_s)
-                self._apply_pause(requester_id)
+                self._apply_pause()
             else:
                 self._pause_manager.remove(requester_id)
                 self._try_resume()
 
     # ------------------------------------------------------------------
-    # ナビゲーション・アクション完了コールバック
+    # エントリー関数（各状態への唯一の入口）
     # ------------------------------------------------------------------
+
+    def _enter_on_starting(self, countdown_ms: int) -> None:
+        self._transition(SequencerState.ON_STARTING)
+        self._countdown_timer.start(countdown_ms)
+
+    def _enter_navigating(self) -> None:
+        waypoint = self._waypoints.get(self._current_index)
+        self._transition(SequencerState.NAVIGATING)
+        self._navigator.send_goal(waypoint, self._on_navigation_result)
+
+    def _enter_on_arriving(self, actions) -> None:
+        self._transition(SequencerState.ON_ARRIVING)
+        self._executor.execute(actions, self._on_arriving_done)
+
+    # ------------------------------------------------------------------
+    # 内部完了コールバック
+    # ------------------------------------------------------------------
+
+    def _on_starting_done(self) -> None:
+        with self._lock:
+            if self._state != SequencerState.ON_STARTING:
+                return
+            self._enter_navigating()
 
     def _on_navigation_result(self, result: NavigationResult) -> None:
         with self._lock:
@@ -315,40 +274,35 @@ class WaypointSequencerFSM:
 
             waypoint = self._waypoints.get(self._current_index)
             if waypoint.on_reached_actions:
-                self._transition(SequencerState.EXECUTING_ACTIONS)
-                self._executor.execute(
-                    waypoint.on_reached_actions, self._on_actions_done)
+                self._enter_on_arriving(waypoint.on_reached_actions)
             else:
-                self._process_waypoint_completion()
+                self._advance_to_next()
 
-    def _on_actions_done(self) -> None:
+    def _on_arriving_done(self) -> None:
         with self._lock:
-            self._process_waypoint_completion()
+            self._advance_to_next()
 
     # ------------------------------------------------------------------
     # ウェイポイント進行ロジック
     # ------------------------------------------------------------------
 
-    def _process_waypoint_completion(self) -> None:
+    def _advance_to_next(self) -> None:
         if self._stop_pending:
             self._stop_pending = False
-            self._pause_pending = None
+            self._pause_pending = False
             self._pause_manager.clear_all()
             self._transition(SequencerState.IDLE)
             return
 
-        if self._pause_pending is not None:
-            self._pause_pending = None
-            self._pre_suspend_state = SequencerState.EXECUTING_ACTIONS
+        if self._pause_pending:
+            self._pause_pending = False
+            self._pre_suspend_state = SequencerState.ON_ARRIVING
             self._transition(SequencerState.SUSPENDED)
             return
 
-        self._advance_waypoint()
-
-    def _advance_waypoint(self) -> None:
         waypoint = self._waypoints.get(self._current_index)
         if any(a.type == "wait" and a.countdown_ms == 0 for a in waypoint.on_reached_actions):
-            self._transition(SequencerState.WAITING_TRIGGER)
+            self._transition(SequencerState.IDLE)
             return
 
         self._current_index += 1
@@ -356,81 +310,44 @@ class WaypointSequencerFSM:
             self._transition(SequencerState.GOAL_REACHED)
             return
 
-        self._navigate_to_current()
-
-    def _navigate_to_current(self) -> None:
-        waypoint = self._waypoints.get(self._current_index)
-        self._transition(SequencerState.NAVIGATING)
-        self._navigator.send_goal(waypoint, self._on_navigation_result)
-
-    # ------------------------------------------------------------------
-    # カウントダウン
-    # ------------------------------------------------------------------
-
-    def _start_countdown(self, countdown_ms: int) -> None:
-        self._transition(SequencerState.COUNTDOWN)
-        self._countdown_timer.start(countdown_ms)
-
-    def _on_countdown_done(self) -> None:
-        with self._lock:
-            if self._state != SequencerState.COUNTDOWN:
-                return
-            self._navigate_to_current()
+        self._enter_navigating()
 
     # ------------------------------------------------------------------
     # Named Pause Slot 管理
     # ------------------------------------------------------------------
 
-    def _apply_pause(self, requester_id: str) -> None:
-        if self._state == SequencerState.EXECUTING_ACTIONS:
-            self._pause_pending = requester_id
+    def _apply_pause(self) -> None:
+        if self._state == SequencerState.ON_ARRIVING:
+            self._pause_pending = True
             return
-        handler = self._pause_dispatch.get(self._state)
-        if handler:
-            handler()
-
-    def _pause_from_countdown(self) -> None:
-        self._saved_countdown_ms = self._countdown_timer.remaining_ms
-        self._countdown_timer.cancel()
-        self._pre_suspend_state = SequencerState.COUNTDOWN
-        self._transition(SequencerState.SUSPENDED)
-
-    def _pause_from_navigating(self) -> None:
-        self._navigator.cancel()
-        self._pre_suspend_state = SequencerState.NAVIGATING
-        self._transition(SequencerState.SUSPENDED)
-
-    def _pause_from_waiting_trigger(self) -> None:
-        self._pre_suspend_state = SequencerState.WAITING_TRIGGER
-        self._transition(SequencerState.SUSPENDED)
+        if self._state == SequencerState.ON_STARTING:
+            self._saved_countdown_ms = self._countdown_timer.remaining_ms
+            self._countdown_timer.cancel()
+            self._pre_suspend_state = SequencerState.ON_STARTING
+            self._transition(SequencerState.SUSPENDED)
+        elif self._state == SequencerState.NAVIGATING:
+            self._navigator.cancel()
+            self._pre_suspend_state = SequencerState.NAVIGATING
+            self._transition(SequencerState.SUSPENDED)
 
     def _try_resume(self) -> None:
         if self._pause_manager.is_active or self._state != SequencerState.SUSPENDED:
             return
-        handler = self._resume_dispatch.get(self._pre_suspend_state)
-        if handler:
-            handler()
+        if self._pre_suspend_state == SequencerState.ON_STARTING:
+            self._enter_on_starting(self._saved_countdown_ms)
+        elif self._pre_suspend_state == SequencerState.NAVIGATING:
+            self._enter_navigating()
+        elif self._pre_suspend_state == SequencerState.ON_ARRIVING:
+            self._advance_to_next()
         else:
             self._transition(SequencerState.IDLE)
-
-    def _resume_to_countdown(self) -> None:
-        self._start_countdown(self._saved_countdown_ms)
-
-    def _resume_to_navigating(self) -> None:
-        self._navigate_to_current()
-
-    def _resume_from_executing_actions(self) -> None:
-        self._advance_waypoint()
-
-    def _resume_to_waiting_trigger(self) -> None:
-        self._transition(SequencerState.WAITING_TRIGGER)
 
     # ------------------------------------------------------------------
     # 状態遷移
     # ------------------------------------------------------------------
 
     def _transition(self, new_state: SequencerState) -> None:
-        allowed = self._ALLOWED_TRANSITIONS.get(self._state, frozenset())
+        allowed = ALLOWED_TRANSITIONS.get(self._state, frozenset())
         if new_state not in allowed:
             self._node.get_logger().error(
                 f"FSM: invalid transition {self._state.value} -> {new_state.value}"
