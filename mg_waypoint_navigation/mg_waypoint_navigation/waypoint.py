@@ -238,4 +238,10 @@ class WaypointsSaver:
             "waypoints": [w.to_dict() for w in waypoints.get_all()],
         }
         with open(self.file_path, "w") as f:
-            yaml.dump(output, f, allow_unicode=True, default_flow_style=False)
+            yaml.safe_dump(
+                output,
+                f,
+                allow_unicode=True,
+                default_flow_style=False,
+                sort_keys=False,
+            )

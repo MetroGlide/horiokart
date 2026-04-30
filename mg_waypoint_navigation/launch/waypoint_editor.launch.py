@@ -68,7 +68,13 @@ def generate_launch_description():
 
     simulation_arg = launch_argument_creator.create(
         "simulation", default="false")
-    map_dir_arg = os.environ["MAP_PATH"]
+    map_dir_arg = os.environ.get("MAP_PATH")
+    if not map_dir_arg:
+        raise RuntimeError(
+            "MAP_PATH environment variable is not set. "
+            "Please set MAP_PATH to the directory containing map_list.txt "
+            "before launching waypoint_editor.launch.py."
+        )
     load_waypoints_yaml_path = launch_argument_creator.create(
         "load_path", default="/root/ros2_data/map/waypoint.yaml"
     )

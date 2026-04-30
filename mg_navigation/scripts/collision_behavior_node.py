@@ -127,7 +127,9 @@ class CollisionBehavior(Node):
         self._collision_active = False
 
     def _collision_detector_subscriber_callback(self, msg: CollisionDetectorState):
-        if msg.detections[0]:
+        front_collision_detected = bool(msg.detections and msg.detections[0])
+
+        if front_collision_detected:
             if self._same_detection_flag:
                 self._latest_msg = msg
                 return

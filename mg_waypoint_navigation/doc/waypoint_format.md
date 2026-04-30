@@ -3,7 +3,7 @@
 ## 概要
 
 `mg_waypoint_navigation` で使用するウェイポイントファイルの仕様。
-`version: "2.0"` キーで識別される。旧フォーマット(v1)は後方互換性で読み込み可能。
+`version: "2.0"` キーで識別される。旧フォーマット(v1)は `load()` で直接は読み込めないため、v2.0 形式への migrate が必要。
 
 ---
 
@@ -190,14 +190,14 @@ ros2 run mg_waypoint_navigation migrate_waypoints.py input.yaml output_v2.yaml
 
 ### v1 アクション文字列と v2 の対応
 
-| v1 文字列                     | v2 type    | 備考                                                                   |
-| ----------------------------- | ---------- | ---------------------------------------------------------------------- |
-| `front_lidar_off`             | `service`  | `/front_lidar_publish_controller_node/change_publish_state` data=false |
-| `front_lidar_on`              | `service`  | 同 data=true                                                           |
-| `amcl_on`                     | `service`  | `/amcl/enable` data=true                                               |
-| `amcl_off`                    | `service`  | `/amcl/enable` data=false                                              |
-| `gps_on`                      | `service`  | `/gnss_odometry_node/change_publish_state` data=true                   |
-| `gps_off`                     | `service`  | `/gnss_odometry_node/change_publish_state` data=false                  |
-| `reload_map`                  | `load_map` | `localization_map_yaml` / `planning_map_yaml` を引き継ぎ               |
-| `wait_trigger`                | `wait`     | `countdown_ms: 0`                                                      |
-| `select_gnss_transform_label` | `publish`  | `gnss_transform_label` フィールドを data.data に変換                   |
+| v1 文字列                     | v2 type       | 備考                                                                   |
+| ----------------------------- | ------------- | ---------------------------------------------------------------------- |
+| `front_lidar_off`             | `service`     | `/front_lidar_publish_controller_node/change_publish_state` data=false |
+| `front_lidar_on`              | `service`     | 同 data=true                                                           |
+| `amcl_on`                     | `service`     | `/amcl/enable` data=true                                               |
+| `amcl_off`                    | `service`     | `/amcl/enable` data=false                                              |
+| `gps_on`                      | `service`     | `/gnss_odometry_node/change_publish_state` data=true                   |
+| `gps_off`                     | `service`     | `/gnss_odometry_node/change_publish_state` data=false                  |
+| `reload_map`                  | `load_map`    | `localization_map_yaml` / `planning_map_yaml` を引き継ぎ               |
+| `wait_trigger`                | `wait_trigger`| トリガー待ち専用アクション                                             |
+| `select_gnss_transform_label` | `publish`     | `gnss_transform_label` フィールドを data.data に変換                   |
