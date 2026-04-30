@@ -62,10 +62,19 @@ class AmclResetAction(BaseAction):
 
 
 class WaitAction(BaseAction):
-    """countdown_ms ミリ秒待機する (countdown_ms=0 は即時完了)"""
+    """countdown_ms ミリ秒待機する"""
 
     def execute(self) -> None:
         ms = self._config.countdown_ms
         if ms > 0:
             self._node.get_logger().info(f"WaitAction: waiting {ms} ms")
             time.sleep(ms / 1000.0)
+
+
+class WaitTriggerAction(BaseAction):
+    """外部トリガー（start()）待ちに移行するアクション。execute() 自体は何もしない。
+    FSM が on_reached_actions に wait_trigger を検出した時点で IDLE へ遷移し、
+    次の start() 呼び出しまで待機する。"""
+
+    def execute(self) -> None:
+        pass

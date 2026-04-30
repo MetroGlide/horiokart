@@ -301,11 +301,17 @@ class WaypointSequencerFSM:
             return
 
         waypoint = self._waypoints.get(self._current_index)
-        if any(a.type == "wait" and a.countdown_ms == 0 for a in waypoint.on_reached_actions):
-            self._transition(SequencerState.IDLE)
+        self._current_index += 1
+
+        has_wait_trigger = any(
+            a.type == "wait_trigger" for a in waypoint.on_reached_actions)
+        if has_wait_trigger:
+            if self._current_index >= self._waypoints.get_size():
+                self._transition(SequencerState.GOAL_REACHED)
+            else:
+                self._transition(SequencerState.IDLE)
             return
 
-        self._current_index += 1
         if self._current_index >= self._waypoints.get_size():
             self._transition(SequencerState.GOAL_REACHED)
             return

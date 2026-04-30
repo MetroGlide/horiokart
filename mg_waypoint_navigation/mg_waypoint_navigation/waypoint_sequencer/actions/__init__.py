@@ -7,6 +7,7 @@ from mg_waypoint_navigation.waypoint_sequencer.actions.builtins import (
     AmclResetAction,
     LoadMapAction,
     WaitAction,
+    WaitTriggerAction,
 )
 from mg_waypoint_navigation.waypoint_sequencer.actions.generic import (
     GenericPublishAction,
@@ -23,6 +24,7 @@ _ACTION_REGISTRY = {
     "load_map": LoadMapAction,
     "amcl_reset": AmclResetAction,
     "wait": WaitAction,
+    "wait_trigger": WaitTriggerAction,
 }
 
 
@@ -41,4 +43,5 @@ __all__ = [
     "LoadMapAction",
     "AmclResetAction",
     "WaitAction",
+    "WaitTriggerAction",
 ]

@@ -16,7 +16,7 @@ class NavigationConfig:
 
 @dataclass
 class ActionConfig:
-    type: str  # "service" | "publish" | "load_map" | "amcl_reset" | "wait"
+    type: str  # "service" | "publish" | "load_map" | "amcl_reset" | "wait" | "wait_trigger"
 
     # service
     service: str = ""
@@ -56,6 +56,8 @@ class ActionConfig:
             d["planning"] = self.planning
         elif self.type == "wait":
             d["countdown_ms"] = self.countdown_ms
+        elif self.type == "wait_trigger":
+            pass
         return d
 
     @classmethod
@@ -87,6 +89,8 @@ class ActionConfig:
             return cls(type=action_type)
         elif action_type == "wait":
             return cls(type=action_type, countdown_ms=d.get("countdown_ms", 3000))
+        elif action_type == "wait_trigger":
+            return cls(type=action_type)
         else:
             return cls(type=action_type)
 

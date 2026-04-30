@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import enum
 from typing import Callable, Optional
+from math import sqrt, atan2
 
 import rclpy
 import rclpy.node
@@ -34,6 +35,7 @@ class WaypointNavigator:
         self._through_tolerance: Optional[float] = None
         self._through_cancel: bool = False
         self._path_computed: bool = False
+        self._waypoint: Optional[Waypoint] = None
 
         bt_xml_path = (
             get_package_share_directory("mg_waypoint_navigation")
@@ -54,6 +56,7 @@ class WaypointNavigator:
         )
         self._through_cancel = False
         self._path_computed = False
+        self._waypoint = waypoint
 
         if not self._action_client.wait_for_server(timeout_sec=5.0):
             self._node.get_logger().error("navigate_to_pose action server not available")
@@ -107,15 +110,35 @@ class WaypointNavigator:
         if self._result_callback:
             self._result_callback(result)
 
+    def _check_actual_arrival_through_tolerance(self, current_pose) -> bool:
+        if self._waypoint is None:
+            return False
+
+        # compute distance to goal from current_pose and self._waypoint.pose
+        dx = self._waypoint.pose.pose.position.x - current_pose.position.x
+        dy = self._waypoint.pose.pose.position.y - current_pose.position.y
+        distance = sqrt(dx * dx + dy * dy)
+
+        return distance <= self._through_tolerance if self._through_tolerance is not None else False
+
     def _feedback_callback(self, feedback_msg) -> None:
+        _old_distance_remaining = self._distance_remaining
         self._distance_remaining = feedback_msg.feedback.distance_remaining
+
         if self._through_tolerance is None or self._through_cancel:
             return
+
         if not self._path_computed:
-            if self._distance_remaining > 0.0:
+            if self._distance_remaining > 0.0 and self._distance_remaining != _old_distance_remaining:
+                self._node.get_logger().info(
+                    f"Path computed. Distance to goal: {self._distance_remaining:.2f} m"
+                )
                 self._path_computed = True
             return
-        if self._distance_remaining <= self._through_tolerance:
+        if self._distance_remaining <= self._through_tolerance and self._check_actual_arrival_through_tolerance(feedback_msg.feedback.current_pose.pose):
+            self._node.get_logger().info(
+                f"Within through tolerance ({self._through_tolerance} m). Canceling goal to proceed to next waypoint."
+            )
             self._through_cancel = True
             if self._goal_handle is not None:
                 self._goal_handle.cancel_goal_async()
