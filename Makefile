@@ -15,10 +15,11 @@ endif
 _up_flags = $(if $(DETACH),-d,)
 
 .PHONY: slam navigation rosbag-replay gazebo-simulation develop \
+        scenario-test \
         shell shell-develop logs ps restart \
         build build-all build-no-cache \
         _collect-deps \
-        rviz rviz2-slam rviz2-navigation down xhost config \
+        rviz2 rviz2-slam rviz2-navigation down xhost config \
         test
 
 # --- サービス起動 ---
@@ -34,6 +35,12 @@ rosbag-replay:
 
 gazebo-simulation:
 	$(COMPOSE) up $(_up_flags) gazebo-simulation
+
+# make scenario-test
+# make scenario-test SCENARIO=/app/mg_scenario_test/scenarios/example_waypoints_file.yaml
+# make scenario-test SCENARIO=/app/mg_scenario_test/scenarios/example_inline_goals.yaml HEADLESS=false
+scenario-test:
+	$(if $(SCENARIO),SCENARIO_FILE=$(SCENARIO) )$(if $(HEADLESS),HEADLESS=$(HEADLESS) )$(COMPOSE) up $(_up_flags) scenario-test
 
 develop:
 	$(COMPOSE) up -d develop
@@ -82,7 +89,7 @@ endif
 	$(COMPOSE_BASE) build $(svc)
 
 build-all: _collect-deps
-	$(COMPOSE_BASE) build slam navigation rosbag-replay gazebo-simulation develop rviz2-slam rviz2-navigation rviz
+	$(COMPOSE_BASE) build slam navigation rosbag-replay gazebo-simulation develop rviz2-slam rviz2-navigation rviz2
 
 build-no-cache: _collect-deps
 ifndef svc
@@ -106,8 +113,8 @@ test:
 
 # --- ユーティリティ ---
 
-rviz:
-	$(COMPOSE) up $(_up_flags) rviz
+rviz2:
+	$(COMPOSE) up $(_up_flags) rviz2
 
 rviz2-slam:
 	$(COMPOSE) up $(_up_flags) rviz2-slam

@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>mg_scenario_test</name>
+  <version>0.1.0</version>
+  <description>Scenario-based navigation test for MG-01</description>
+  <maintainer email="maintainer@example.com">MetroGlide</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav2_msgs</depend>
+  <depend>action_msgs</depend>
+  <depend>tf2_ros</depend>
+  <depend>mg_msgs</depend>
+  <depend>mg_waypoint_navigation</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

@@ -117,6 +117,24 @@ services:
         ros2 launch mg_simulation bringup.launch.py
       "
 
+  scenario-test:
+    <<: *simulation-base
+    environment:
+      - DISPLAY=${DISPLAY}
+      - PYTHONUNBUFFERED=1
+      - SIMULATION=true
+      - IGN_GAZEBO_RESOURCE_PATH=/root/.ignition/fuel
+      - SCENARIO_FILE=${SCENARIO_FILE:-/app/mg_scenario_test/scenarios/example_inline_goals.yaml}
+      - HEADLESS=${HEADLESS:-true}
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        ros2 launch mg_scenario_test scenario_test.launch.py
+          scenario_file:=$$SCENARIO_FILE
+          headless:=$$HEADLESS
+      "
+
   develop:
     <<: *develop-base
     command: "/app/docker/docker-entrypoint.sh"
@@ -139,7 +157,7 @@ services:
         rviz2 --display-config /app/mg_navigation/rviz/rviz.rviz
       "
 
-  rviz:
+  rviz2:
     <<: *develop-base
     environment:
       - DISPLAY=${DISPLAY}
