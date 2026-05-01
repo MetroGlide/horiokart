@@ -164,6 +164,21 @@ class WaypointSequencerFSM:
             self._current_index = index
             return True
 
+    def reload_waypoints(self, waypoints: WaypointList) -> CommandResult:
+        """IDLE / GOAL_REACHED / ERROR 時のみウェイポイントリストを差し替える"""
+        with self._lock:
+            allowed = {SequencerState.IDLE,
+                       SequencerState.GOAL_REACHED, SequencerState.ERROR}
+            if self._state not in allowed:
+                return CommandResult(False, f"Cannot reload in state {self._state.value}")
+            self._waypoints = waypoints
+            size = waypoints.get_size()
+            if size == 0:
+                self._current_index = 0
+            elif self._current_index >= size:
+                self._current_index = size - 1
+            return CommandResult(True, f"Reloaded {size} waypoints")
+
     # ------------------------------------------------------------------
     # 外部コマンド
     # ------------------------------------------------------------------

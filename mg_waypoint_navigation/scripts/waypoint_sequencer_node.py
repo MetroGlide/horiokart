@@ -70,6 +70,9 @@ class WaypointSequencerNode(Node):
         )
         self._stop_srv = self.create_service(
             Trigger, "~/stop", self._on_stop_srv)
+        self._reload_srv = self.create_service(
+            Trigger, "~/reload_waypoints", self._on_reload_waypoints_srv
+        )
 
         self._set_index_sub = self.create_subscription(
             Int16, "~/set_next_waypoint_index", self._on_set_index, 1
@@ -136,6 +139,26 @@ class WaypointSequencerNode(Node):
         result = self._fsm.stop()
         response.success = result.success
         response.message = result.message
+        return response
+
+    def _on_reload_waypoints_srv(self, request: Trigger.Request, response: Trigger.Response):
+        if not self._load_path:
+            response.success = False
+            response.message = "load_path is not set"
+            return response
+        try:
+            loader = WaypointsLoader(self._load_path)
+            waypoints = loader.load()
+        except Exception as e:
+            response.success = False
+            response.message = f"Failed to load waypoints: {e}"
+            return response
+        result = self._fsm.reload_waypoints(waypoints)
+        response.success = result.success
+        response.message = result.message
+        if result.success:
+            self._publish_waypoints_list(waypoints)
+            self._publish_markers(waypoints)
         return response
 
     # ------------------------------------------------------------------
