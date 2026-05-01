@@ -18,7 +18,8 @@ _up_flags = $(if $(DETACH),-d,)
         shell shell-develop logs ps restart \
         build build-all build-no-cache \
         _collect-deps \
-        rviz rviz2-slam rviz2-navigation down xhost config
+        rviz rviz2-slam rviz2-navigation down xhost config \
+        test
 
 # --- サービス起動 ---
 
@@ -93,6 +94,15 @@ endif
 
 down:
 	$(COMPOSE) down
+
+# --- テスト ---
+# 全テスト: make test
+# 特定パッケージ: make test pkg=mg_waypoint_navigation
+test:
+	$(COMPOSE) run --rm --no-deps develop bash -c \
+	  "cd /app && \
+	   PYTHONPATH=\$$(find /app -maxdepth 1 -mindepth 1 -type d | tr '\n' ':') \
+	   python3 -m pytest $(if $(pkg),$(pkg)/test/,) -v"
 
 # --- ユーティリティ ---
 

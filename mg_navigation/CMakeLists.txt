@@ -92,7 +92,7 @@ ament_target_dependencies(${COSTMAP_FOR_BAG_PLAY} ${DEPENDENCIES})
 ################################################################################
 # Install
 ################################################################################
-install(DIRECTORY launch params rviz behavior_trees
+install(DIRECTORY launch params rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
@@ -108,14 +108,6 @@ install(TARGETS ${COSTMAP_FOR_BAG_PLAY}
 ################################################################################
 ament_python_install_package(${PROJECT_NAME})
 
-install(PROGRAMS
-  scripts/waypoint_editor_node.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-install(PROGRAMS
-  scripts/waypoints_follower.py
-  DESTINATION lib/${PROJECT_NAME}
-)
 install(PROGRAMS
   scripts/collision_behavior_node.py
   DESTINATION lib/${PROJECT_NAME}

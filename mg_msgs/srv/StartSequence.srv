@@ -1,0 +1,4 @@
+uint32 countdown_ms
+---
+bool success
+string message

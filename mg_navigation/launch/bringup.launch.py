@@ -36,6 +36,8 @@ def generate_launch_description():
         'use_collision_behavior', default="true")
     use_waypoints_follower_arg = launch_argument_creator.create(
         'use_waypoints_follower', default="true")
+    waypoints_load_path_arg = launch_argument_creator.create(
+        'waypoints_load_path', default=EnvironmentVariable('WAYPOINT_PATH'))
 
     namespace_arg = launch_argument_creator.create(
         'namespace', default='')
@@ -158,12 +160,19 @@ def generate_launch_description():
             condition=IfCondition(use_collision_behavior_arg.launch_config),
         ),
 
-        # Waypoint Follower
-        Node(
-            package='mg_navigation',
-            executable='waypoints_follower.py',
-            parameters=[configured_params],
-            output='screen',
+        # Waypoint Sequencer
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(
+                    get_package_share_directory('mg_waypoint_navigation'),
+                    'launch',
+                    'waypoint_sequencer.launch.py',
+                )
+            ),
+            launch_arguments={
+                'simulation': simulation_arg.launch_config,
+                'load_path': waypoints_load_path_arg.launch_config,
+            }.items(),
             condition=IfCondition(use_waypoints_follower_arg.launch_config),
         ),
 
