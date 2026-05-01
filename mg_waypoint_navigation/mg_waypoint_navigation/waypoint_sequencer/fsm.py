@@ -92,7 +92,7 @@ class WaypointSequencerFSM:
         self._executor = ActionExecutor(node)
 
         self._state = SequencerState.IDLE
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
         self._waypoints: WaypointList = WaypointList()
         self._current_index: int = 0

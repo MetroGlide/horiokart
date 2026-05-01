@@ -37,6 +37,10 @@ def main():
         print(f"Input file is already v2.0 format. Nothing to do.")
         sys.exit(0)
 
+    if not isinstance(raw, list):
+        print(f"Error: expected a YAML list, got {type(raw).__name__}", file=sys.stderr)
+        sys.exit(1)
+
     from mg_waypoint_navigation.waypoint_v1_compat import convert_v1_waypoint
     from mg_waypoint_navigation.waypoint import WaypointList, WaypointsSaver
 

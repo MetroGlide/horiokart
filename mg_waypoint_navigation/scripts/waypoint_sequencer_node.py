@@ -46,6 +46,11 @@ class WaypointSequencerNode(Node):
             "publish_waypoint_status").value
         self._status_freq: float = self.get_parameter(
             "waypoint_status_freq_hz").value
+        if self._status_freq <= 0.0:
+            self.get_logger().warn(
+                f"waypoint_status_freq_hz={self._status_freq} is invalid. Using default 10.0 Hz."
+            )
+            self._status_freq = 10.0
         self._publish_list: bool = self.get_parameter(
             "publish_waypoints_list").value
 
@@ -111,7 +116,8 @@ class WaypointSequencerNode(Node):
             f"Loaded {waypoints.get_size()} waypoints from {self._load_path}"
         )
 
-        self._publish_waypoints_list(waypoints)
+        if self._publish_list:
+            self._publish_waypoints_list(waypoints)
         self._publish_markers(waypoints)
 
     # ------------------------------------------------------------------

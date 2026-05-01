@@ -48,7 +48,7 @@ _V1_ACTION_MAP = {
         srv_class="SetBool",
         request={"data": False},
     ),
-    "wait_trigger": lambda: ActionConfig(type="wait", countdown_ms=0),
+    "wait_trigger": lambda: ActionConfig(type="wait_trigger"),
     "reload_map": lambda: ActionConfig(type="load_map"),
     "wait_all_action_done": lambda: ActionConfig(type="wait", countdown_ms=0),
 }
