@@ -48,6 +48,7 @@ x-simulation-base: &simulation-base
     args:
       ROS_DISTRO: humble
     target: simulation
+    network: host
   image: mg_simulation
   tty: true
   network_mode: "host"
@@ -125,13 +126,28 @@ services:
       - SIMULATION=true
       - IGN_GAZEBO_RESOURCE_PATH=/root/.ignition/fuel
       - SCENARIO_FILE=${SCENARIO_FILE:-/app/mg_scenario_test/scenarios/example_inline_goals.yaml}
-      - HEADLESS=${HEADLESS:-true}
-    command: >
+    command: |
       bash -c "
         source /opt/ros/humble/setup.bash &&
         source /root/ros2_ws/install/setup.bash &&
-        ros2 launch mg_scenario_test scenario_test.launch.py
-          scenario_file:=$$SCENARIO_FILE
+        ros2 launch mg_scenario_test scenario_test.launch.py scenario_file:=$$SCENARIO_FILE
+      "
+
+  scenario-test-full:
+    <<: *simulation-base
+    environment:
+      - DISPLAY=${DISPLAY}
+      - PYTHONUNBUFFERED=1
+      - SIMULATION=true
+      - IGN_GAZEBO_RESOURCE_PATH=/root/.ignition/fuel
+      - SCENARIO_FILE=${SCENARIO_FILE:-/app/mg_scenario_test/scenarios/example_inline_goals.yaml}
+      - HEADLESS=${HEADLESS:-true}
+    command: |
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        ros2 launch mg_scenario_test scenario_test_full.launch.py \
+          scenario_file:=$$SCENARIO_FILE \
           headless:=$$HEADLESS
       "
 

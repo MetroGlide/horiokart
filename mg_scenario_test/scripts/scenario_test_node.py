@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import sys
 import threading
 
 import rclpy
@@ -12,6 +13,8 @@ from mg_scenario_test.event_executor import EventExecutor
 from mg_scenario_test.scenario_loader import ScenarioLoader
 from mg_scenario_test.scenario_runner import ScenarioRunner
 
+_SEP = "=" * 60
+
 
 class ScenarioTestNode(Node):
     def __init__(self):
@@ -21,6 +24,7 @@ class ScenarioTestNode(Node):
         self.declare_parameter("robot_name", "mg")
 
         self._result_pub = self.create_publisher(String, "~/result", 10)
+        self._done_event = threading.Event()
 
         scenario_file = self.get_parameter("scenario_file").value
         if not scenario_file:
@@ -54,9 +58,6 @@ class ScenarioTestNode(Node):
         self._exec_thread.start()
 
     def _run_scenario(self) -> None:
-        self.get_logger().info(
-            f"[ScenarioTest] Starting scenario '{self._scenario.scenario_name}'"
-        )
         result = self._runner.execute(self._scenario)
 
         payload = {
@@ -71,17 +72,25 @@ class ScenarioTestNode(Node):
         msg.data = json.dumps(payload)
         self._result_pub.publish(msg)
 
+        log = self.get_logger()
+        log.info(_SEP)
         if result.success:
-            self.get_logger().info(
-                f"[ScenarioTest] PASSED — {result.reached_count}/{result.total_count} goals, "
-                f"{result.elapsed_sec:.1f}s"
-            )
+            log.info("  Result : PASSED")
         else:
-            self.get_logger().error(
-                f"[ScenarioTest] FAILED at goal {result.failed_index} — "
-                f"{result.reached_count}/{result.total_count} goals, "
-                f"{result.elapsed_sec:.1f}s"
-            )
+            log.error("  Result : FAILED")
+        log.info(
+            f"  Goals  : {result.reached_count} / {result.total_count} reached")
+        log.info(f"  Time   : {result.elapsed_sec:.1f} s")
+        if not result.success and result.failed_index >= 0:
+            log.error(f"  Failed at goal index: {result.failed_index}")
+        log.info(_SEP)
+
+        self._done_event.set()
+
+    def wait_for_done(self) -> bool:
+        """シナリオ完了まで待機して結果を返す。"""
+        self._exec_thread.join()
+        return True
 
 
 def main():
@@ -90,7 +99,10 @@ def main():
     executor = MultiThreadedExecutor()
     executor.add_node(node)
     try:
-        executor.spin()
+        while rclpy.ok() and not node._done_event.is_set():
+            executor.spin_once(timeout_sec=0.1)
+    except KeyboardInterrupt:
+        pass
     finally:
         executor.shutdown()
         node.destroy_node()

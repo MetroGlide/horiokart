@@ -10,6 +10,7 @@ from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
 from nav2_msgs.action import NavigateToPose
 from rclpy.action import ActionClient
+from rclpy.qos import QoSDurabilityPolicy, QoSProfile, ReliabilityPolicy
 
 if TYPE_CHECKING:
     import rclpy.node
@@ -49,6 +50,8 @@ class ScenarioRunner:
     Node は MultiThreadedExecutor で spin している必要がある。
     """
 
+    _SEP = "=" * 60
+
     def __init__(
         self,
         node: "rclpy.node.Node",
@@ -62,55 +65,290 @@ class ScenarioRunner:
             node, NavigateToPose, "navigate_to_pose")
 
     def execute(self, scenario: "Scenario") -> ScenarioResult:
+        self._event_executor.sequencer_namespace = scenario.sequencer_namespace
+        if scenario.waypoints_nav_mode == "sequencer":
+            return self._execute_sequencer_mode(scenario)
+        return self._execute_direct_mode(scenario)
+
+    def _execute_direct_mode(self, scenario: "Scenario") -> ScenarioResult:
         plans = self._build_goal_plans(scenario)
         total = len(plans)
         start_time = time.monotonic()
+        log = self._node.get_logger()
 
-        for plan in plans:
-            self._node.get_logger().info(
-                f"[ScenarioRunner] Goal {plan.goal_index + 1}/{total}: "
-                f"({plan.pose.x:.2f}, {plan.pose.y:.2f})"
-            )
+        log.info(self._SEP)
+        log.info(f"  Scenario : {scenario.scenario_name}")
+        log.info(f"  World    : {scenario.world_name}")
+        log.info(f"  Goals    : {total}")
+        log.info(self._SEP)
 
-            stop_before = threading.Event()
-            self._event_executor.execute_events(plan.before, stop_before)
-
-            during_stop = threading.Event()
-            during_thread = threading.Thread(
-                target=self._event_executor.execute_events,
-                args=(plan.during, during_stop),
-                daemon=True,
-            )
-            during_thread.start()
-
-            nav_ok = self._navigate(plan.pose)
-
-            during_stop.set()
-            during_thread.join(timeout=10.0)
-
-            if not nav_ok:
-                elapsed = time.monotonic() - start_time
-                self._node.get_logger().error(
-                    f"[ScenarioRunner] Navigation failed at goal {plan.goal_index}"
-                )
-                return ScenarioResult(
-                    success=False,
-                    elapsed_sec=elapsed,
-                    reached_count=plan.goal_index,
-                    total_count=total,
-                    failed_index=plan.goal_index,
-                )
-
-            stop_after = threading.Event()
-            self._event_executor.execute_events(plan.after, stop_after)
-
-        elapsed = time.monotonic() - start_time
-        return ScenarioResult(
-            success=True,
-            elapsed_sec=elapsed,
-            reached_count=total,
-            total_count=total,
+        result = ScenarioResult(
+            success=False, elapsed_sec=0.0,
+            reached_count=0, total_count=total,
         )
+        try:
+            for plan in plans:
+                log.info(
+                    f"[Goal {plan.goal_index + 1}/{total}] "
+                    f"target=({plan.pose.x:.2f}, {plan.pose.y:.2f})"
+                )
+
+                if plan.before:
+                    log.info(f"  >> before events ({len(plan.before)} items)")
+                stop_before = threading.Event()
+                self._event_executor.execute_events(plan.before, stop_before)
+
+                if plan.during:
+                    log.info(
+                        f"  >> during events ({len(plan.during)} items) [parallel]")
+                during_stop = threading.Event()
+                during_thread = threading.Thread(
+                    target=self._event_executor.execute_events,
+                    args=(plan.during, during_stop),
+                    daemon=True,
+                )
+                during_thread.start()
+
+                log.info(f"  >> navigating ...")
+                nav_ok = self._navigate(plan.pose)
+
+                during_stop.set()
+                during_thread.join(timeout=10.0)
+
+                if not nav_ok:
+                    elapsed = time.monotonic() - start_time
+                    log.error(
+                        f"[Goal {plan.goal_index + 1}/{total}] FAILED — navigation did not succeed"
+                    )
+                    result = ScenarioResult(
+                        success=False,
+                        elapsed_sec=elapsed,
+                        reached_count=plan.goal_index,
+                        total_count=total,
+                        failed_index=plan.goal_index,
+                    )
+                    return result
+
+                log.info(f"  >> after events ({len(plan.after)} items)")
+                stop_after = threading.Event()
+                self._event_executor.execute_events(plan.after, stop_after)
+
+                log.info(f"[Goal {plan.goal_index + 1}/{total}] REACHED")
+
+            elapsed = time.monotonic() - start_time
+            result = ScenarioResult(
+                success=True,
+                elapsed_sec=elapsed,
+                reached_count=total,
+                total_count=total,
+            )
+            return result
+
+        finally:
+            if scenario.finally_events:
+                log.info(
+                    f"[Finally] running {len(scenario.finally_events)} cleanup event(s)")
+                stop = threading.Event()
+                self._event_executor.execute_events(
+                    scenario.finally_events, stop)
+                log.info("[Finally] done")
+
+    def _execute_sequencer_mode(self, scenario: "Scenario") -> ScenarioResult:
+        """waypoint_sequencer に走行を委ねるモード。
+
+        各 waypoint の before を実行後、trigger_waypoint イベントで sequencer を起動し、
+        current_index の変化を監視して during/after を実行する。
+        wait_trigger の有無に関わらず到達を検出できる。
+        """
+        log = self._node.get_logger()
+        ns = scenario.sequencer_namespace
+
+        all_wps = self._get_waypoints(scenario)
+        if all_wps is None:
+            log.error(
+                "[ScenarioRunner] Cannot get waypoints: waypoints_file not set "
+                f"and /{ns}/waypoints topic unavailable"
+            )
+            return ScenarioResult(
+                success=False, elapsed_sec=0.0, reached_count=0, total_count=0
+            )
+
+        total = len(all_wps)
+        start_index = scenario.start_waypoint_index
+        events_by_index = {
+            ge.waypoint_index: ge for ge in (scenario.goal_events or [])
+        }
+        start_time = time.monotonic()
+
+        log.info(self._SEP)
+        log.info(f"  Scenario : {scenario.scenario_name}")
+        log.info(f"  World    : {scenario.world_name}")
+        log.info(f"  Mode     : sequencer  (ns={ns})")
+        log.info(f"  Goals    : {total}  (start_index={start_index})")
+        log.info(self._SEP)
+
+        result = ScenarioResult(
+            success=False, elapsed_sec=0.0,
+            reached_count=0, total_count=total,
+        )
+        try:
+            for loop_i, wp in enumerate(all_wps[start_index:]):
+                seq_index = start_index + loop_i  # sequencer の current_index
+                wp_index = wp.index if hasattr(wp, "index") else seq_index
+                ge = events_by_index.get(wp_index)
+                before = ge.before if ge else []
+                during = ge.during if ge else []
+                after = ge.after if ge else []
+
+                try:
+                    pos_x = wp.pose.pose.position.x
+                    pos_y = wp.pose.pose.position.y
+                    pos_str = f"({pos_x:.2f}, {pos_y:.2f})"
+                except Exception:
+                    pos_str = "(unknown)"
+
+                log.info(
+                    f"[Goal {seq_index + 1}/{total}] "
+                    f"target={pos_str} wp_index={wp_index} [sequencer]"
+                )
+
+                if before:
+                    log.info(f"  >> before events ({len(before)} items)")
+                stop_before = threading.Event()
+                self._event_executor.execute_events(before, stop_before)
+
+                if during:
+                    log.info(
+                        f"  >> during events ({len(during)} items) [parallel]")
+                during_stop = threading.Event()
+                during_thread = threading.Thread(
+                    target=self._event_executor.execute_events,
+                    args=(during, during_stop),
+                    daemon=True,
+                )
+                during_thread.start()
+
+                log.info(
+                    f"  >> waiting for sequencer to pass waypoint {seq_index} ..."
+                )
+                nav_ok = self._wait_sequencer_done(
+                    seq_index, ns, timeout_sec=300.0
+                )
+
+                during_stop.set()
+                during_thread.join(timeout=10.0)
+
+                if not nav_ok:
+                    elapsed = time.monotonic() - start_time
+                    log.error(
+                        f"[Goal {seq_index + 1}/{total}] FAILED "
+                        f"\u2014 sequencer did not reach waypoint {seq_index}"
+                    )
+                    result = ScenarioResult(
+                        success=False,
+                        elapsed_sec=elapsed,
+                        reached_count=seq_index,
+                        total_count=total,
+                        failed_index=seq_index,
+                    )
+                    return result
+
+                if after:
+                    log.info(f"  >> after events ({len(after)} items)")
+                stop_after = threading.Event()
+                self._event_executor.execute_events(after, stop_after)
+
+                log.info(f"[Goal {seq_index + 1}/{total}] REACHED")
+
+            elapsed = time.monotonic() - start_time
+            result = ScenarioResult(
+                success=True,
+                elapsed_sec=elapsed,
+                reached_count=total,
+                total_count=total,
+            )
+            return result
+
+        finally:
+            if scenario.finally_events:
+                log.info(
+                    f"[Finally] running {len(scenario.finally_events)} cleanup event(s)"
+                )
+                stop = threading.Event()
+                self._event_executor.execute_events(scenario.finally_events, stop)
+                log.info("[Finally] done")
+
+    def _get_waypoints(self, scenario: "Scenario"):
+        """waypoints_file またはトピックからウェイポイントリストを取得する。"""
+        if scenario.waypoints_file:
+            from mg_waypoint_navigation.waypoint import WaypointsLoader
+            wl = WaypointsLoader(scenario.waypoints_file).load()
+            return wl.get_all()
+        return self._fetch_waypoints_from_topic(scenario.sequencer_namespace)
+
+    def _fetch_waypoints_from_topic(self, ns: str):
+        """latched な /{ns}/waypoints トピックから WaypointInfo リストを取得する。"""
+        from mg_msgs.msg import WaypointList as WaypointListMsg
+        log = self._node.get_logger()
+        latched_qos = QoSProfile(
+            depth=1,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+            reliability=ReliabilityPolicy.RELIABLE,
+        )
+        received: List = [None]
+        done_event = threading.Event()
+
+        def cb(msg):
+            received[0] = msg.waypoints
+            done_event.set()
+
+        sub = self._node.create_subscription(
+            WaypointListMsg, f"/{ns}/waypoints", cb, latched_qos
+        )
+        log.info(f"[ScenarioRunner] Waiting for /{ns}/waypoints topic ...")
+        done_event.wait(timeout=5.0)
+        self._node.destroy_subscription(sub)
+
+        if received[0] is None:
+            return None
+        log.info(
+            f"[ScenarioRunner] Received {len(received[0])} waypoints from topic"
+        )
+        return list(received[0])
+
+    def _wait_sequencer_done(
+        self, expected_index: int, ns: str, timeout_sec: float = 300.0
+    ) -> bool:
+        """sequencer の current_index が expected_index を超えるまで待つ。
+
+        wait_trigger の有無に関わらず動作する:
+        - wait_trigger なし: 次 waypoint へ移行するため current_index が増加
+        - wait_trigger あり: IDLE になる際に current_index が増加
+        """
+        from mg_msgs.msg import SequencerStatus
+        done_event = threading.Event()
+        result_holder: List[bool] = [False]
+
+        def cb(msg: SequencerStatus):
+            idx = msg.current_index
+            state = msg.state
+            if idx > expected_index:
+                result_holder[0] = True
+                done_event.set()
+            elif state == "ERROR":
+                self._node.get_logger().error(
+                    f"[ScenarioRunner] sequencer entered ERROR state at index {idx}"
+                )
+                done_event.set()
+
+        sub = self._node.create_subscription(
+            SequencerStatus, f"/{ns}/status", cb, 10
+        )
+        try:
+            done_event.wait(timeout=timeout_sec)
+        finally:
+            self._node.destroy_subscription(sub)
+        return result_holder[0]
 
     def _build_goal_plans(self, scenario: "Scenario") -> "List[_GoalPlan]":
         if scenario.goals is not None:

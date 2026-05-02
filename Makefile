@@ -15,7 +15,7 @@ endif
 _up_flags = $(if $(DETACH),-d,)
 
 .PHONY: slam navigation rosbag-replay gazebo-simulation develop \
-        scenario-test \
+        scenario-test scenario-test-full \
         shell shell-develop logs ps restart \
         build build-all build-no-cache \
         _collect-deps \

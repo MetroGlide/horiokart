@@ -25,7 +25,7 @@ goals:
         pose: { frame: "absolute", x: 0.0, y: 0.0, z: 0.05, yaw: 0.0 }
       # AMCL 初期位置をロボット現在位置に設定 (robot_relative: オフセット 0 = 現在地)
       - type: set_amcl_initial_pose
-        pose: { frame: "robot_relative", x: 0.0, y: 0.0, z: 0.0, yaw: 0.0 }
+        pose: { frame: "absolute", x: 0.0, y: 0.0, z: 0.0, yaw: 0.0 }
       # 収束待ち (目視確認用)
       - type: delay
         sec: 3.0
@@ -63,7 +63,10 @@ goals:
       - type: despawn_obstacle
         obstacle: "barrier_1"
 
-# ---- waypoints_file を使う場合の例 (上記 goals と排他) ----
+# Ctrl+C や異常終了を含め、シナリオ終了時に必ず実行される後処理
+finally:
+  - type: cleanup_all_obstacles
+
 # waypoints_file: /root/ros2_data/waypoints/test_route.yaml
 # goal_events:
 #   - waypoint_index: 0

@@ -40,6 +40,8 @@ class EventExecutor:
         self._tf_listener = __import__("tf2_ros", fromlist=["TransformListener"]).TransformListener(
             self._tf_buffer, node
         )
+        self._spawned_names: List[str] = []
+        self.sequencer_namespace: str = "waypoint_sequencer_node"
 
     def execute_events(
         self, events: "List[EventSpec]", stop_event: threading.Event
@@ -66,6 +68,12 @@ class EventExecutor:
             self._handle_spawn_obstacle(event)
         elif t == "despawn_obstacle":
             self._handle_despawn_obstacle(event)
+        elif t == "cleanup_all_obstacles":
+            self._handle_cleanup_all_obstacles()
+        elif t == "trigger_waypoint":
+            self._handle_trigger_waypoint(event)
+        elif t == "set_sequencer_index":
+            self._handle_set_sequencer_index(event)
         else:
             self._node.get_logger().warn(
                 f"[EventExecutor] Unknown event type: {t}")
@@ -103,15 +111,19 @@ class EventExecutor:
                 f"[EventExecutor] Obstacle '{name}' not defined in scenario"
             )
             return
-        if event.spawn_pose is None:
+        pose_spec = event.spawn_pose or event.pose
+        if pose_spec is None:
             self._node.get_logger().error(
-                f"[EventExecutor] spawn_obstacle '{name}' missing spawn_pose"
+                f"[EventExecutor] spawn_obstacle '{name}' missing pose"
             )
             return
-        resolved_pose = self._resolve_pose(event.spawn_pose)
+        resolved_pose = self._resolve_pose(pose_spec)
         ok = self._adapter.spawn_entity(
             name, self._obstacles[name].model, resolved_pose)
-        if not ok:
+        if ok:
+            if name not in self._spawned_names:
+                self._spawned_names.append(name)
+        else:
             self._node.get_logger().error(
                 f"[EventExecutor] spawn_obstacle '{name}' failed"
             )
@@ -119,10 +131,74 @@ class EventExecutor:
     def _handle_despawn_obstacle(self, event: "EventSpec") -> None:
         name = event.obstacle
         ok = self._adapter.despawn_entity(name)
-        if not ok:
+        if ok:
+            self._spawned_names = [n for n in self._spawned_names if n != name]
+        else:
             self._node.get_logger().warn(
                 f"[EventExecutor] despawn_obstacle '{name}' failed (may not exist)"
             )
+
+    def _handle_cleanup_all_obstacles(self) -> None:
+        targets = list(self._spawned_names)
+        if not targets:
+            self._node.get_logger().info(
+                "[EventExecutor] cleanup_all_obstacles: nothing to remove")
+            return
+        self._node.get_logger().info(
+            f"[EventExecutor] cleanup_all_obstacles: removing {targets}"
+        )
+        for name in targets:
+            ok = self._adapter.despawn_entity(name)
+            if ok:
+                self._spawned_names = [
+                    n for n in self._spawned_names if n != name]
+            else:
+                self._node.get_logger().warn(
+                    f"[EventExecutor] cleanup: despawn '{name}' failed (may not exist)"
+                )
+
+    def _handle_trigger_waypoint(self, event: "EventSpec") -> None:
+        from mg_msgs.srv import StartSequence
+        service_name = f"/{self.sequencer_namespace}/start"
+        client = self._node.create_client(StartSequence, service_name)
+        if not client.wait_for_service(timeout_sec=5.0):
+            self._node.get_logger().error(
+                f"[EventExecutor] trigger_waypoint: {service_name} not available"
+            )
+            return
+        req = StartSequence.Request()
+        req.countdown_ms = event.countdown_ms
+        self._node.get_logger().info(
+            f"[EventExecutor] trigger_waypoint: calling {service_name} "
+            f"(countdown_ms={event.countdown_ms})"
+        )
+        future = client.call_async(req)
+        done = threading.Event()
+        future.add_done_callback(lambda _f: done.set())
+        done.wait(timeout=10.0)
+        if not future.done() or future.result() is None:
+            self._node.get_logger().error(
+                "[EventExecutor] trigger_waypoint: service call timed out"
+            )
+        elif not future.result().success:
+            self._node.get_logger().warn(
+                f"[EventExecutor] trigger_waypoint: {future.result().message}"
+            )
+        else:
+            self._node.get_logger().info(
+                f"[EventExecutor] trigger_waypoint: accepted ({future.result().message})"
+            )
+
+    def _handle_set_sequencer_index(self, event: "EventSpec") -> None:
+        from std_msgs.msg import Int16
+        topic = f"/{self.sequencer_namespace}/set_next_waypoint_index"
+        pub = self._node.create_publisher(Int16, topic, 1)
+        msg = Int16()
+        msg.data = event.target_index
+        pub.publish(msg)
+        self._node.get_logger().info(
+            f"[EventExecutor] set_sequencer_index: published {event.target_index} → {topic}"
+        )
 
     def _resolve_pose(self, pose_spec: "PoseSpec") -> "PoseSpec":
         from mg_scenario_test.scenario import PoseSpec

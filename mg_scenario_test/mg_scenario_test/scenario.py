@@ -35,17 +35,23 @@ class EventSpec:
     """シナリオイベントの定義。typeによって使用するフィールドが異なる。
 
     type一覧:
-      reset_pose         : ロボットをpose位置にテレポート
-      set_amcl_initial_pose: AMCLの初期位置をposeに設定
-      delay              : sec秒待機
-      spawn_obstacle     : obstacle(名前)をspawn_poseにスポーン
-      despawn_obstacle   : obstacle(名前)をデスポーン
+      reset_pose              : ロボットをpose位置にテレポート
+      set_amcl_initial_pose   : AMCLの初期位置をposeに設定
+      delay                   : sec秒待機
+      spawn_obstacle          : obstacle(名前)をposeにスポーン
+      despawn_obstacle        : obstacle(名前)をデスポーン
+      cleanup_all_obstacles   : シナリオ内でスポーンした全障害物をデスポーン
+      trigger_waypoint        : waypoint_sequencerの~/startを呼び出して次のwaypointへ進める
+      set_sequencer_index     : waypoint_sequencerの次のwaypoint indexを設定(IDLE時のみ有効)
     """
     type: str
-    pose: Optional[PoseSpec] = None        # reset_pose / set_amcl_initial_pose
+    # reset_pose / set_amcl_initial_pose / spawn_obstacle
+    pose: Optional[PoseSpec] = None
     sec: float = 0.0                       # delay
     obstacle: str = ""                     # spawn_obstacle / despawn_obstacle
-    spawn_pose: Optional[PoseSpec] = None  # spawn_obstacle
+    spawn_pose: Optional[PoseSpec] = None  # spawn_obstacle (後方互換)
+    countdown_ms: int = 0                  # trigger_waypoint
+    target_index: int = 0                  # set_sequencer_index
 
 
 @dataclass
@@ -74,4 +80,8 @@ class Scenario:
     obstacles: Dict[str, ObstacleDef] = field(default_factory=dict)
     goals: Optional[List[GoalSpec]] = None
     waypoints_file: Optional[str] = None
+    waypoints_nav_mode: str = "direct"  # "direct" | "sequencer"
+    sequencer_namespace: str = "waypoint_sequencer_node"
+    start_waypoint_index: int = 0
     goal_events: Optional[List[GoalEventSpec]] = None
+    finally_events: List[EventSpec] = field(default_factory=list)

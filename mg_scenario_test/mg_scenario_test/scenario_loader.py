@@ -26,13 +26,15 @@ class ScenarioLoader:
     def _parse(raw: dict) -> Scenario:
         has_goals = "goals" in raw
         has_waypoints_file = "waypoints_file" in raw
+        is_sequencer = raw.get("waypoints_nav_mode", "direct") == "sequencer"
 
         if has_goals and has_waypoints_file:
             raise ValueError(
                 "'goals' and 'waypoints_file' are mutually exclusive")
-        if not has_goals and not has_waypoints_file:
+        if not has_goals and not has_waypoints_file and not is_sequencer:
             raise ValueError(
-                "Either 'goals' or 'waypoints_file' must be specified")
+                "Either 'goals' or 'waypoints_file' must be specified "
+                "(or set waypoints_nav_mode: sequencer to use /waypoints topic)")
         if has_goals and "goal_events" in raw:
             raise ValueError(
                 "'goal_events' is only valid with 'waypoints_file'")
@@ -59,7 +61,13 @@ class ScenarioLoader:
             obstacles=obstacles,
             goals=goals,
             waypoints_file=raw.get("waypoints_file"),
+            waypoints_nav_mode=raw.get("waypoints_nav_mode", "direct"),
+            sequencer_namespace=raw.get("sequencer_namespace", "waypoint_sequencer_node"),
+            start_waypoint_index=int(raw.get("start_waypoint_index", 0)),
             goal_events=goal_events,
+            finally_events=[
+                ScenarioLoader._parse_event(e) for e in raw.get("finally", [])
+            ],
         )
 
     @staticmethod
@@ -96,6 +104,8 @@ class ScenarioLoader:
             sec=float(raw.get("sec", 0.0)),
             obstacle=raw.get("obstacle", ""),
             spawn_pose=spawn_pose,
+            countdown_ms=int(raw.get("countdown_ms", 0)),
+            target_index=int(raw.get("target_index", 0)),
         )
 
     @staticmethod

@@ -2,6 +2,11 @@ version: "1.0"
 scenario_name: "waypoints_file_with_events"
 world_name: "warehouse"
 
+# ナビゲーションモード
+# "direct"    : scenario_runner が NavigateToPose を直接送信 (デフォルト)
+# "sequencer" : waypoint_sequencer に走行を委譲。before 内の trigger_waypoint で開始する。
+waypoints_nav_mode: "direct"
+
 # 障害物の名前付き定義
 obstacles:
   person_0:
@@ -14,7 +19,7 @@ obstacles:
 # 既存の waypoints.yaml を参照する (goals: とは排他)
 # コンテナ内のパスを指定する
 # WAYPOINT_PATH 環境変数に対応するファイルを用意すること
-waypoints_file: /root/ros2_data/waypoints/warehouse_route.yaml
+waypoints_file: /root/ros2_data/map/waypoint.yaml
 
 # waypoints_file 使用時のみ有効。waypoint_index で per-waypoint イベントを定義する。
 goal_events:
@@ -25,7 +30,7 @@ goal_events:
         pose: { frame: "absolute", x: 0.0, y: 0.0, z: 0.05, yaw: 0.0 }
       # AMCL 初期位置を現在位置 (ロボット相対オフセット 0) に設定
       - type: set_amcl_initial_pose
-        pose: { frame: "robot_relative", x: 0.0, y: 0.0, z: 0.0, yaw: 0.0 }
+        pose: { frame: "absolute", x: 0.0, y: 0.0, z: 0.0, yaw: 0.0 }
       # 収束待ち (目視確認用)
       - type: delay
         sec: 3.0
@@ -63,3 +68,6 @@ goal_events:
     after:
       - type: despawn_obstacle
         obstacle: "person_1"
+
+finally:
+  - type: cleanup_all_obstacles

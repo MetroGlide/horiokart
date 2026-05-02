@@ -141,7 +141,7 @@ class GazeboAdapter(SimulatorAdapter):
         self, service: str, req_type: str, rep_type: str, req: str
     ) -> bool:
         cmd = [
-            "gz", "service",
+            "ign", "service",
             "-s", service,
             "--reqtype", req_type,
             "--reptype", rep_type,
@@ -167,7 +167,7 @@ class GazeboAdapter(SimulatorAdapter):
             return False
         except FileNotFoundError:
             print(
-                "[GazeboAdapter] 'gz' command not found. Is Gazebo Fortress installed?")
+                "[GazeboAdapter] 'ign' command not found. Is Gazebo Fortress installed?")
             return False
 
     @staticmethod
