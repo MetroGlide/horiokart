@@ -275,7 +275,8 @@ class ScenarioRunner:
                     f"[Finally] running {len(scenario.finally_events)} cleanup event(s)"
                 )
                 stop = threading.Event()
-                self._event_executor.execute_events(scenario.finally_events, stop)
+                self._event_executor.execute_events(
+                    scenario.finally_events, stop)
                 log.info("[Finally] done")
 
     def _get_waypoints(self, scenario: "Scenario"):

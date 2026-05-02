@@ -62,7 +62,8 @@ class ScenarioLoader:
             goals=goals,
             waypoints_file=raw.get("waypoints_file"),
             waypoints_nav_mode=raw.get("waypoints_nav_mode", "direct"),
-            sequencer_namespace=raw.get("sequencer_namespace", "waypoint_sequencer_node"),
+            sequencer_namespace=raw.get(
+                "sequencer_namespace", "waypoint_sequencer_node"),
             start_waypoint_index=int(raw.get("start_waypoint_index", 0)),
             goal_events=goal_events,
             finally_events=[
