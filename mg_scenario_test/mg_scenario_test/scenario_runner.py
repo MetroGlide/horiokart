@@ -406,27 +406,67 @@ class ScenarioRunner:
 
         done_event = threading.Event()
         result_holder: List[bool] = [False]
+        goal_handle_holder = [None]
+        navigate_timeout_sec = float(
+            getattr(self, "_navigate_timeout_sec", 300.0)
+        )
+        cancel_wait_sec = float(getattr(self, "_navigate_cancel_wait_sec", 5.0))
 
         def goal_response_cb(future):
-            handle = future.result()
-            if not handle.accepted:
-                self._node.get_logger().warn(
-                    "[ScenarioRunner] NavigateToPose goal rejected"
+            try:
+                handle = future.result()
+                goal_handle_holder[0] = handle
+                if not handle.accepted:
+                    self._node.get_logger().warn(
+                        "[ScenarioRunner] NavigateToPose goal rejected"
+                    )
+                    done_event.set()
+                    return
+                result_future = handle.get_result_async()
+                result_future.add_done_callback(result_cb)
+            except Exception as exc:
+                self._node.get_logger().error(
+                    f"[ScenarioRunner] Failed to process NavigateToPose goal response: {exc}"
                 )
                 done_event.set()
-                return
-            result_future = handle.get_result_async()
-            result_future.add_done_callback(result_cb)
 
         def result_cb(future):
-            status = future.result().status
-            result_holder[0] = status == GoalStatus.STATUS_SUCCEEDED
-            done_event.set()
+            try:
+                status = future.result().status
+                result_holder[0] = status == GoalStatus.STATUS_SUCCEEDED
+            except Exception as exc:
+                self._node.get_logger().error(
+                    f"[ScenarioRunner] Failed to get NavigateToPose result: {exc}"
+                )
+                result_holder[0] = False
+            finally:
+                done_event.set()
 
         future = self._nav_client.send_goal_async(goal)
         future.add_done_callback(goal_response_cb)
 
-        done_event.wait()
+        if not done_event.wait(timeout=navigate_timeout_sec):
+            self._node.get_logger().error(
+                "[ScenarioRunner] NavigateToPose did not finish within "
+                f"{navigate_timeout_sec:.1f}s; cancelling goal"
+            )
+            handle = goal_handle_holder[0]
+            if handle is not None and handle.accepted:
+                try:
+                    cancel_done_event = threading.Event()
+                    cancel_future = handle.cancel_goal_async()
+
+                    def cancel_done_cb(_future):
+                        cancel_done_event.set()
+
+                    cancel_future.add_done_callback(cancel_done_cb)
+                    cancel_done_event.wait(timeout=cancel_wait_sec)
+                except Exception as exc:
+                    self._node.get_logger().warn(
+                        f"[ScenarioRunner] Failed to cancel timed out NavigateToPose goal: {exc}"
+                    )
+            return False
+
         return result_holder[0]
 
     @staticmethod
