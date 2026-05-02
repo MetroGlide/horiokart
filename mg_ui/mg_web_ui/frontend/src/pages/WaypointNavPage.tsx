@@ -25,18 +25,18 @@ export default function WaypointNavPage({
 
   const status = useTopicSubscriber<SequencerStatus>(
     client,
-    "waypoint_sequencer_node/status",
+    "/waypoint_sequencer_node/status",
     "mg_msgs/msg/SequencerStatus",
   );
 
   const handleStart = () =>
-    call("waypoint_sequencer_node/start", { countdown_ms: countdownMs });
+    call("/waypoint_sequencer_node/start", { countdown_ms: countdownMs });
 
-  const handleStop = () => call("waypoint_sequencer_node/stop", {});
+  const handleStop = () => call("/waypoint_sequencer_node/stop", {});
 
   const handlePause = () =>
     client.publish(
-      "waypoint_sequencer_node/pause_request",
+      "/waypoint_sequencer_node/pause_request",
       "mg_msgs/msg/PauseRequest",
       {
         requester_id: "web_ui",
@@ -48,7 +48,7 @@ export default function WaypointNavPage({
 
   const handleResume = () =>
     client.publish(
-      "waypoint_sequencer_node/pause_request",
+      "/waypoint_sequencer_node/pause_request",
       "mg_msgs/msg/PauseRequest",
       {
         requester_id: "web_ui",
@@ -60,13 +60,13 @@ export default function WaypointNavPage({
 
   const handleJump = () =>
     client.publish(
-      "waypoint_sequencer_node/set_next_waypoint_index",
+      "/waypoint_sequencer_node/set_next_waypoint_index",
       "std_msgs/msg/Int16",
       { data: jumpIndex },
     );
 
   const handleReload = () =>
-    call("waypoint_sequencer_node/reload_waypoints", {});
+    call("/waypoint_sequencer_node/reload_waypoints", {});
 
   const stateColor = status
     ? (STATE_COLOR[status.state] ?? "text-white")
