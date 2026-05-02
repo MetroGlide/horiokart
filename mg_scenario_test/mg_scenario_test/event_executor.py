@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Dict, List
 
 import rclpy.time
 import rclpy.duration
+from std_msgs.msg import Int16
 
 if TYPE_CHECKING:
     import rclpy.node
@@ -42,6 +43,11 @@ class EventExecutor:
         )
         self._spawned_names: List[str] = []
         self.sequencer_namespace: str = "waypoint_sequencer_node"
+        self._sequencer_index_pub = node.create_publisher(
+            Int16,
+            f"/{self.sequencer_namespace}/set_next_waypoint_index",
+            1,
+        )
 
     def execute_events(
         self, events: "List[EventSpec]", stop_event: threading.Event
@@ -190,14 +196,12 @@ class EventExecutor:
             )
 
     def _handle_set_sequencer_index(self, event: "EventSpec") -> None:
-        from std_msgs.msg import Int16
-        topic = f"/{self.sequencer_namespace}/set_next_waypoint_index"
-        pub = self._node.create_publisher(Int16, topic, 1)
         msg = Int16()
         msg.data = event.target_index
-        pub.publish(msg)
+        self._sequencer_index_pub.publish(msg)
         self._node.get_logger().info(
-            f"[EventExecutor] set_sequencer_index: published {event.target_index} → {topic}"
+            f"[EventExecutor] set_sequencer_index: published {event.target_index} → "
+            f"/{self.sequencer_namespace}/set_next_waypoint_index"
         )
 
     def _resolve_pose(self, pose_spec: "PoseSpec") -> "PoseSpec":
