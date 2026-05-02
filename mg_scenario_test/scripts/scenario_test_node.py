@@ -24,6 +24,7 @@ class ScenarioTestNode(Node):
 
         self._result_pub = self.create_publisher(String, "~/result", 10)
         self._done_event = threading.Event()
+        self._scenario_success: bool = False
 
         scenario_file = self.get_parameter("scenario_file").value
         if not scenario_file:
@@ -85,11 +86,12 @@ class ScenarioTestNode(Node):
         log.info(_SEP)
 
         self._done_event.set()
+        self._scenario_success = result.success
 
     def wait_for_done(self) -> bool:
-        """シナリオ完了まで待機して結果を返す。"""
+        """シナリオ完了まで待機してシナリオの成否を返す。"""
         self._exec_thread.join()
-        return True
+        return self._scenario_success
 
 
 def main():
