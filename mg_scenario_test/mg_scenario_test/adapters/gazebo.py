@@ -161,6 +161,11 @@ class GazeboAdapter(SimulatorAdapter):
                     f"stderr: {result.stderr.strip()}"
                 )
                 return False
+            if result.stdout.strip() == "data: false":
+                print(
+                    f"[GazeboAdapter] Service returned data: false: {service}"
+                )
+                return False
             return True
         except subprocess.TimeoutExpired:
             print(f"[GazeboAdapter] Service call timed out: {service}")

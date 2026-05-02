@@ -42,6 +42,11 @@ gazebo-simulation:
 scenario-test:
 	$(if $(SCENARIO),SCENARIO_FILE=$(SCENARIO) )$(if $(HEADLESS),HEADLESS=$(HEADLESS) )$(COMPOSE) up $(_up_flags) scenario-test
 
+# make scenario-test-full
+# make scenario-test-full SCENARIO=/app/mg_scenario_test/scenarios/example_inline_goals.yaml HEADLESS=false
+scenario-test-full:
+	$(if $(SCENARIO),SCENARIO_FILE=$(SCENARIO) )$(if $(HEADLESS),HEADLESS=$(HEADLESS) )$(COMPOSE) up $(_up_flags) scenario-test-full
+
 develop:
 	$(COMPOSE) up -d develop
 	$(if $(ATTACH),$(COMPOSE) exec develop bash,)

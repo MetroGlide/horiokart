@@ -6,7 +6,6 @@ Gazebo / Navigation (waypoint_sequencer 含む) / RViz2 は事前に個別起動
 起動するノード:
   1. scenario_test_node
 """
-import yaml
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration

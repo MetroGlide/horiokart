@@ -175,6 +175,7 @@ class ScenarioRunner:
 
         total = len(all_wps)
         start_index = scenario.start_waypoint_index
+        run_total = total - start_index
         events_by_index = {
             ge.waypoint_index: ge for ge in (scenario.goal_events or [])
         }
@@ -189,7 +190,7 @@ class ScenarioRunner:
 
         result = ScenarioResult(
             success=False, elapsed_sec=0.0,
-            reached_count=0, total_count=total,
+            reached_count=0, total_count=run_total,
         )
         try:
             for loop_i, wp in enumerate(all_wps[start_index:]):
@@ -247,8 +248,8 @@ class ScenarioRunner:
                     result = ScenarioResult(
                         success=False,
                         elapsed_sec=elapsed,
-                        reached_count=seq_index,
-                        total_count=total,
+                        reached_count=loop_i,
+                        total_count=run_total,
                         failed_index=seq_index,
                     )
                     return result
@@ -264,8 +265,8 @@ class ScenarioRunner:
             result = ScenarioResult(
                 success=True,
                 elapsed_sec=elapsed,
-                reached_count=total,
-                total_count=total,
+                reached_count=run_total,
+                total_count=run_total,
             )
             return result
 
