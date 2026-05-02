@@ -1,0 +1,13 @@
+diagnostics_node:
+  ros__parameters:
+    monitored_nodes:
+      - waypoint_sequencer_node
+      - amcl
+      - bt_navigator
+      - controller_server
+      - planner_server
+    sequencer_expected_hz: 10.0
+    amcl_expected_hz: 1.0
+    hz_warn_ratio: 0.5
+    amcl_covariance_warn: 2.0
+    amcl_covariance_error: 10.0
