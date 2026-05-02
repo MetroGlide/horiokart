@@ -1,0 +1,88 @@
+version: "1.0"
+scenario_name: "inline_goals_obstacle_avoidance"
+world_name: "warehouse"
+
+# 障害物の名前付き定義 (イベントから参照する)
+obstacles:
+  barrier_0:
+    model: { type: "fuel", uri: "OpenRobotics/models/Jersey Barrier" }
+  barrier_1:
+    model: { type: "fuel", uri: "OpenRobotics/models/Jersey Barrier" }
+  person_0:
+    model: { type: "fuel", uri: "OpenRobotics/models/MaleVisitorOnPhone" }
+  test_box:
+    model:
+      type: primitive
+      shape: box
+      size: { x: 0.6, y: 0.6, z: 1.2 }
+
+# インラインゴール定義 (waypoints_file と排他)
+goals:
+  - pose: { frame: "absolute", x: 5.0, y: 2.0, z: 0.0, yaw: 0.0 }
+    before:
+      # ロボットを初期位置にテレポート (絶対座標)
+      - type: reset_pose
+        pose: { frame: "absolute", x: 0.0, y: 0.0, z: 0.05, yaw: 0.0 }
+      # AMCL 初期位置をロボット現在位置に設定 (robot_relative: オフセット 0 = 現在地)
+      - type: set_amcl_initial_pose
+        pose: { frame: "absolute", x: 0.0, y: 0.0, z: 0.0, yaw: 0.0 }
+      # 収束待ち (目視確認用)
+      - type: delay
+        sec: 3.0
+      # 静的障害物を事前にスポーン
+      - type: spawn_obstacle
+        obstacle: "barrier_0"
+        pose: { frame: "absolute", x: 3.0, y: 1.0, z: 0.0, yaw: 0.0 }
+      - type: spawn_obstacle
+        obstacle: "test_box"
+        pose: { frame: "absolute", x: 2.5, y: -0.5, z: 0.6, yaw: 0.785 }
+    during:
+      # ナビゲーション開始 5 秒後に人が飛び出す (ロボット正面 2m)
+      - type: delay
+        sec: 5.0
+      - type: spawn_obstacle
+        obstacle: "person_0"
+        pose: { frame: "robot_relative", x: 2.0, y: 0.0, z: 0.0, yaw: 3.14 }
+    after:
+      # ゴール到達後に静的障害物を除去
+      - type: despawn_obstacle
+        obstacle: "barrier_0"
+      - type: despawn_obstacle
+        obstacle: "test_box"
+      - type: despawn_obstacle
+        obstacle: "person_0"
+
+  - pose: { frame: "absolute", x: 10.0, y: 5.0, z: 0.0, yaw: 1.57 }
+    before:
+      # 次のゴールへ向かう前に新たな障害物を配置
+      - type: spawn_obstacle
+        obstacle: "barrier_1"
+        pose: { frame: "absolute", x: 8.0, y: 4.0, z: 0.0, yaw: 0.0 }
+    during: []
+    after:
+      - type: despawn_obstacle
+        obstacle: "barrier_1"
+
+# Ctrl+C や異常終了を含め、シナリオ終了時に必ず実行される後処理
+finally:
+  - type: cleanup_all_obstacles
+
+# waypoints_file: /root/ros2_data/waypoints/test_route.yaml
+# goal_events:
+#   - waypoint_index: 0
+#     before:
+#       - type: reset_pose
+#         pose: {frame: "absolute", x: 0.0, y: 0.0, z: 0.05, yaw: 0.0}
+#       - type: set_amcl_initial_pose
+#         pose: {frame: "robot_relative", x: 0.0, y: 0.0, z: 0.0, yaw: 0.0}
+#       - type: delay
+#         sec: 3.0
+#     during:
+#       - type: delay
+#         sec: 8.0
+#       - type: spawn_obstacle
+#         obstacle: "person_0"
+#         pose: {frame: "robot_relative", x: 2.0, y: 0.0, z: 0.0, yaw: 3.14}
+#     after:
+#       - type: despawn_obstacle
+#         obstacle: "person_0"

@@ -1,0 +1,75 @@
+version: "1.0"
+scenario_name: "waypoints_sequencer_mode"
+world_name: "warehouse"
+
+# sequencer モード: waypoint_sequencer に走行を委譲する。
+# before 内の trigger_waypoint で各 waypoint への移動を開始し、
+# current_index の変化を監視して during/after を制御する。
+# wait_trigger 有無に関わらず到達を検出できる。
+waypoints_nav_mode: "sequencer"
+
+# waypoint_sequencer ノードのネームスペース (デフォルト: waypoint_sequencer_node)
+sequencer_namespace: "waypoint_sequencer_node"
+
+# 途中から再開する場合にシナリオ側のループ開始インデックスを指定する (デフォルト: 0)
+# set_sequencer_index イベントと組み合わせて sequencer 側も合わせること
+start_waypoint_index: 0
+
+obstacles:
+  person_0:
+    model: { type: "fuel", uri: "OpenRobotics/models/MaleVisitorOnPhone" }
+  barrier_mid:
+    model: { type: "fuel", uri: "OpenRobotics/models/Jersey Barrier" }
+
+# waypoints_file は省略可能 (省略時は /{sequencer_namespace}/waypoints トピックから取得)
+# waypoints_file: /root/ros2_data/map/waypoint.yaml
+
+goal_events:
+  - waypoint_index: 0
+    before:
+      - type: reset_pose
+        pose: { frame: "absolute", x: 0.0, y: 0.0, z: 0.05, yaw: 0.0 }
+      - type: set_amcl_initial_pose
+        pose: { frame: "absolute", x: 0.0, y: 0.0, z: 0.0, yaw: 0.0 }
+      - type: delay
+        sec: 3.0
+      # sequencer を waypoint 0 から開始させる (IDLE 時のみ有効)
+      - type: set_sequencer_index
+        target_index: 0
+      # countdown_ms: 0 はカウントダウンなしで即座に開始
+      - type: trigger_waypoint
+        countdown_ms: 0
+    during:
+      # NAVIGATING 中に障害物をスポーン
+      - type: delay
+        sec: 5.0
+      - type: spawn_obstacle
+        obstacle: "person_0"
+        pose: { frame: "robot_relative", x: 3.0, y: 0.5, z: 0.0, yaw: 3.14 }
+    after:
+      - type: despawn_obstacle
+        obstacle: "person_0"
+
+  - waypoint_index: 1
+    before:
+      # waypoint 0 到達後、障害物を設置してから waypoint 1 へ進む
+      - type: spawn_obstacle
+        obstacle: "barrier_mid"
+        pose: { frame: "absolute", x: 7.0, y: 3.5, z: 0.0, yaw: 1.57 }
+      # 3 秒カウントダウン後に waypoint 1 へ向かわせる
+      - type: trigger_waypoint
+        countdown_ms: 3000
+    during: []
+    after:
+      - type: despawn_obstacle
+        obstacle: "barrier_mid"
+
+  - waypoint_index: 2
+    before:
+      - type: trigger_waypoint
+        countdown_ms: 0
+    during: []
+    after: []
+
+finally:
+  - type: cleanup_all_obstacles
