@@ -146,9 +146,8 @@ services:
       bash -c "
         source /opt/ros/humble/setup.bash &&
         source /root/ros2_ws/install/setup.bash &&
-        ros2 launch mg_scenario_test scenario_test_full.launch.py \
-          scenario_file:=$$SCENARIO_FILE \
-          headless:=$$HEADLESS
+        ros2 launch mg_scenario_test scenario_test.launch.py \
+          scenario_file:=$$SCENARIO_FILE
       "
 
   develop:
