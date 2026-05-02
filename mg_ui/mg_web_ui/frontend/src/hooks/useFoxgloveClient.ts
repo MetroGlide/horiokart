@@ -1,3 +1,5 @@
+import { parse } from '@foxglove/rosmsg'
+import { MessageReader, MessageWriter } from '@foxglove/rosmsg2-serialization'
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
@@ -20,90 +22,116 @@ interface ServerChannel {
   schema: string
 }
 
+interface AdvertisedSchema {
+  encoding: string
+  schemaName: string
+  schema: string
+}
+
 interface ServiceInfo {
   id: number
-  requestEncoding: string
-  requestSchema: string
+  request?: AdvertisedSchema
+  response?: AdvertisedSchema
 }
 
-type CdrPrimitive =
-  | 'bool' | 'uint8' | 'int8'
-  | 'uint16' | 'int16'
-  | 'uint32' | 'int32' | 'float32'
-  | 'uint64' | 'int64' | 'float64'
-  | 'string'
-
-function parseCdrFields(schema: string): Array<{ type: CdrPrimitive; name: string }> {
-  const primitives = new Set<string>([
-    'bool', 'uint8', 'int8', 'uint16', 'int16',
-    'uint32', 'int32', 'float32', 'uint64', 'int64', 'float64', 'string',
-  ])
-  const fields: Array<{ type: CdrPrimitive; name: string }> = []
-  for (const raw of schema.split('\n')) {
-    const line = raw.trim()
-    if (!line || line.startsWith('#') || line === '---') continue
-    if (line.includes('=')) continue
-    const parts = line.split(/\s+/)
-    if (parts.length >= 2 && primitives.has(parts[0])) {
-      fields.push({ type: parts[0] as CdrPrimitive, name: parts[1] })
-    }
-  }
-  return fields
+const CLIENT_CHANNEL_SCHEMAS: Record<string, AdvertisedSchema> = {
+  'mg_msgs/msg/PauseRequest': {
+    encoding: 'cdr',
+    schemaName: 'mg_msgs/msg/PauseRequest',
+    schema: 'string requester_id\nbool active\nfloat32 heartbeat_period_s\nstring reason',
+  },
+  'std_msgs/msg/Int16': {
+    encoding: 'cdr',
+    schemaName: 'std_msgs/msg/Int16',
+    schema: 'int16 data',
+  },
+  'std_msgs/msg/String': {
+    encoding: 'cdr',
+    schemaName: 'std_msgs/msg/String',
+    schema: 'string data',
+  },
 }
 
-function cdrAlign(pos: number, type: CdrPrimitive): number {
-  const alignment: Record<CdrPrimitive, number> = {
-    bool: 1, uint8: 1, int8: 1,
-    uint16: 2, int16: 2,
-    uint32: 4, int32: 4, float32: 4, string: 4,
-    uint64: 8, int64: 8, float64: 8,
+function getMessageReader(cache: Map<string, MessageReader>, schema: AdvertisedSchema): MessageReader | undefined {
+  const key = `${schema.schemaName}:${schema.schema}`
+  const cached = cache.get(key)
+  if (cached) return cached
+
+  try {
+    const reader = new MessageReader(parse(schema.schema, { ros2: true }))
+    cache.set(key, reader)
+    return reader
+  } catch {
+    return undefined
   }
-  const a = alignment[type]
-  return a <= 1 ? pos : Math.ceil(pos / a) * a
 }
 
-function encodeCDRRequest(payload: Record<string, unknown>, schema: string): Uint8Array {
-  const fields = parseCdrFields(schema)
-  const chunks: Uint8Array[] = [new Uint8Array([0x00, 0x01, 0x00, 0x00])]
-  let pos = 4
-  for (const { type, name } of fields) {
-    const aligned = cdrAlign(pos, type)
-    if (aligned > pos) {
-      chunks.push(new Uint8Array(aligned - pos))
-      pos = aligned
-    }
-    const val = payload[name] ?? 0
-    const n = typeof val === 'boolean' ? (val ? 1 : 0) : Number(val)
-    let b: Uint8Array
-    switch (type) {
-      case 'bool': case 'uint8': case 'int8':
-        b = new Uint8Array([n & 0xff]); break
-      case 'uint16': case 'int16':
-        b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, n, true); break
-      case 'uint32': case 'int32':
-        b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, n >>> 0, true); break
-      case 'float32':
-        b = new Uint8Array(4); new DataView(b.buffer).setFloat32(0, n, true); break
-      case 'uint64': case 'int64':
-        b = new Uint8Array(8); new DataView(b.buffer).setBigUint64(0, BigInt(Math.trunc(n)), true); break
-      case 'float64':
-        b = new Uint8Array(8); new DataView(b.buffer).setFloat64(0, n, true); break
-      case 'string': {
-        const sb = new TextEncoder().encode(String(val ?? ''))
-        b = new Uint8Array(4 + sb.byteLength + 1)
-        new DataView(b.buffer).setUint32(0, sb.byteLength + 1, true)
-        b.set(sb, 4)
-        break
-      }
-    }
-    chunks.push(b)
-    pos += b.byteLength
+function getMessageWriter(cache: Map<string, MessageWriter>, schema: AdvertisedSchema): MessageWriter | undefined {
+  const key = `${schema.schemaName}:${schema.schema}`
+  const cached = cache.get(key)
+  if (cached) return cached
+
+  try {
+    const writer = new MessageWriter(parse(schema.schema, { ros2: true }))
+    cache.set(key, writer)
+    return writer
+  } catch {
+    return undefined
   }
-  const total = chunks.reduce((s, c) => s + c.byteLength, 0)
-  const out = new Uint8Array(total)
-  let off = 0
-  for (const c of chunks) { out.set(c, off); off += c.byteLength }
-  return out
+}
+
+function decodePayload(
+  payload: ArrayBuffer,
+  schema: AdvertisedSchema | undefined,
+  readerCache: Map<string, MessageReader>,
+): unknown {
+  if (!schema) {
+    return payload
+  }
+
+  if (schema.encoding === 'json') {
+    try {
+      return JSON.parse(new TextDecoder().decode(payload))
+    } catch {
+      return payload
+    }
+  }
+
+  if (schema.encoding !== 'cdr') {
+    return payload
+  }
+
+  const reader = getMessageReader(readerCache, schema)
+  if (!reader) {
+    return payload
+  }
+
+  try {
+    return reader.readMessage(new Uint8Array(payload))
+  } catch {
+    return payload
+  }
+}
+
+function encodePayload(
+  data: unknown,
+  schema: AdvertisedSchema | undefined,
+  writerCache: Map<string, MessageWriter>,
+): Uint8Array {
+  if (!schema || schema.encoding === 'json') {
+    return new TextEncoder().encode(JSON.stringify(data))
+  }
+
+  const writer = getMessageWriter(writerCache, schema)
+  if (!writer) {
+    return new TextEncoder().encode(JSON.stringify(data))
+  }
+
+  try {
+    return writer.writeMessage(data as Record<string, unknown>)
+  } catch {
+    return new TextEncoder().encode(JSON.stringify(data))
+  }
 }
 
 const SUBPROTOCOL = ['foxglove.websocket.v1', 'foxglove.sdk.v1']
@@ -130,8 +158,15 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
   const wsRef = useRef<WebSocket | null>(null)
   const channelsByTopicRef = useRef<Map<string, ServerChannel>>(new Map())
   const subscriptionsRef = useRef<Map<SubscriptionId, (data: unknown) => void>>(new Map())
+  const subscriptionChannelsRef = useRef<Map<SubscriptionId, ServerChannel>>(new Map())
+  const messageReadersRef = useRef<Map<string, MessageReader>>(new Map())
+  const messageWritersRef = useRef<Map<string, MessageWriter>>(new Map())
   const clientChIdRef = useRef<Map<string, number>>(new Map())
-  const pendingServicesRef = useRef<Map<number, { resolve: (v: unknown) => void; reject: (e: unknown) => void }>>(new Map())
+  const pendingServicesRef = useRef<Map<number, {
+    resolve: (v: unknown) => void
+    reject: (e: unknown) => void
+    response?: AdvertisedSchema
+  }>>(new Map())
   const serviceCallIdRef = useRef(0)
   const subIdCounterRef = useRef(0)
   const clientChIdCounterRef = useRef(0)
@@ -155,6 +190,8 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
     ws.onclose = () => {
       updateStatus('disconnected')
       channelsByTopicRef.current.clear()
+      subscriptionChannelsRef.current.clear()
+      messageReadersRef.current.clear()
       clientChIdRef.current.clear()
       servicesByNameRef.current.clear()
       if (mountedRef.current) {
@@ -188,13 +225,14 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
           const services = msg['services'] as Array<{
             id: number
             name: string
-            request?: { encoding: string; schema: string }
+            request?: { encoding: string; schemaName: string; schema: string }
+            response?: { encoding: string; schemaName: string; schema: string }
           }>
           for (const svc of services) {
             const info: ServiceInfo = {
               id: svc.id,
-              requestEncoding: svc.request?.encoding ?? 'cdr',
-              requestSchema: svc.request?.schema ?? '',
+              request: svc.request,
+              response: svc.response,
             }
             servicesByNameRef.current.set(svc.name, info)
             servicesByNameRef.current.set(normalizeName(svc.name), info)
@@ -224,25 +262,25 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
         if (opcode === MSG_OPCODE_MESSAGE_DATA) {
           const subId = view.getUint32(1, true) as SubscriptionId
           const handler = subscriptionsRef.current.get(subId)
+          const channel = subscriptionChannelsRef.current.get(subId)
           if (!handler) return
           const payload = event.data.slice(1 + 4 + 8)
-          try {
-            handler(JSON.parse(new TextDecoder().decode(payload)))
-          } catch {
-            handler(payload)
-          }
+          handler(decodePayload(payload, channel, messageReadersRef.current))
         } else if (opcode === MSG_OPCODE_SERVICE_CALL_RESPONSE) {
           const callId = view.getUint32(1 + 4, true)
           const encLen = view.getUint32(1 + 4 + 4, true)
           const pending = pendingServicesRef.current.get(callId)
           if (!pending) return
           pendingServicesRef.current.delete(callId)
+          const encoding = new TextDecoder().decode(event.data.slice(1 + 4 + 4 + 4, 1 + 4 + 4 + 4 + encLen))
           const payload = event.data.slice(1 + 4 + 4 + 4 + encLen)
-          try {
-            pending.resolve(JSON.parse(new TextDecoder().decode(payload)))
-          } catch {
-            pending.resolve(payload)
-          }
+          pending.resolve(
+            decodePayload(
+              payload,
+              pending.response ? { ...pending.response, encoding } : undefined,
+              messageReadersRef.current,
+            ),
+          )
         }
       }
     }
@@ -283,10 +321,12 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
 
       const subId = ++subIdCounterRef.current
       subscriptionsRef.current.set(subId, onMessage)
+      subscriptionChannelsRef.current.set(subId, channel)
       ws.send(JSON.stringify({ op: 'subscribe', subscriptions: [{ id: subId, channelId: channel.id }] }))
 
       return () => {
         subscriptionsRef.current.delete(subId)
+        subscriptionChannelsRef.current.delete(subId)
         if (wsRef.current?.readyState === WebSocket.OPEN) {
           wsRef.current.send(JSON.stringify({ op: 'unsubscribe', subscriptionIds: [subId] }))
         }
@@ -310,14 +350,16 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
       }
 
       const callId = ++serviceCallIdRef.current
-      pendingServicesRef.current.set(callId, { resolve, reject })
+      pendingServicesRef.current.set(callId, {
+        resolve,
+        reject,
+        response: serviceInfo.response,
+      })
 
-      const encoding = serviceInfo.requestEncoding
+      const requestSchema = serviceInfo.request
+      const encoding = requestSchema?.encoding ?? 'json'
       const encodingBytes = new TextEncoder().encode(encoding)
-      const payloadBytes =
-        encoding === 'cdr'
-          ? encodeCDRRequest(payload as Record<string, unknown>, serviceInfo.requestSchema)
-          : new TextEncoder().encode(JSON.stringify(payload))
+      const payloadBytes = encodePayload(payload, requestSchema, messageWritersRef.current)
       const buf = new ArrayBuffer(1 + 4 + 4 + 4 + encodingBytes.byteLength + payloadBytes.byteLength)
       const view = new DataView(buf)
       let offset = 0
@@ -342,17 +384,20 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
     const ws = wsRef.current
     if (!ws || ws.readyState !== WebSocket.OPEN) return
 
+    const schema = CLIENT_CHANNEL_SCHEMAS[schemaName]
+    const encoding = schema?.encoding ?? 'json'
+    const payloadBytes = encodePayload(data, schema, messageWritersRef.current)
+
     let chId = clientChIdRef.current.get(topic)
     if (chId === undefined) {
       chId = ++clientChIdCounterRef.current
       clientChIdRef.current.set(topic, chId)
       ws.send(JSON.stringify({
         op: 'advertise',
-        channels: [{ id: chId, topic, encoding: 'json', schemaName }],
+        channels: [{ id: chId, topic, encoding, schemaName }],
       }))
     }
 
-    const payloadBytes = new TextEncoder().encode(JSON.stringify(data))
     const buf = new ArrayBuffer(1 + 4 + payloadBytes.byteLength)
     const view = new DataView(buf)
     view.setUint8(0, MSG_OPCODE_CLIENT_MESSAGE)
