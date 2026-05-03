@@ -4,6 +4,7 @@ const links = [
   { to: "/", label: "TOP" },
   { to: "/waypoint", label: "Waypoint Nav" },
   { to: "/slam", label: "SLAM" },
+  { to: "/simulation", label: "Simulation" },
   { to: "/utility", label: "Utility" },
 ];
 

@@ -28,6 +28,7 @@ export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
   const panels = [
     { label: "Waypoint Nav", to: "/waypoint", icon: "🗺️" },
     { label: "SLAM", to: "/slam", icon: "📡" },
+    { label: "Simulation", to: "/simulation", icon: "🧪" },
     { label: "Utility", to: "/utility", icon: "🛠️" },
   ];
 
@@ -85,7 +86,7 @@ export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
         </section>
       )}
 
-      <section className="grid grid-cols-3 gap-4">
+      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {panels.map(({ label, to, icon }) => (
           <button
             key={to}

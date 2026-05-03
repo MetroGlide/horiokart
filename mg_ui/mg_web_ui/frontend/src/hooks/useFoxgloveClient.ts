@@ -50,6 +50,39 @@ const CLIENT_CHANNEL_SCHEMAS: Record<string, AdvertisedSchema> = {
     schemaName: 'std_msgs/msg/String',
     schema: 'string data',
   },
+  'geometry_msgs/msg/PoseWithCovarianceStamped': {
+    encoding: 'cdr',
+    schemaName: 'geometry_msgs/msg/PoseWithCovarianceStamped',
+    schema: `std_msgs/Header header
+geometry_msgs/PoseWithCovariance pose
+================================================================================
+MSG: std_msgs/Header
+builtin_interfaces/Time stamp
+string frame_id
+================================================================================
+MSG: builtin_interfaces/Time
+int32 sec
+uint32 nanosec
+================================================================================
+MSG: geometry_msgs/PoseWithCovariance
+geometry_msgs/Pose pose
+float64[36] covariance
+================================================================================
+MSG: geometry_msgs/Pose
+geometry_msgs/Point position
+geometry_msgs/Quaternion orientation
+================================================================================
+MSG: geometry_msgs/Point
+float64 x
+float64 y
+float64 z
+================================================================================
+MSG: geometry_msgs/Quaternion
+float64 x
+float64 y
+float64 z
+float64 w`,
+  },
 }
 
 function getMessageReader(cache: Map<string, MessageReader>, schema: AdvertisedSchema): MessageReader | undefined {

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 import subprocess
 import json
+import math
 
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
+from mg_msgs.srv import ResetSimRobotPose
 
 
 class SystemManagerNode(Node):
@@ -15,9 +17,19 @@ class SystemManagerNode(Node):
         super().__init__('system_manager_node')
 
         self.declare_parameter('project_dir', '/app')
+        self.declare_parameter('simulation_world', 'warehouse')
+        self.declare_parameter('simulation_robot_name', 'mg')
         self._project_dir: str = (
             self.get_parameter(
                 'project_dir').get_parameter_value().string_value
+        )
+        self._simulation_world: str = (
+            self.get_parameter(
+                'simulation_world').get_parameter_value().string_value
+        )
+        self._simulation_robot_name: str = (
+            self.get_parameter(
+                'simulation_robot_name').get_parameter_value().string_value
         )
 
         self.create_service(Trigger, '~/start_slam', self._start_slam)
@@ -29,6 +41,12 @@ class SystemManagerNode(Node):
         self.create_service(Trigger, '~/save_map', self._save_map)
         self.create_service(Trigger, '~/start_waypoint_editor',
                             self._start_waypoint_editor)
+        self.create_service(Trigger, '~/start_scenario_test',
+                            self._start_scenario_test)
+        self.create_service(Trigger, '~/stop_scenario_test',
+                            self._stop_scenario_test)
+        self.create_service(ResetSimRobotPose, '~/reset_sim_robot_pose',
+                            self._reset_sim_robot_pose)
 
         self._status_pub = self.create_publisher(
             String, '~/container_status', 10)
@@ -98,6 +116,43 @@ class SystemManagerNode(Node):
             'source /opt/ros/humble/setup.bash && '
             'source /root/ros2_ws/install/setup.bash && '
             'ros2 run mg_waypoint_navigation waypoint_editor_node.py',
+        ])
+        res.success = ok
+        res.message = msg
+        return res
+
+    def _start_scenario_test(self, _req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+        ok, msg = self._run(['make', 'scenario-test', 'DETACH=1'])
+        res.success = ok
+        res.message = msg
+        return res
+
+    def _stop_scenario_test(self, _req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+        ok, msg = self._run(['docker', 'compose', 'stop', 'scenario-test'])
+        res.success = ok
+        res.message = msg
+        return res
+
+    def _reset_sim_robot_pose(self, req: ResetSimRobotPose.Request, res: ResetSimRobotPose.Response) -> ResetSimRobotPose.Response:
+        qz = math.sin(req.yaw / 2.0)
+        qw = math.cos(req.yaw / 2.0)
+        request = (
+            f'name: "{self._simulation_robot_name}" '
+            f'position {{ x: {req.x} y: {req.y} z: {req.z} }} '
+            f'orientation {{ x: 0.0 y: 0.0 z: {qz} w: {qw} }}'
+        )
+        command = (
+            f'ign service '
+            f'-s /world/{self._simulation_world}/set_pose '
+            f'--reqtype ignition.msgs.Pose '
+            f'--reptype ignition.msgs.Boolean '
+            f'--timeout 5000 '
+            f"--req '{request}'"
+        )
+        ok, msg = self._run([
+            'docker', 'compose', 'exec', 'gazebo-simulation',
+            'bash', '-lc',
+            command,
         ])
         res.success = ok
         res.message = msg

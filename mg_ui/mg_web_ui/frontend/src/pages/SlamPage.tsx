@@ -13,7 +13,7 @@ export default function SlamPage({ client }: { client: FoxgloveClientHandle }) {
 
   const containerStatus = useTopicSubscriber<{ data: string }>(
     client,
-    "system_manager_node/container_status",
+    "/system_manager_node/container_status",
     "std_msgs/msg/String",
   );
 
@@ -64,21 +64,21 @@ export default function SlamPage({ client }: { client: FoxgloveClientHandle }) {
         <p className="text-xs text-gray-400">SLAM Control</p>
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={() => call("system_manager_node/start_slam", {})}
+            onClick={() => call("/system_manager_node/start_slam", {})}
             disabled={loading}
             className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
           >
             Start SLAM
           </button>
           <button
-            onClick={() => call("system_manager_node/stop_slam", {})}
+            onClick={() => call("/system_manager_node/stop_slam", {})}
             disabled={loading}
             className="bg-red-600 hover:bg-red-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
           >
             Stop SLAM
           </button>
           <button
-            onClick={() => call("system_manager_node/save_map", {})}
+            onClick={() => call("/system_manager_node/save_map", {})}
             disabled={loading}
             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
           >
@@ -92,14 +92,14 @@ export default function SlamPage({ client }: { client: FoxgloveClientHandle }) {
         <p className="text-xs text-gray-400">Navigation Control</p>
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={() => call("system_manager_node/start_navigation", {})}
+            onClick={() => call("/system_manager_node/start_navigation", {})}
             disabled={loading}
             className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
           >
             Start Navigation
           </button>
           <button
-            onClick={() => call("system_manager_node/stop_navigation", {})}
+            onClick={() => call("/system_manager_node/stop_navigation", {})}
             disabled={loading}
             className="bg-red-600 hover:bg-red-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
           >

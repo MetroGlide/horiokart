@@ -4,6 +4,7 @@ import TopPage from "./pages/TopPage";
 import WaypointNavPage from "./pages/WaypointNavPage";
 import SlamPage from "./pages/SlamPage";
 import UtilityPage from "./pages/UtilityPage";
+import SimulationPage from "./pages/SimulationPage";
 import NavBar from "./components/NavBar";
 import ConnectionBadge from "./components/ConnectionBadge";
 
@@ -27,6 +28,10 @@ export default function App() {
             element={<WaypointNavPage client={client} />}
           />
           <Route path="/slam" element={<SlamPage client={client} />} />
+          <Route
+            path="/simulation"
+            element={<SimulationPage client={client} />}
+          />
           <Route path="/utility" element={<UtilityPage client={client} />} />
         </Routes>
       </main>

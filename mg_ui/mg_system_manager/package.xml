@@ -11,6 +11,7 @@
   <buildtool_depend>ament_cmake_python</buildtool_depend>
 
   <depend>rclpy</depend>
+  <depend>mg_msgs</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
 
