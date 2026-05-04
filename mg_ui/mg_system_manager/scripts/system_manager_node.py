@@ -72,30 +72,52 @@ class SystemManagerNode(Node):
             return False, str(e)
 
     def _start_slam(self, _req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+        self.get_logger().info('[Called] start_slam')
+
         ok, msg = self._run(['make', 'slam', 'DETACH=1'])
         res.success = ok
         res.message = msg
+
+        self.get_logger().info(
+            f'start_slam result: success={ok}, message="{msg}"')
         return res
 
     def _stop_slam(self, _req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+        self.get_logger().info('[Called] stop_slam')
+
         ok, msg = self._run(['docker', 'compose', 'stop', 'slam'])
         res.success = ok
         res.message = msg
+
+        self.get_logger().info(
+            f'stop_slam result: success={ok}, message="{msg}"')
         return res
 
     def _start_navigation(self, _req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+        self.get_logger().info('[Called] start_navigation')
+
         ok, msg = self._run(['make', 'navigation', 'DETACH=1'])
         res.success = ok
         res.message = msg
+
+        self.get_logger().info(
+            f'start_navigation result: success={ok}, message="{msg}"')
         return res
 
     def _stop_navigation(self, _req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+        self.get_logger().info('[Called] stop_navigation')
+
         ok, msg = self._run(['docker', 'compose', 'stop', 'navigation'])
         res.success = ok
         res.message = msg
+
+        self.get_logger().info(
+            f'stop_navigation result: success={ok}, message="{msg}"')
         return res
 
     def _save_map(self, _req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+        self.get_logger().info('[Called] save_map')
+
         ok, msg = self._run([
             'docker', 'compose', 'exec', 'slam',
             'bash', '-c',
@@ -107,9 +129,14 @@ class SystemManagerNode(Node):
         ])
         res.success = ok
         res.message = msg
+
+        self.get_logger().info(
+            f'save_map result: success={ok}, message="{msg}"')
         return res
 
     def _start_waypoint_editor(self, _req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+        self.get_logger().info('[Called] start_waypoint_editor')
+
         ok, msg = self._run([
             'docker', 'compose', 'exec', '-d', 'develop',
             'bash', '-c',
@@ -119,21 +146,36 @@ class SystemManagerNode(Node):
         ])
         res.success = ok
         res.message = msg
+
+        self.get_logger().info(
+            f'start_waypoint_editor result: success={ok}, message="{msg}"')
         return res
 
     def _start_scenario_test(self, _req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+        self.get_logger().info('[Called] start_scenario_test')
+
         ok, msg = self._run(['make', 'scenario-test', 'DETACH=1'])
         res.success = ok
         res.message = msg
+
+        self.get_logger().info(
+            f'start_scenario_test result: success={ok}, message="{msg}"')
         return res
 
     def _stop_scenario_test(self, _req: Trigger.Request, res: Trigger.Response) -> Trigger.Response:
+        self.get_logger().info('[Called] stop_scenario_test')
+
         ok, msg = self._run(['docker', 'compose', 'stop', 'scenario-test'])
         res.success = ok
         res.message = msg
+
+        self.get_logger().info(
+            f'stop_scenario_test result: success={ok}, message="{msg}"')
         return res
 
     def _reset_sim_robot_pose(self, req: ResetSimRobotPose.Request, res: ResetSimRobotPose.Response) -> ResetSimRobotPose.Response:
+        self.get_logger().info('[Called] reset_sim_robot_pose')
+
         qz = math.sin(req.yaw / 2.0)
         qw = math.cos(req.yaw / 2.0)
         request = (
@@ -149,20 +191,51 @@ class SystemManagerNode(Node):
             f'--timeout 5000 '
             f"--req '{request}'"
         )
+
+        ok, cid_output = self._run([
+            'docker', 'ps',
+            '--filter', 'label=com.docker.compose.service=gazebo-simulation',
+            '--format', '{{.ID}}'
+        ])
+
+        if not ok or not cid_output.strip():
+            res.success = False
+            res.message = f"Failed to get container ID: {cid_output}"
+
+            self.get_logger().info(
+                f'reset_sim_robot_pose result: success={res.success}, message="{res.message}"')
+            return res
+
+        # 複数行返ってきた場合に備え、先頭のコンテナIDのみを抽出
+        cid = cid_output.strip().split('\n')[0]
+
         ok, msg = self._run([
-            'docker', 'compose', 'exec', 'gazebo-simulation',
+            'docker', 'exec', cid.strip(),
             'bash', '-lc',
             command,
         ])
+        self.get_logger().info(f'Command output: {msg}')
         res.success = ok
         res.message = msg
+
+        self.get_logger().info(
+            f'reset_sim_robot_pose result: success={res.success}, message="{res.message}"')
         return res
 
     def _publish_container_status(self) -> None:
+        self.get_logger().info('[Called] publish_container_status')
+
+        # docker compose ps のバグを回避し、純粋な docker ps を使用する
+        # -a をつけることで停止中のコンテナステータスも取得します
         ok, output = self._run([
-            'docker', 'compose', 'ps', '--format', 'json',
+            'docker', 'ps', '-a',
+            '--filter', 'label=com.docker.compose.service',
+            '--format', '{{.Label "com.docker.compose.service"}}\t{{.State}}'
         ])
+
         if not ok:
+            self.get_logger().error(
+                f'Failed to get container status: {output}')
             return
 
         services: dict[str, str] = {}
@@ -170,16 +243,17 @@ class SystemManagerNode(Node):
             line = line.strip()
             if not line:
                 continue
-            try:
-                entry = json.loads(line)
-                name = entry.get('Service', entry.get('Name', ''))
-                state = entry.get('State', 'unknown')
+
+            # タブ区切りで分割 (例: "gazebo-simulation\trunning")
+            parts = line.split('\t')
+            if len(parts) >= 2:
+                name = parts[0]
+                state = parts[1]
                 services[name] = state
-            except json.JSONDecodeError:
-                continue
 
         msg = String()
         msg.data = json.dumps(services)
+        self.get_logger().info(f'Publishing container status: {msg.data}')
         self._status_pub.publish(msg)
 
 
