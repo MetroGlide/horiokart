@@ -1,6 +1,7 @@
 import { parse } from '@foxglove/rosmsg'
 import { MessageReader, MessageWriter } from '@foxglove/rosmsg2-serialization'
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { SCHEMAS } from '../ros/interfaces'
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
 
@@ -34,56 +35,7 @@ interface ServiceInfo {
   response?: AdvertisedSchema
 }
 
-const CLIENT_CHANNEL_SCHEMAS: Record<string, AdvertisedSchema> = {
-  'mg_msgs/msg/PauseRequest': {
-    encoding: 'cdr',
-    schemaName: 'mg_msgs/msg/PauseRequest',
-    schema: 'string requester_id\nbool active\nfloat32 heartbeat_period_s\nstring reason',
-  },
-  'std_msgs/msg/Int16': {
-    encoding: 'cdr',
-    schemaName: 'std_msgs/msg/Int16',
-    schema: 'int16 data',
-  },
-  'std_msgs/msg/String': {
-    encoding: 'cdr',
-    schemaName: 'std_msgs/msg/String',
-    schema: 'string data',
-  },
-  'geometry_msgs/msg/PoseWithCovarianceStamped': {
-    encoding: 'cdr',
-    schemaName: 'geometry_msgs/msg/PoseWithCovarianceStamped',
-    schema: `std_msgs/Header header
-geometry_msgs/PoseWithCovariance pose
-================================================================================
-MSG: std_msgs/Header
-builtin_interfaces/Time stamp
-string frame_id
-================================================================================
-MSG: builtin_interfaces/Time
-int32 sec
-uint32 nanosec
-================================================================================
-MSG: geometry_msgs/PoseWithCovariance
-geometry_msgs/Pose pose
-float64[36] covariance
-================================================================================
-MSG: geometry_msgs/Pose
-geometry_msgs/Point position
-geometry_msgs/Quaternion orientation
-================================================================================
-MSG: geometry_msgs/Point
-float64 x
-float64 y
-float64 z
-================================================================================
-MSG: geometry_msgs/Quaternion
-float64 x
-float64 y
-float64 z
-float64 w`,
-  },
-}
+const CLIENT_CHANNEL_SCHEMAS: Record<string, AdvertisedSchema> = SCHEMAS
 
 function getMessageReader(cache: Map<string, MessageReader>, schema: AdvertisedSchema): MessageReader | undefined {
   const key = `${schema.schemaName}:${schema.schema}`
@@ -437,7 +389,7 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
     const ws = wsRef.current
     if (!ws || ws.readyState !== WebSocket.OPEN) return
 
-    const schema = CLIENT_CHANNEL_SCHEMAS[schemaName]
+    const schema = CLIENT_CHANNEL_SCHEMAS[schemaName] as AdvertisedSchema | undefined
     const encoding = schema?.encoding ?? 'json'
     const payloadBytes = encodePayload(data, schema, messageWritersRef.current)
 

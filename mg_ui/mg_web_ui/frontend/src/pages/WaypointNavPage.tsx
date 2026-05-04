@@ -3,6 +3,7 @@ import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
 import { useServiceCaller } from "../hooks/useServiceCaller";
 import { SequencerStatus } from "../types";
+import { TOPICS, SERVICES } from "../ros/interfaces";
 
 const STATE_COLOR: Record<string, string> = {
   IDLE: "text-gray-300",
@@ -25,48 +26,37 @@ export default function WaypointNavPage({
 
   const status = useTopicSubscriber<SequencerStatus>(
     client,
-    "/waypoint_sequencer_node/status",
+    TOPICS.WAYPOINT_STATUS,
     "mg_msgs/msg/SequencerStatus",
   );
 
   const handleStart = () =>
-    call("/waypoint_sequencer_node/start", { countdown_ms: countdownMs });
+    call(SERVICES.WAYPOINT_START, { countdown_ms: countdownMs });
 
-  const handleStop = () => call("/waypoint_sequencer_node/stop", {});
+  const handleStop = () => call(SERVICES.WAYPOINT_STOP, {});
 
   const handlePause = () =>
-    client.publish(
-      "/waypoint_sequencer_node/pause_request",
-      "mg_msgs/msg/PauseRequest",
-      {
-        requester_id: "web_ui",
-        active: true,
-        heartbeat_period_s: 0.0,
-        reason: "manual pause",
-      },
-    );
+    client.publish(TOPICS.WAYPOINT_PAUSE_REQUEST, "mg_msgs/msg/PauseRequest", {
+      requester_id: "web_ui",
+      active: true,
+      heartbeat_period_s: 0.0,
+      reason: "manual pause",
+    });
 
   const handleResume = () =>
-    client.publish(
-      "/waypoint_sequencer_node/pause_request",
-      "mg_msgs/msg/PauseRequest",
-      {
-        requester_id: "web_ui",
-        active: false,
-        heartbeat_period_s: 0.0,
-        reason: "",
-      },
-    );
+    client.publish(TOPICS.WAYPOINT_PAUSE_REQUEST, "mg_msgs/msg/PauseRequest", {
+      requester_id: "web_ui",
+      active: false,
+      heartbeat_period_s: 0.0,
+      reason: "",
+    });
 
   const handleJump = () =>
-    client.publish(
-      "/waypoint_sequencer_node/set_next_waypoint_index",
-      "std_msgs/msg/Int16",
-      { data: jumpIndex },
-    );
+    client.publish(TOPICS.WAYPOINT_SET_NEXT_INDEX, "std_msgs/msg/Int16", {
+      data: jumpIndex,
+    });
 
-  const handleReload = () =>
-    call("/waypoint_sequencer_node/reload_waypoints", {});
+  const handleReload = () => call(SERVICES.WAYPOINT_RELOAD, {});
 
   const stateColor = status
     ? (STATE_COLOR[status.state] ?? "text-white")

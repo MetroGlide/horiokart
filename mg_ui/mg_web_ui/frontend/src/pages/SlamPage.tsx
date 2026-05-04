@@ -4,6 +4,7 @@ import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { SystemManagerHandle } from "../hooks/useSystemManagerClient";
 import { DiagnosticArray } from "../types";
 import ApiLogPanel from "../components/ApiLogPanel";
+import { TOPICS } from "../ros/interfaces";
 
 export default function SlamPage({
   client,
@@ -17,7 +18,7 @@ export default function SlamPage({
 
   const diagnostics = useTopicSubscriber<DiagnosticArray>(
     client,
-    "/diagnostics",
+    TOPICS.DIAGNOSTICS,
     "diagnostic_msgs/msg/DiagnosticArray",
   );
 

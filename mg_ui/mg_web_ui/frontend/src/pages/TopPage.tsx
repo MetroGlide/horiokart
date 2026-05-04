@@ -3,12 +3,13 @@ import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
 import { useDiagnosticsMap } from "../hooks/useDiagnosticsMap";
 import { SequencerStatus, DIAG_COLOR, DIAG_LEVEL } from "../types";
+import { TOPICS } from "../ros/interfaces";
 
 export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
   const navigate = useNavigate();
   const seqStatus = useTopicSubscriber<SequencerStatus>(
     client,
-    "waypoint_sequencer_node/status",
+    TOPICS.WAYPOINT_STATUS,
     "mg_msgs/msg/SequencerStatus",
   );
   const diagStatuses = useDiagnosticsMap(client);

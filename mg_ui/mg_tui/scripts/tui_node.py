@@ -19,7 +19,7 @@ import requests
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
-from std_msgs.msg import String
+from std_msgs.msg import Int16
 from std_srvs.srv import Trigger
 from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -36,6 +36,35 @@ _BEST_EFFORT_QOS = QoSProfile(
     reliability=ReliabilityPolicy.BEST_EFFORT,
     durability=DurabilityPolicy.VOLATILE,
 )
+
+_NODE_NS = {
+    'WAYPOINT_SEQUENCER': 'waypoint_sequencer_node',
+    'DIAGNOSTICS': '',
+    'LOCALIZATION': '',
+}
+
+
+def _node_ns(ns: str, path: str) -> str:
+    """path has leading slash. Returns relative name if ns given, absolute if not."""
+    if ns:
+        return f'/{ns}/{path.lstrip("/")}'
+    return path
+
+
+class _Topics:
+    WAYPOINT_STATUS = _node_ns(_NODE_NS['WAYPOINT_SEQUENCER'], '/status')
+    WAYPOINT_PAUSE_REQUEST = _node_ns(
+        _NODE_NS['WAYPOINT_SEQUENCER'], '/pause_request')
+    WAYPOINT_SET_NEXT_INDEX = _node_ns(
+        _NODE_NS['WAYPOINT_SEQUENCER'], '/set_next_waypoint_index')
+    DIAGNOSTICS = _node_ns(_NODE_NS['DIAGNOSTICS'], '/diagnostics')
+    AMCL_POSE = _node_ns(_NODE_NS['LOCALIZATION'], '/amcl_pose')
+
+
+class _Services:
+    WAYPOINT_START = _node_ns(_NODE_NS['WAYPOINT_SEQUENCER'], '/start')
+    WAYPOINT_STOP = _node_ns(_NODE_NS['WAYPOINT_SEQUENCER'], '/stop')
+
 
 _DIAG_LEVEL = {0: 'OK', 1: 'WARN', 2: 'ERROR', 3: 'STALE'}
 _STATE_STYLE = {
@@ -72,26 +101,26 @@ class RosBackend(Node):
 
         self.create_subscription(
             SequencerStatus,
-            'waypoint_sequencer_node/status',
+            _Topics.WAYPOINT_STATUS,
             self._on_sequencer,
             _BEST_EFFORT_QOS,
         )
         self.create_subscription(
             DiagnosticArray,
-            '/diagnostics',
+            _Topics.DIAGNOSTICS,
             self._on_diagnostics,
             10,
         )
         self.create_subscription(
             PoseWithCovarianceStamped,
-            'amcl_pose',
+            _Topics.AMCL_POSE,
             self._on_amcl,
             10,
         )
         self._pause_pub = self.create_publisher(
-            PauseRequest, 'waypoint_sequencer_node/pause_request', 10)
+            PauseRequest, _Topics.WAYPOINT_PAUSE_REQUEST, 10)
         self._jump_pub = self.create_publisher(
-            String, 'waypoint_sequencer_node/set_next_waypoint_index', 10)
+            Int16, _Topics.WAYPOINT_SET_NEXT_INDEX, 10)
 
     def _on_sequencer(self, msg: SequencerStatus) -> None:
         self._state.seq_state = msg.state
@@ -224,10 +253,10 @@ class MgTuiApp(App):
         self.query_one('#status-bar', Static).update(s.last_service_msg)
 
     def action_start_nav(self) -> None:
-        self._backend.call_trigger('waypoint_sequencer_node/start')
+        self._backend.call_trigger(_Services.WAYPOINT_START)
 
     def action_stop_nav(self) -> None:
-        self._backend.call_trigger('waypoint_sequencer_node/stop')
+        self._backend.call_trigger(_Services.WAYPOINT_STOP)
 
     def action_pause_nav(self) -> None:
         self._backend.publish_pause(active=True)

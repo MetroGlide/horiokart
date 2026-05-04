@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FoxgloveClientHandle } from './useFoxgloveClient'
 import { DiagnosticArray, DiagnosticStatus } from '../types'
+import { TOPICS } from '../ros/interfaces'
 
 export function useDiagnosticsMap(
   client: FoxgloveClientHandle,
@@ -10,7 +11,7 @@ export function useDiagnosticsMap(
   useEffect(() => {
     if (client.status !== 'connected') return
     const unsubscribe = client.subscribe(
-      '/diagnostics',
+      TOPICS.DIAGNOSTICS,
       'diagnostic_msgs/msg/DiagnosticArray',
       (msg) => {
         const arr = msg as DiagnosticArray

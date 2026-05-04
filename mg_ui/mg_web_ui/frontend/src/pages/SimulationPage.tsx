@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { SystemManagerHandle } from "../hooks/useSystemManagerClient";
 import ApiLogPanel from "../components/ApiLogPanel";
+import { TOPICS } from "../ros/interfaces";
 
 interface PoseInput {
   x: number;
@@ -78,7 +79,7 @@ export default function SimulationPage({
     setError(null);
     try {
       client.publish(
-        "/initialpose",
+        TOPICS.INITIALPOSE,
         "geometry_msgs/msg/PoseWithCovarianceStamped",
         buildInitialPoseMessage(pose),
       );
