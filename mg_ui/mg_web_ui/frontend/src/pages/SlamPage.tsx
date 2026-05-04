@@ -1,36 +1,46 @@
+import { useState } from "react";
 import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
-import { useServiceCaller } from "../hooks/useServiceCaller";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
+import { SystemManagerHandle } from "../hooks/useSystemManagerClient";
 import { DiagnosticArray } from "../types";
+import ApiLogPanel from "../components/ApiLogPanel";
 
-export default function SlamPage({ client }: { client: FoxgloveClientHandle }) {
-  const { call, loading, error } = useServiceCaller(client);
+export default function SlamPage({
+  client,
+  sysManager,
+}: {
+  client: FoxgloveClientHandle;
+  sysManager: SystemManagerHandle;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const diagnostics = useTopicSubscriber<DiagnosticArray>(
     client,
     "/diagnostics",
     "diagnostic_msgs/msg/DiagnosticArray",
   );
 
-  const containerStatus = useTopicSubscriber<{ data: string }>(
-    client,
-    "/system_manager_node/container_status",
-    "std_msgs/msg/String",
-  );
-
-  const containers: Record<string, string> = (() => {
-    try {
-      return JSON.parse(containerStatus?.data ?? "{}");
-    } catch {
-      return {};
-    }
-  })();
-
+  const { containers, callApi } = sysManager;
   const slamState = containers["slam"] ?? "unknown";
 
   const amclStatus = diagnostics?.status.find(
     (s) => s.name === "localization/amcl_covariance",
   );
   const traceXy = amclStatus?.values.find((v) => v.key === "trace_xy")?.value;
+
+  const call = async (path: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await callApi(path);
+      if (!result.success) setError(result.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -64,21 +74,21 @@ export default function SlamPage({ client }: { client: FoxgloveClientHandle }) {
         <p className="text-xs text-gray-400">SLAM Control</p>
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={() => call("/system_manager_node/start_slam", {})}
+            onClick={() => call("/slam/start")}
             disabled={loading}
             className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
           >
             Start SLAM
           </button>
           <button
-            onClick={() => call("/system_manager_node/stop_slam", {})}
+            onClick={() => call("/slam/stop")}
             disabled={loading}
             className="bg-red-600 hover:bg-red-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
           >
             Stop SLAM
           </button>
           <button
-            onClick={() => call("/system_manager_node/save_map", {})}
+            onClick={() => call("/map/save")}
             disabled={loading}
             className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
           >
@@ -92,14 +102,14 @@ export default function SlamPage({ client }: { client: FoxgloveClientHandle }) {
         <p className="text-xs text-gray-400">Navigation Control</p>
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={() => call("/system_manager_node/start_navigation", {})}
+            onClick={() => call("/navigation/start")}
             disabled={loading}
             className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
           >
             Start Navigation
           </button>
           <button
-            onClick={() => call("/system_manager_node/stop_navigation", {})}
+            onClick={() => call("/navigation/stop")}
             disabled={loading}
             className="bg-red-600 hover:bg-red-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
           >
@@ -107,6 +117,7 @@ export default function SlamPage({ client }: { client: FoxgloveClientHandle }) {
           </button>
         </div>
       </section>
+      <ApiLogPanel logs={sysManager.logs} />
     </div>
   );
 }

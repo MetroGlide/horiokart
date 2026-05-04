@@ -200,18 +200,22 @@ services:
     <<: *develop-base
     environment:
       - PYTHONUNBUFFERED=1
+      - PROJECT_DIR=/app
+      - HOST_PROJECT_DIR=${PWD}
+      - HOST_HOME=${HOME}
+      - SIMULATION_WORLD=warehouse
+      - SIMULATION_ROBOT_NAME=mg
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - $HOME/.Xauthority/:/root/.Xauthority
       - ./:/app/
+      - ${PWD}:${PWD}
       - /dev:/dev
       - ${HOME}/ros2_data:/root/ros2_data
       - /var/run/docker.sock:/var/run/docker.sock
     command: >
       bash -c "
-        source /opt/ros/humble/setup.bash &&
-        source /root/ros2_ws/install/setup.bash &&
-        ros2 launch mg_system_manager system_manager.launch.py
+        python3 /app/mg_ui/mg_system_manager/scripts/system_manager_app.py
       "
 
   foxglove-bridge:

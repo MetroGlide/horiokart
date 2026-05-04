@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import { useFoxgloveClient } from "./hooks/useFoxgloveClient";
+import { useSystemManagerClient } from "./hooks/useSystemManagerClient";
 import TopPage from "./pages/TopPage";
 import WaypointNavPage from "./pages/WaypointNavPage";
 import SlamPage from "./pages/SlamPage";
@@ -10,6 +11,7 @@ import ConnectionBadge from "./components/ConnectionBadge";
 
 export default function App() {
   const client = useFoxgloveClient();
+  const sysManager = useSystemManagerClient();
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -27,12 +29,18 @@ export default function App() {
             path="/waypoint"
             element={<WaypointNavPage client={client} />}
           />
-          <Route path="/slam" element={<SlamPage client={client} />} />
+          <Route
+            path="/slam"
+            element={<SlamPage client={client} sysManager={sysManager} />}
+          />
           <Route
             path="/simulation"
-            element={<SimulationPage client={client} />}
+            element={<SimulationPage client={client} sysManager={sysManager} />}
           />
-          <Route path="/utility" element={<UtilityPage client={client} />} />
+          <Route
+            path="/utility"
+            element={<UtilityPage client={client} sysManager={sysManager} />}
+          />
         </Routes>
       </main>
     </div>

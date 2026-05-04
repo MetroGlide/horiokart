@@ -11,7 +11,10 @@
 """
 import json
 import threading
+import time
 from dataclasses import dataclass, field
+
+import requests
 
 import rclpy
 from rclpy.node import Node
@@ -85,12 +88,6 @@ class RosBackend(Node):
             self._on_amcl,
             10,
         )
-        self.create_subscription(
-            String,
-            'system_manager_node/container_status',
-            self._on_containers,
-            10,
-        )
         self._pause_pub = self.create_publisher(
             PauseRequest, 'waypoint_sequencer_node/pause_request', 10)
         self._jump_pub = self.create_publisher(
@@ -115,13 +112,6 @@ class RosBackend(Node):
     def _on_amcl(self, msg: PoseWithCovarianceStamped) -> None:
         cov = msg.pose.covariance
         self._state.amcl_trace_xy = cov[0] + cov[7]
-        self._refresh()
-
-    def _on_containers(self, msg: String) -> None:
-        try:
-            self._state.containers = json.loads(msg.data)
-        except json.JSONDecodeError:
-            pass
         self._refresh()
 
     def call_trigger(self, service: str) -> None:
@@ -246,7 +236,17 @@ class MgTuiApp(App):
         self._backend.publish_pause(active=False)
 
     def action_save_map(self) -> None:
-        self._backend.call_trigger('system_manager_node/save_map')
+        def _do() -> None:
+            try:
+                r = requests.post('http://localhost:8001/map/save', timeout=35)
+                data = r.json()
+                self._state.last_service_msg = (
+                    f'save_map: {"OK" if data["success"] else "FAIL"} {data["message"]}'
+                )
+            except Exception as e:
+                self._state.last_service_msg = f'save_map: error {e}'
+            self.call_from_thread(self._update_ui)
+        threading.Thread(target=_do, daemon=True).start()
 
 
 def main(args=None):
@@ -264,6 +264,18 @@ def main(args=None):
         daemon=True,
     )
     ros_thread.start()
+
+    def _poll_containers() -> None:
+        while True:
+            try:
+                r = requests.get('http://localhost:8001/status', timeout=2)
+                state.containers = r.json()
+                app.call_from_thread(app._update_ui)
+            except Exception:
+                pass
+            time.sleep(2.0)
+
+    threading.Thread(target=_poll_containers, daemon=True).start()
 
     try:
         app.run()

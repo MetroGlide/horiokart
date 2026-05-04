@@ -1,19 +1,38 @@
+import { useState } from "react";
 import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
-import { useServiceCaller } from "../hooks/useServiceCaller";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
+import { SystemManagerHandle } from "../hooks/useSystemManagerClient";
 import { DiagnosticArray, DIAG_COLOR, DIAG_LEVEL } from "../types";
+import ApiLogPanel from "../components/ApiLogPanel";
 
 export default function UtilityPage({
   client,
+  sysManager,
 }: {
   client: FoxgloveClientHandle;
+  sysManager: SystemManagerHandle;
 }) {
-  const { call, loading, error } = useServiceCaller(client);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { callApi } = sysManager;
   const diagnostics = useTopicSubscriber<DiagnosticArray>(
     client,
     "/diagnostics",
     "diagnostic_msgs/msg/DiagnosticArray",
   );
+
+  const handleStartWaypointEditor = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await callApi("/waypoint-editor/start");
+      if (!result.success) setError(result.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -21,9 +40,7 @@ export default function UtilityPage({
         <p className="text-xs text-gray-400">Tools</p>
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={() =>
-              call("/system_manager_node/start_waypoint_editor", {})
-            }
+            onClick={handleStartWaypointEditor}
             disabled={loading}
             className="bg-gray-600 hover:bg-gray-500 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
           >
@@ -60,6 +77,7 @@ export default function UtilityPage({
           <p className="text-sm text-gray-500">waiting for /diagnostics…</p>
         )}
       </section>
+      <ApiLogPanel logs={sysManager.logs} />
     </div>
   );
 }

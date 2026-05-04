@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
-import { useServiceCaller } from "../hooks/useServiceCaller";
-import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
+import { SystemManagerHandle } from "../hooks/useSystemManagerClient";
+import ApiLogPanel from "../components/ApiLogPanel";
 
 interface PoseInput {
   x: number;
@@ -38,45 +38,44 @@ function buildInitialPoseMessage(pose: PoseInput) {
 
 export default function SimulationPage({
   client,
+  sysManager,
 }: {
   client: FoxgloveClientHandle;
+  sysManager: SystemManagerHandle;
 }) {
-  const { call, loading, error } = useServiceCaller(client);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pose, setPose] = useState<PoseInput>({
     x: 0.0,
     y: 0.0,
     z: 0.05,
     yaw: 0.0,
   });
-  const [localError, setLocalError] = useState<string | null>(null);
 
-  const containerStatus = useTopicSubscriber<{ data: string }>(
-    client,
-    "/system_manager_node/container_status",
-    "std_msgs/msg/String",
-  );
-
-  const containers: Record<string, string> = useMemo(() => {
-    try {
-      return JSON.parse(containerStatus?.data ?? "{}");
-    } catch {
-      return {};
-    }
-  }, [containerStatus]);
-
+  const { containers, callApi } = sysManager;
   const scenarioState = containers["scenario-test"] ?? "unknown";
 
   const updatePose = (key: keyof PoseInput, value: number) => {
     setPose((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleResetRobotPose = async () => {
-    setLocalError(null);
-    await call("/system_manager_node/reset_sim_robot_pose", pose);
+  const callSys = async (path: string, body?: unknown) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await callApi(path, body);
+      if (!result.success) setError(result.message);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const handleResetRobotPose = () => callSys("/simulation/reset-pose", pose);
+
   const handleResetAmclPose = () => {
-    setLocalError(null);
+    setError(null);
     try {
       client.publish(
         "/initialpose",
@@ -84,19 +83,12 @@ export default function SimulationPage({
         buildInitialPoseMessage(pose),
       );
     } catch (e) {
-      setLocalError(e instanceof Error ? e.message : String(e));
+      setError(e instanceof Error ? e.message : String(e));
     }
   };
 
-  const handleStartScenario = async () => {
-    setLocalError(null);
-    await call("/system_manager_node/start_scenario_test", {});
-  };
-
-  const handleStopScenario = async () => {
-    setLocalError(null);
-    await call("/system_manager_node/stop_scenario_test", {});
-  };
+  const handleStartScenario = () => callSys("/scenario-test/start");
+  const handleStopScenario = () => callSys("/scenario-test/stop");
 
   return (
     <div className="space-y-6">
@@ -192,10 +184,9 @@ export default function SimulationPage({
             Stop Scenario
           </button>
         </div>
-        {(error || localError) && (
-          <p className="text-red-400 text-sm">{error ?? localError}</p>
-        )}
+        {error && <p className="text-red-400 text-sm">{error}</p>}
       </section>
+      <ApiLogPanel logs={sysManager.logs} />
     </div>
   );
 }

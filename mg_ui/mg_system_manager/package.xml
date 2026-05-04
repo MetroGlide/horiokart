@@ -8,12 +8,6 @@
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <buildtool_depend>ament_cmake_python</buildtool_depend>
-
-  <depend>rclpy</depend>
-  <depend>mg_msgs</depend>
-  <depend>std_msgs</depend>
-  <depend>std_srvs</depend>
 
   <export>
     <build_type>ament_cmake</build_type>

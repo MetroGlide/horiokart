@@ -89,6 +89,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   ros-${ROS_DISTRO}-teleop-twist-keyboard \
   ros-${ROS_DISTRO}-rqt ros-${ROS_DISTRO}-rqt-*
 
+RUN mkdir -p /usr/local/lib/docker/cli-plugins \
+  && curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose \
+  && chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
 # ==============================================================================
 # Stage: develop
 # ==============================================================================
