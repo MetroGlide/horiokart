@@ -40,3 +40,35 @@ export const DIAG_COLOR: Record<number, string> = {
   2: 'text-red-500',
   3: 'text-gray-400',
 }
+
+export interface GoalStatus {
+  goal_info: {
+    goal_id: { uuid: number[] }
+    stamp: { sec: number; nanosec: number }
+  }
+  status: number
+}
+
+export interface GoalStatusArray {
+  status_list: GoalStatus[]
+}
+
+export const GOAL_STATUS: Record<number, string> = {
+  0: 'UNKNOWN',
+  1: 'ACCEPTED',
+  2: 'EXECUTING',
+  3: 'CANCELING',
+  4: 'SUCCEEDED',
+  5: 'CANCELED',
+  6: 'ABORTED',
+}
+
+export const GOAL_STATUS_COLOR: Record<number, string> = {
+  0: 'text-gray-400',
+  1: 'text-yellow-400',
+  2: 'text-blue-400',
+  3: 'text-yellow-500',
+  4: 'text-green-400',
+  5: 'text-gray-400',
+  6: 'text-red-400',
+}

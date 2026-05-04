@@ -1,45 +1,40 @@
 import { useNavigate } from "react-router-dom";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
-import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
 import { useDiagnosticsMap } from "../hooks/useDiagnosticsMap";
-import { SequencerStatus, DIAG_COLOR, DIAG_LEVEL } from "../types";
-import { TOPICS } from "../ros/interfaces";
+import { DIAG_COLOR, DIAG_LEVEL } from "../types";
+
+const navCards = [
+  { label: "Waypoint Nav", to: "/waypoint", icon: "🗺️", description: "ウェイポイントナビゲーション制御" },
+  { label: "SLAM", to: "/slam", icon: "📡", description: "SLAM・地図保存・ローカライゼーション" },
+  { label: "System", to: "/system", icon: "🛠️", description: "サービス管理・診断情報" },
+  { label: "Setting", to: "/setting", icon: "⚙️", description: "シミュレーションモード・表示設定" },
+];
 
 export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
   const navigate = useNavigate();
-  const seqStatus = useTopicSubscriber<SequencerStatus>(
-    client,
-    TOPICS.WAYPOINT_STATUS,
-    "mg_msgs/msg/SequencerStatus",
-  );
   const diagStatuses = useDiagnosticsMap(client);
 
   const warnCount = diagStatuses.filter((s) => s.level >= 1).length;
   const errorCount = diagStatuses.filter((s) => s.level >= 2).length;
 
-  const panels = [
-    { label: "Waypoint Nav", to: "/waypoint", icon: "🗺️" },
-    { label: "SLAM", to: "/slam", icon: "📡" },
-    { label: "Simulation", to: "/simulation", icon: "🧪" },
-    { label: "Utility", to: "/utility", icon: "🛠️" },
-  ];
-
   return (
     <div className="space-y-6">
       <section className="grid grid-cols-2 gap-4">
-        <div className="bg-gray-800 rounded-lg p-4">
-          <p className="text-xs text-gray-400 mb-1">Sequencer State</p>
-          <p className="text-2xl font-bold">{seqStatus?.state ?? "—"}</p>
-          {seqStatus && (
-            <p className="text-sm text-gray-400 mt-1">
-              {Math.min(seqStatus.current_index + 1, seqStatus.total_waypoints)}{" "}
-              / {seqStatus.total_waypoints} pts
-              {seqStatus.distance_remaining > 0 &&
-                ` · ${seqStatus.distance_remaining.toFixed(1)} m`}
-            </p>
-          )}
-        </div>
-        <div className="bg-gray-800 rounded-lg p-4">
+        {navCards.map(({ label, to, icon, description }) => (
+          <button
+            key={to}
+            onClick={() => navigate(to)}
+            className="bg-gray-800 hover:bg-gray-700 rounded-lg p-6 text-left transition-colors border border-gray-700 hover:border-gray-500"
+          >
+            <div className="text-3xl mb-2">{icon}</div>
+            <div className="font-semibold text-lg">{label}</div>
+            <div className="text-xs text-gray-400 mt-1">{description}</div>
+          </button>
+        ))}
+      </section>
+
+      <section className="grid grid-cols-2 gap-4">
+        <div className="bg-gray-800 rounded-lg p-4 col-span-2">
           <p className="text-xs text-gray-400 mb-1">System Health</p>
           {errorCount > 0 ? (
             <p className="text-2xl font-bold text-red-400">
@@ -78,19 +73,6 @@ export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
           </ul>
         </section>
       )}
-
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {panels.map(({ label, to, icon }) => (
-          <button
-            key={to}
-            onClick={() => navigate(to)}
-            className="bg-gray-800 hover:bg-gray-700 rounded-lg p-6 text-center transition-colors"
-          >
-            <div className="text-3xl mb-2">{icon}</div>
-            <div className="font-medium">{label}</div>
-          </button>
-        ))}
-      </section>
     </div>
   );
 }

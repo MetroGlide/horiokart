@@ -14,12 +14,16 @@ export const TOPICS = {
   WAYPOINT_SET_NEXT_INDEX: nodeNs(NODE_NS.WAYPOINT_SEQUENCER, "/set_next_waypoint_index"),
   DIAGNOSTICS: nodeNs(NODE_NS.DIAGNOSTICS, "/diagnostics"),
   INITIALPOSE: nodeNs(NODE_NS.LOCALIZATION, "/initialpose"),
+  NAV_ACTION_STATUS: "/navigate_to_pose/_action/status",
+  AMCL_POSE: "/amcl_pose",
 } as const
 
 export const SERVICES = {
   WAYPOINT_START: nodeNs(NODE_NS.WAYPOINT_SEQUENCER, "/start"),
   WAYPOINT_STOP: nodeNs(NODE_NS.WAYPOINT_SEQUENCER, "/stop"),
   WAYPOINT_RELOAD: nodeNs(NODE_NS.WAYPOINT_SEQUENCER, "/reload_waypoints"),
+  LIFECYCLE_NAV_IS_ACTIVE: "/lifecycle_manager_navigation/is_active",
+  LIFECYCLE_LOC_IS_ACTIVE: "/lifecycle_manager_localization/is_active",
 } as const
 
 export interface RosSchema {
