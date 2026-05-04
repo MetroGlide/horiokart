@@ -146,24 +146,7 @@ class DockerManager:
 
     def start_waypoint_editor(self) -> tuple[bool, str]:
         logger.info("start_waypoint_editor")
-        container = self._get_container("develop")
-        if container is None:
-            return False, "develop container not found"
-        try:
-            container.exec_run(
-                [
-                    "bash", "-c",
-                    "source /opt/ros/humble/setup.bash && "
-                    "source /root/ros2_ws/install/setup.bash && "
-                    "ros2 run mg_waypoint_navigation waypoint_editor_node.py",
-                ],
-                detach=True,
-            )
-            logger.info("start_waypoint_editor detached")
-            return True, ""
-        except Exception as e:
-            logger.error("start_waypoint_editor exception: %s", e)
-            return False, str(e)
+        return self._compose_up("waypoint-editor")
 
     def reset_sim_robot_pose(
         self, x: float, y: float, z: float, yaw: float
@@ -251,6 +234,36 @@ async def save_map():
 @app.post("/waypoint-editor/start")
 def start_waypoint_editor():
     ok, msg = manager.start_waypoint_editor()
+    return _result(ok, msg)
+
+
+@app.post("/waypoint-editor/stop")
+def stop_waypoint_editor():
+    ok, msg = manager.stop("waypoint-editor")
+    return _result(ok, msg)
+
+
+@app.post("/foxglove-bridge/start")
+def start_foxglove_bridge():
+    ok, msg = manager.start("foxglove-bridge")
+    return _result(ok, msg)
+
+
+@app.post("/foxglove-bridge/stop")
+def stop_foxglove_bridge():
+    ok, msg = manager.stop("foxglove-bridge")
+    return _result(ok, msg)
+
+
+@app.post("/diagnostics/start")
+def start_diagnostics():
+    ok, msg = manager.start("diagnostics")
+    return _result(ok, msg)
+
+
+@app.post("/diagnostics/stop")
+def stop_diagnostics():
+    ok, msg = manager.stop("diagnostics")
     return _result(ok, msg)
 
 

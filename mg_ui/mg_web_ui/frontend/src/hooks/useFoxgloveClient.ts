@@ -192,6 +192,7 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
   const channelsByTopicRef = useRef<Map<string, ServerChannel>>(new Map())
   const subscriptionsRef = useRef<Map<SubscriptionId, (data: unknown) => void>>(new Map())
   const subscriptionChannelsRef = useRef<Map<SubscriptionId, ServerChannel>>(new Map())
+  const pendingSubsRef = useRef<Map<SubscriptionId, { topic: string; onMessage: (data: unknown) => void }>>(new Map())
   const messageReadersRef = useRef<Map<string, MessageReader>>(new Map())
   const messageWritersRef = useRef<Map<string, MessageWriter>>(new Map())
   const clientChIdRef = useRef<Map<string, number>>(new Map())
@@ -227,6 +228,7 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
       messageReadersRef.current.clear()
       clientChIdRef.current.clear()
       servicesByNameRef.current.clear()
+      pendingSubsRef.current.clear()
       if (mountedRef.current) {
         reconnectTimerRef.current = setTimeout(connect, RECONNECT_INTERVAL_MS)
       }
@@ -246,6 +248,18 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
           for (const ch of channels) {
             channelsByTopicRef.current.set(ch.topic, ch)
             channelsByTopicRef.current.set(normalizeName(ch.topic), ch)
+          }
+          const ws = wsRef.current
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            for (const [subId, pending] of pendingSubsRef.current) {
+              const channel = channelsByTopicRef.current.get(pending.topic)
+              if (channel) {
+                pendingSubsRef.current.delete(subId)
+                subscriptionsRef.current.set(subId, pending.onMessage)
+                subscriptionChannelsRef.current.set(subId, channel)
+                ws.send(JSON.stringify({ op: 'subscribe', subscriptions: [{ id: subId, channelId: channel.id }] }))
+              }
+            }
           }
         } else if (op === 'unadvertise') {
           const channelIds = msg['channelIds'] as ChannelId[]
@@ -350,9 +364,15 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
       if (!ws || ws.readyState !== WebSocket.OPEN) return () => {}
 
       const channel = channelsByTopicRef.current.get(topic)
-      if (!channel) return () => {}
-
       const subId = ++subIdCounterRef.current
+
+      if (!channel) {
+        pendingSubsRef.current.set(subId, { topic, onMessage })
+        return () => {
+          pendingSubsRef.current.delete(subId)
+        }
+      }
+
       subscriptionsRef.current.set(subId, onMessage)
       subscriptionChannelsRef.current.set(subId, channel)
       ws.send(JSON.stringify({ op: 'subscribe', subscriptions: [{ id: subId, channelId: channel.id }] }))

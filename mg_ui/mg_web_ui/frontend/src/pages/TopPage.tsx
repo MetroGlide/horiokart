@@ -1,12 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
-import {
-  DiagnosticArray,
-  SequencerStatus,
-  DIAG_COLOR,
-  DIAG_LEVEL,
-} from "../types";
+import { useDiagnosticsMap } from "../hooks/useDiagnosticsMap";
+import { SequencerStatus, DIAG_COLOR, DIAG_LEVEL } from "../types";
 
 export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
   const navigate = useNavigate();
@@ -15,15 +11,10 @@ export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
     "waypoint_sequencer_node/status",
     "mg_msgs/msg/SequencerStatus",
   );
-  const diagnostics = useTopicSubscriber<DiagnosticArray>(
-    client,
-    "/diagnostics",
-    "diagnostic_msgs/msg/DiagnosticArray",
-  );
+  const diagStatuses = useDiagnosticsMap(client);
 
-  const warnCount = diagnostics?.status.filter((s) => s.level >= 1).length ?? 0;
-  const errorCount =
-    diagnostics?.status.filter((s) => s.level >= 2).length ?? 0;
+  const warnCount = diagStatuses.filter((s) => s.level >= 1).length;
+  const errorCount = diagStatuses.filter((s) => s.level >= 2).length;
 
   const panels = [
     { label: "Waypoint Nav", to: "/waypoint", icon: "🗺️" },
@@ -40,7 +31,8 @@ export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
           <p className="text-2xl font-bold">{seqStatus?.state ?? "—"}</p>
           {seqStatus && (
             <p className="text-sm text-gray-400 mt-1">
-              {seqStatus.current_index + 1} / {seqStatus.total_waypoints} pts
+              {Math.min(seqStatus.current_index + 1, seqStatus.total_waypoints)}{" "}
+              / {seqStatus.total_waypoints} pts
               {seqStatus.distance_remaining > 0 &&
                 ` · ${seqStatus.distance_remaining.toFixed(1)} m`}
             </p>
@@ -60,18 +52,18 @@ export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
             <p className="text-2xl font-bold text-green-400">OK</p>
           )}
           <p className="text-sm text-gray-400 mt-1">
-            {diagnostics
-              ? `${diagnostics.status.length} items monitored`
+            {diagStatuses.length > 0
+              ? `${diagStatuses.length} items monitored`
               : "waiting…"}
           </p>
         </div>
       </section>
 
-      {diagnostics && warnCount + errorCount > 0 && (
+      {warnCount + errorCount > 0 && (
         <section className="bg-gray-800 rounded-lg p-4">
           <p className="text-xs text-gray-400 mb-2">Alerts</p>
           <ul className="space-y-1">
-            {diagnostics.status
+            {diagStatuses
               .filter((s) => s.level >= 1)
               .map((s) => (
                 <li key={s.name} className="flex gap-2 text-sm">

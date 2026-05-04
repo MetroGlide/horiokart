@@ -196,6 +196,18 @@ services:
         ros2 launch mg_diagnostics diagnostics.launch.py
       "
 
+  waypoint-editor:
+    <<: *develop-base
+    environment:
+      - DISPLAY=${DISPLAY}
+      - PYTHONUNBUFFERED=1
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        ros2 launch mg_waypoint_navigation waypoint_editor.launch.py
+      "
+
   system-manager:
     <<: *develop-base
     environment:

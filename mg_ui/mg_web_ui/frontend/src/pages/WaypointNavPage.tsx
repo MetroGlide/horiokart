@@ -82,7 +82,9 @@ export default function WaypointNavPage({
         {status && (
           <div className="mt-2 grid grid-cols-2 gap-2 text-sm text-gray-300">
             <span>
-              Waypoint: {status.current_index + 1} / {status.total_waypoints}
+              Waypoint:{" "}
+              {Math.min(status.current_index + 1, status.total_waypoints)} /{" "}
+              {status.total_waypoints}
             </span>
             <span>Remaining: {status.distance_remaining.toFixed(1)} m</span>
             {status.countdown_ms_remaining > 0 && (
