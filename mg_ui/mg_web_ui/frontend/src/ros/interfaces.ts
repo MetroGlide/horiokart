@@ -16,6 +16,21 @@ export const TOPICS = {
   INITIALPOSE: nodeNs(NODE_NS.LOCALIZATION, "/initialpose"),
   NAV_ACTION_STATUS: "/navigate_to_pose/_action/status",
   AMCL_POSE: "/amcl_pose",
+  MAP: "/map",
+  TF: "/tf",
+  TF_STATIC: "/tf_static",
+  SCAN_TOP: "/scan_top_lidar",
+  SCAN_FRONT: "/scan_front_lidar",
+  NAV_PLAN: "/plan",
+  ACTUAL_PATH: "/actual_path",
+  GLOBAL_COSTMAP: "/global_costmap/costmap",
+  LOCAL_COSTMAP: "/local_costmap/costmap",
+  WAYPOINT_MARKERS: "/waypoint_follower_node/waypoints_markers",
+  COLLISION_FRONT: "/collision_detector/polygon_front",
+  COLLISION_REAR: "/collision_detector/polygon_rear",
+  DEPTH_POINTS: "/camera/camera/depth/color/points",
+  CAMERA_IMAGE: "/camera/camera/color/image_raw/compressed",
+  PARTICLE_CLOUD: "/particle_cloud",
 } as const
 
 export const SERVICES = {
