@@ -7,7 +7,11 @@ import { useNav2Status } from "../hooks/useNav2Status";
 import { useSimulation } from "../contexts/SimulationContext";
 import { SequencerStatus, GOAL_STATUS, GOAL_STATUS_COLOR } from "../types";
 import { TOPICS, SERVICES } from "../ros/interfaces";
-import { RosViewer, CameraImagePanel } from "../components/ros-viewer";
+import {
+  RosViewer,
+  CameraImagePanel,
+  DepthImagePanel,
+} from "../components/ros-viewer";
 import ApiLogPanel from "../components/ApiLogPanel";
 
 const STATE_COLOR: Record<string, string> = {
@@ -151,7 +155,7 @@ export default function WaypointNavPage({
     <div className="flex gap-4 h-[calc(100vh-160px)]">
       <div className="w-72 flex-shrink-0 space-y-4 overflow-y-auto">
         <section className="bg-gray-800 rounded-lg p-4">
-          <p className="text-xs text-gray-400 mb-1">State</p>
+          <p className="text-xs text-gray-400 mb-1">Waypoint Sequencer State</p>
           <p className={`text-3xl font-bold ${stateColor}`}>
             {status?.state ?? "—"}
           </p>
@@ -363,8 +367,13 @@ export default function WaypointNavPage({
         <div className="flex-1 min-h-0 bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
           <RosViewer client={client} mode="3d" className="w-full h-full" />
         </div>
-        <div className="h-40 flex-shrink-0 rounded-lg overflow-hidden border border-gray-700">
-          <CameraImagePanel client={client} className="w-full h-full" />
+        <div className="flex gap-2 h-40 flex-shrink-0">
+          <div className="flex-1 rounded-lg overflow-hidden border border-gray-700">
+            <CameraImagePanel client={client} className="w-full h-full" />
+          </div>
+          <div className="flex-1 rounded-lg overflow-hidden border border-gray-700">
+            <DepthImagePanel client={client} className="w-full h-full" />
+          </div>
         </div>
       </div>
     </div>

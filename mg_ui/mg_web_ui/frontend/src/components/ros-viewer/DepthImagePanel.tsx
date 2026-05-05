@@ -1,16 +1,16 @@
 import { FoxgloveClientHandle } from "../../hooks/useFoxgloveClient";
-import { useColorImage } from "./hooks/useColorImage";
+import { useDepthImage } from "./hooks/useDepthImage";
 
-interface CameraImagePanelProps {
+interface DepthImagePanelProps {
   client: FoxgloveClientHandle;
   className?: string;
 }
 
-export default function CameraImagePanel({
+export default function DepthImagePanel({
   client,
   className,
-}: CameraImagePanelProps) {
-  const src = useColorImage(client);
+}: DepthImagePanelProps) {
+  const src = useDepthImage(client);
 
   return (
     <div
@@ -19,11 +19,11 @@ export default function CameraImagePanel({
       {src ? (
         <img
           src={src}
-          alt="camera"
+          alt="depth"
           className="max-w-full max-h-full object-contain"
         />
       ) : (
-        <span className="text-gray-500 text-xs">No camera image</span>
+        <span className="text-gray-500 text-xs">No depth image</span>
       )}
     </div>
   );

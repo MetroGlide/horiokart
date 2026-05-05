@@ -40,18 +40,29 @@ function SingleMarker({ marker }: { marker: Marker }) {
       );
 
     case MARKER_TYPE.ARROW: {
+      const length = scale.x;
+      const shaftR = scale.y / 2;
+      const headR = scale.z > 0 ? scale.z / 2 : scale.y;
       return (
         <group position={[x, y, z]} rotation={rotation}>
-          <mesh position={[0, scale.y * 0.3, 0]}>
-            <cylinderGeometry
-              args={[scale.x * 0.1, scale.x * 0.1, scale.y * 0.6, 8]}
-            />
-            <meshBasicMaterial color={matColor} transparent opacity={color.a} />
-          </mesh>
-          <mesh position={[0, scale.y * 0.75, 0]}>
-            <coneGeometry args={[scale.x * 0.2, scale.y * 0.4, 8]} />
-            <meshBasicMaterial color={matColor} transparent opacity={color.a} />
-          </mesh>
+          <group rotation={[0, 0, -Math.PI / 2]}>
+            <mesh position={[0, length * 0.35, 0]}>
+              <cylinderGeometry args={[shaftR, shaftR, length * 0.7, 8]} />
+              <meshBasicMaterial
+                color={matColor}
+                transparent
+                opacity={color.a}
+              />
+            </mesh>
+            <mesh position={[0, length * 0.85, 0]}>
+              <coneGeometry args={[headR, length * 0.3, 8]} />
+              <meshBasicMaterial
+                color={matColor}
+                transparent
+                opacity={color.a}
+              />
+            </mesh>
+          </group>
         </group>
       );
     }
@@ -79,6 +90,77 @@ function SingleMarker({ marker }: { marker: Marker }) {
             );
           })}
         </group>
+      );
+
+    case MARKER_TYPE.SPHERE_LIST:
+      if (points.length === 0) return null;
+      return (
+        <group>
+          {points.map((p, i) => (
+            <mesh key={i} position={[p.x, p.y, p.z]}>
+              <sphereGeometry args={[scale.x / 2, 8, 8]} />
+              <meshBasicMaterial
+                color={
+                  marker.colors[i]
+                    ? new THREE.Color(
+                        marker.colors[i].r,
+                        marker.colors[i].g,
+                        marker.colors[i].b,
+                      )
+                    : matColor
+                }
+                transparent
+                opacity={marker.colors[i] ? marker.colors[i].a : color.a}
+              />
+            </mesh>
+          ))}
+        </group>
+      );
+
+    case MARKER_TYPE.CUBE_LIST:
+      if (points.length === 0) return null;
+      return (
+        <group>
+          {points.map((p, i) => (
+            <mesh key={i} position={[p.x, p.y, p.z]} rotation={rotation}>
+              <boxGeometry args={[scale.x, scale.y, scale.z]} />
+              <meshBasicMaterial
+                color={
+                  marker.colors[i]
+                    ? new THREE.Color(
+                        marker.colors[i].r,
+                        marker.colors[i].g,
+                        marker.colors[i].b,
+                      )
+                    : matColor
+                }
+                transparent
+                opacity={marker.colors[i] ? marker.colors[i].a : color.a}
+              />
+            </mesh>
+          ))}
+        </group>
+      );
+
+    case MARKER_TYPE.POINTS:
+      if (points.length === 0) return null;
+      return (
+        <points>
+          <bufferGeometry>
+            <bufferAttribute
+              attach="attributes-position"
+              args={[
+                new Float32Array(points.flatMap((p) => [p.x, p.y, p.z])),
+                3,
+              ]}
+            />
+          </bufferGeometry>
+          <pointsMaterial
+            color={matColor}
+            size={scale.x > 0 ? scale.x : 0.1}
+            sizeAttenuation
+          />
+        </points>
       );
 
     case MARKER_TYPE.TEXT_VIEW_FACING:

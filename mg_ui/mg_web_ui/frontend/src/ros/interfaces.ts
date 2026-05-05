@@ -25,11 +25,13 @@ export const TOPICS = {
   ACTUAL_PATH: "/actual_path",
   GLOBAL_COSTMAP: "/global_costmap/costmap",
   LOCAL_COSTMAP: "/local_costmap/costmap",
-  WAYPOINT_MARKERS: "/waypoint_follower_node/waypoints_markers",
+  WAYPOINT_MARKERS: "/waypoint_sequencer_node/waypoints_markers",
   COLLISION_FRONT: "/collision_detector/polygon_front",
   COLLISION_REAR: "/collision_detector/polygon_rear",
-  DEPTH_POINTS: "/camera/camera/depth/color/points",
-  CAMERA_IMAGE: "/camera/camera/color/image_raw/compressed",
+  DEPTH_POINTS: "/rs_d435i/depth/color/points",
+  DEPTH_IMAGE: "/rs_d435i/depth/image_raw",
+  // CAMERA_IMAGE: "/rs_d435i/color/image_raw/compressed",
+  CAMERA_IMAGE: "/rs_d435i/color/image_raw",
   PARTICLE_CLOUD: "/particle_cloud",
 } as const
 

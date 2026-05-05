@@ -1,39 +1,55 @@
-import { useMemo } from "react";
+import { useRef } from "react";
 import * as THREE from "three";
+import { Line } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
 import { FoxgloveClientHandle } from "../../../hooks/useFoxgloveClient";
-import { useRobotPose } from "../hooks/useRobotPose";
+import { TfBuffer } from "../hooks/useTfBuffer";
+
+interface Props {
+  client: FoxgloveClientHandle;
+  tfBuffer: TfBuffer;
+  length?: number;
+  width?: number;
+}
 
 export default function RobotArrow({
-  client,
-}: {
-  client: FoxgloveClientHandle;
-}) {
-  const pose = useRobotPose(client);
+  tfBuffer,
+  length = 0.8,
+  width = 0.6,
+}: Props) {
+  const groupRef = useRef<THREE.Group>(null);
 
-  const rotation = useMemo(() => {
-    if (!pose) return new THREE.Euler();
-    const { x, y, z, w } = pose.pose.pose.orientation;
-    return new THREE.Euler().setFromQuaternion(
-      new THREE.Quaternion(x, y, z, w),
-    );
-  }, [pose]);
+  useFrame(() => {
+    const tf = tfBuffer.lookupTransform("map", "base_link");
+    if (!tf || !groupRef.current) return;
+    const pos = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    tf.decompose(pos, quat, scale);
+    groupRef.current.position.set(pos.x, pos.y, 0.05);
+    groupRef.current.rotation.setFromQuaternion(quat);
+  });
 
-  if (!pose) return null;
+  const hl = length / 2;
+  const hw = width / 2;
 
-  const { x, y } = pose.pose.pose.position;
+  const outline: [number, number, number][] = [
+    [hl, hw, 0],
+    [hl, -hw, 0],
+    [-hl, -hw, 0],
+    [-hl, hw, 0],
+    [hl, hw, 0],
+  ];
+
+  const arrow: [number, number, number][] = [
+    [0, 0, 0],
+    [hl * 0.8, 0, 0],
+  ];
 
   return (
-    <group position={[x, y, 0.05]} rotation={rotation}>
-      {/* shaft */}
-      <mesh position={[0, 0.15, 0]}>
-        <cylinderGeometry args={[0.08, 0.08, 0.3, 8]} />
-        <meshBasicMaterial color="#00aaff" />
-      </mesh>
-      {/* arrowhead */}
-      <mesh position={[0, 0.4, 0]}>
-        <coneGeometry args={[0.15, 0.3, 8]} />
-        <meshBasicMaterial color="#00aaff" />
-      </mesh>
+    <group ref={groupRef}>
+      <Line points={outline} color="#00aaff" lineWidth={2} />
+      <Line points={arrow} color="#00aaff" lineWidth={3} />
     </group>
   );
 }

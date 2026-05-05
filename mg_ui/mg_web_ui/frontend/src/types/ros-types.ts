@@ -154,6 +154,16 @@ export interface PointField {
   count: number
 }
 
+export interface RosImage {
+  header: Header
+  height: number
+  width: number
+  encoding: string
+  is_bigendian: boolean
+  step: number
+  data: Uint8Array | number[]
+}
+
 export interface PointCloud2 {
   header: Header
   height: number

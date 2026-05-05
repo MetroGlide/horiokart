@@ -1,6 +1,8 @@
-import { Suspense } from "react";
+import { Suspense, useEffect, useRef } from "react";
+import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
 import { MapControls, OrbitControls } from "@react-three/drei";
+import { useThree } from "@react-three/fiber";
 import { FoxgloveClientHandle } from "../../hooks/useFoxgloveClient";
 import { useVisualization } from "../../contexts/VisualizationContext";
 import { useTfBuffer } from "./hooks/useTfBuffer";
@@ -17,6 +19,51 @@ import PointCloud2Layer from "./layers/PointCloud2Layer";
 
 export type ViewerMode = "2d" | "3d";
 
+function YawControl2D() {
+  const { camera, gl } = useThree();
+  const dragging = useRef(false);
+  const lastX = useRef(0);
+
+  useEffect(() => {
+    const el = gl.domElement;
+
+    const onDown = (e: MouseEvent) => {
+      if (e.button === 2) {
+        dragging.current = true;
+        lastX.current = e.clientX;
+        e.preventDefault();
+      }
+    };
+    const onMove = (e: MouseEvent) => {
+      if (!dragging.current) return;
+      const dx = e.clientX - lastX.current;
+      lastX.current = e.clientX;
+      const angle = -dx * 0.005;
+      const { x, y } = camera.up;
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      camera.up.set(x * c - y * s, x * s + y * c, 0);
+    };
+    const onUp = () => {
+      dragging.current = false;
+    };
+    const onContext = (e: Event) => e.preventDefault();
+
+    el.addEventListener("contextmenu", onContext);
+    el.addEventListener("mousedown", onDown);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      el.removeEventListener("contextmenu", onContext);
+      el.removeEventListener("mousedown", onDown);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [camera, gl]);
+
+  return null;
+}
+
 interface SceneProps {
   client: FoxgloveClientHandle;
   mode: ViewerMode;
@@ -29,7 +76,10 @@ function Scene({ client, mode }: SceneProps) {
   return (
     <>
       {mode === "2d" ? (
-        <MapControls makeDefault screenSpacePanning />
+        <>
+          <MapControls makeDefault screenSpacePanning />
+          <YawControl2D />
+        </>
       ) : (
         <OrbitControls makeDefault />
       )}
@@ -68,7 +118,7 @@ function Scene({ client, mode }: SceneProps) {
           tfBuffer={tfBuffer}
         />
       )}
-      {layers.robotPose && <RobotArrow client={client} />}
+      {layers.robotPose && <RobotArrow client={client} tfBuffer={tfBuffer} />}
       {layers.particleCloud && <ParticleCloud client={client} />}
       {layers.planPath && (
         <PathLine client={client} topic={TOPICS.NAV_PLAN} color="#ff0000" />
@@ -77,7 +127,9 @@ function Scene({ client, mode }: SceneProps) {
         <PathLine client={client} topic={TOPICS.ACTUAL_PATH} color="#aa55ff" />
       )}
       {layers.waypointMarkers && <WaypointMarkers client={client} />}
-      {layers.collisionPolygons && <CollisionPolygons client={client} />}
+      {layers.collisionPolygons && (
+        <CollisionPolygons client={client} tfBuffer={tfBuffer} />
+      )}
       {layers.pointCloud && (
         <PointCloud2Layer client={client} tfBuffer={tfBuffer} />
       )}
