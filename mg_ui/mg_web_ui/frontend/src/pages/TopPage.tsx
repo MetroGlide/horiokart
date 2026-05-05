@@ -1,18 +1,41 @@
 import { useNavigate } from "react-router-dom";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { useDiagnosticsMap } from "../hooks/useDiagnosticsMap";
+import { useVisualization } from "../contexts/VisualizationContext";
 import { DIAG_COLOR, DIAG_LEVEL } from "../types";
+import SystemMetrics from "../components/SystemMetrics";
 
 const navCards = [
-  { label: "Waypoint Nav", to: "/waypoint", icon: "🗺️", description: "ウェイポイントナビゲーション制御" },
-  { label: "SLAM", to: "/slam", icon: "📡", description: "SLAM・地図保存・ローカライゼーション" },
-  { label: "System", to: "/system", icon: "🛠️", description: "サービス管理・診断情報" },
-  { label: "Setting", to: "/setting", icon: "⚙️", description: "シミュレーションモード・表示設定" },
+  {
+    label: "Waypoint Nav",
+    to: "/waypoint",
+    icon: "🗺️",
+    description: "ウェイポイントナビゲーション制御",
+  },
+  {
+    label: "SLAM",
+    to: "/slam",
+    icon: "📡",
+    description: "SLAM・地図保存・ローカライゼーション",
+  },
+  {
+    label: "System",
+    to: "/system",
+    icon: "🛠️",
+    description: "サービス管理・診断情報",
+  },
+  {
+    label: "Setting",
+    to: "/setting",
+    icon: "⚙️",
+    description: "シミュレーションモード・表示設定",
+  },
 ];
 
 export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
   const navigate = useNavigate();
   const diagStatuses = useDiagnosticsMap(client);
+  const { overlays } = useVisualization();
 
   const warnCount = diagStatuses.filter((s) => s.level >= 1).length;
   const errorCount = diagStatuses.filter((s) => s.level >= 2).length;
@@ -71,6 +94,13 @@ export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
                 </li>
               ))}
           </ul>
+        </section>
+      )}
+
+      {overlays.systemMetrics && (
+        <section className="bg-gray-800 rounded-lg p-4">
+          <p className="text-xs text-gray-400 mb-2">System Resources</p>
+          <SystemMetrics client={client} />
         </section>
       )}
     </div>

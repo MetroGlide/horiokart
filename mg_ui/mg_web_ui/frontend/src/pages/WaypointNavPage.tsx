@@ -5,11 +5,24 @@ import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
 import { useServiceCaller } from "../hooks/useServiceCaller";
 import { useNav2Status } from "../hooks/useNav2Status";
 import { useSimulation } from "../contexts/SimulationContext";
-import { SequencerStatus, GOAL_STATUS, GOAL_STATUS_COLOR } from "../types";
+import { useVisualization } from "../contexts/VisualizationContext";
+import { useTeleop } from "../contexts/TeleopContext";
+import {
+  SequencerStatus,
+  OdomMsg,
+  BoolMsg,
+  CollisionDetectorState,
+  TwistMsg,
+  GOAL_STATUS,
+  GOAL_STATUS_COLOR,
+} from "../types";
 import { TOPICS, SERVICES } from "../ros/interfaces";
 import ApiLogPanel from "../components/ApiLogPanel";
 import SectionCard from "../components/SectionCard";
 import RobotPageLayout from "../components/RobotPageLayout";
+import JoystickPad from "../components/JoystickPad";
+import VelocityGauge from "../components/VelocityGauge";
+import SystemMetrics from "../components/SystemMetrics";
 
 const STATE_COLOR: Record<string, string> = {
   IDLE: "text-gray-300",
@@ -61,6 +74,13 @@ export default function WaypointNavPage({
   const [jumpIndex, setJumpIndex] = useState(0);
   const { call, loading, error } = useServiceCaller(client);
   const { isSimulation } = useSimulation();
+  const { overlays } = useVisualization();
+  const {
+    maxLinear,
+    maxAngular,
+    effectiveGaugeMaxLinear,
+    effectiveGaugeMaxAngular,
+  } = useTeleop();
 
   const status = useTopicSubscriber<SequencerStatus>(
     client,
@@ -69,6 +89,30 @@ export default function WaypointNavPage({
   );
 
   const nav2 = useNav2Status(client);
+
+  const odom = useTopicSubscriber<OdomMsg>(
+    client,
+    TOPICS.ODOM,
+    "nav_msgs/msg/Odometry",
+  );
+
+  const emergencyStop = useTopicSubscriber<BoolMsg>(
+    client,
+    TOPICS.EMERGENCY_STOP,
+    "std_msgs/msg/Bool",
+  );
+
+  const collisionState = useTopicSubscriber<CollisionDetectorState>(
+    client,
+    TOPICS.COLLISION_STATE,
+    "nav2_msgs/msg/CollisionDetectorState",
+  );
+
+  const cmdVelMsg = useTopicSubscriber<TwistMsg>(
+    client,
+    TOPICS.CMD_VEL,
+    "geometry_msgs/msg/Twist",
+  );
 
   const [simLoading, setSimLoading] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
@@ -217,6 +261,46 @@ export default function WaypointNavPage({
                 </p>
               </div>
             </div>
+          </SectionCard>
+          <SectionCard title="Safety">
+            <div className="flex flex-wrap gap-2 text-sm">
+              <span
+                className={`px-2 py-0.5 rounded font-semibold ${
+                  emergencyStop?.data
+                    ? "bg-red-600 text-white"
+                    : "bg-gray-700 text-gray-400"
+                }`}
+              >
+                E-Stop {emergencyStop?.data ? "ACTIVE" : "OFF"}
+              </span>
+              {collisionState &&
+                collisionState.polygons.map((name, i) => (
+                  <span
+                    key={name}
+                    className={`px-2 py-0.5 rounded text-xs font-medium ${
+                      collisionState.detections[i]
+                        ? "bg-orange-600 text-white"
+                        : "bg-gray-700 text-gray-500"
+                    }`}
+                  >
+                    {name}
+                  </span>
+                ))}
+              {!collisionState && (
+                <span className="text-xs text-gray-500">
+                  collision: no data
+                </span>
+              )}
+            </div>
+          </SectionCard>
+          <SectionCard title="Velocity">
+            <VelocityGauge
+              cmdLinear={cmdVelMsg?.linear.x ?? 0}
+              cmdAngular={cmdVelMsg?.angular.z ?? 0}
+              odom={odom}
+              maxLinear={effectiveGaugeMaxLinear}
+              maxAngular={effectiveGaugeMaxAngular}
+            />
           </SectionCard>
         </div>
       ),
@@ -397,6 +481,30 @@ export default function WaypointNavPage({
       ]}
       viewerMode="3d"
       showCameraPanel
+      viewerOverlay={
+        <>
+          <div className="absolute top-10 left-2 flex flex-col gap-2 pointer-events-auto w-40">
+            {overlays.velocityGauge && (
+              <VelocityGauge
+                cmdLinear={cmdVelMsg?.linear.x ?? 0}
+                cmdAngular={cmdVelMsg?.angular.z ?? 0}
+                odom={odom}
+                compact
+                maxLinear={effectiveGaugeMaxLinear}
+                maxAngular={effectiveGaugeMaxAngular}
+              />
+            )}
+            {overlays.systemMetrics && (
+              <SystemMetrics client={client} compact />
+            )}
+          </div>
+          {overlays.joystick && (
+            <div className="absolute bottom-4 right-4 pointer-events-auto">
+              <JoystickPad client={client} />
+            </div>
+          )}
+        </>
+      }
     />
   );
 }

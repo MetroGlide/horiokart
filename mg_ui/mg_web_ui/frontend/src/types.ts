@@ -72,3 +72,30 @@ export const GOAL_STATUS_COLOR: Record<number, string> = {
   5: 'text-gray-400',
   6: 'text-red-400',
 }
+
+export interface Float32Msg {
+  data: number
+}
+
+export interface BoolMsg {
+  data: boolean
+}
+
+export interface OdomMsg {
+  twist: {
+    twist: {
+      linear: { x: number; y: number; z: number }
+      angular: { x: number; y: number; z: number }
+    }
+  }
+}
+
+export interface CollisionDetectorState {
+  polygons: string[]
+  detections: boolean[]
+}
+
+export interface TwistMsg {
+  linear: { x: number; y: number; z: number }
+  angular: { x: number; y: number; z: number }
+}

@@ -8,6 +8,7 @@ import {
   DepthImagePanel,
   ViewerMode,
 } from "./ros-viewer";
+import { ReactNode } from "react";
 
 interface RobotPageLayoutProps {
   client: FoxgloveClientHandle;
@@ -15,6 +16,7 @@ interface RobotPageLayoutProps {
   defaultOpen?: string[];
   viewerMode?: ViewerMode;
   showCameraPanel?: boolean;
+  viewerOverlay?: ReactNode;
 }
 
 export default function RobotPageLayout({
@@ -23,6 +25,7 @@ export default function RobotPageLayout({
   defaultOpen = [],
   viewerMode,
   showCameraPanel = false,
+  viewerOverlay,
 }: RobotPageLayoutProps) {
   const { enabled: vizEnabled, layers } = useVisualization();
   const hasViewer = vizEnabled && viewerMode != null;
@@ -41,12 +44,17 @@ export default function RobotPageLayout({
 
       {hasViewer && (
         <div className="flex-1 flex flex-col gap-2 min-h-0">
-          <div className="flex-1 min-h-0 bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
+          <div className="flex-1 min-h-0 bg-gray-900 rounded-lg overflow-hidden border border-gray-700 relative">
             <RosViewer
               client={client}
               initialMode={viewerMode}
               className="w-full h-full"
             />
+            {viewerOverlay && (
+              <div className="absolute inset-0 pointer-events-none">
+                {viewerOverlay}
+              </div>
+            )}
           </div>
           {showCameraPanel && layers.cameraImage && (
             <div className="flex gap-2 h-40 flex-shrink-0">

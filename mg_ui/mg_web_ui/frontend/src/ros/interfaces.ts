@@ -33,6 +33,12 @@ export const TOPICS = {
   // CAMERA_IMAGE: "/rs_d435i/color/image_raw/compressed",
   CAMERA_IMAGE: "/rs_d435i/color/image_raw",
   PARTICLE_CLOUD: "/particle_cloud",
+  CMD_VEL: "/cmd_vel",
+  ODOM: "/odom",
+  EMERGENCY_STOP: "/motor_driver_node/emergency_stop",
+  COLLISION_STATE: "/collision_detector_state",
+  CPU_USAGE: "/cpu_usage",
+  MEMORY_USAGE: "/memory_usage",
 } as const
 
 export const SERVICES = {
@@ -64,6 +70,17 @@ export const SCHEMAS: Record<string, RosSchema> = {
     encoding: 'cdr',
     schemaName: 'std_msgs/msg/String',
     schema: 'string data',
+  },
+  'geometry_msgs/msg/Twist': {
+    encoding: 'cdr',
+    schemaName: 'geometry_msgs/msg/Twist',
+    schema: `geometry_msgs/Vector3 linear
+geometry_msgs/Vector3 angular
+================================================================================
+MSG: geometry_msgs/Vector3
+float64 x
+float64 y
+float64 z`,
   },
   'geometry_msgs/msg/PoseWithCovarianceStamped': {
     encoding: 'cdr',

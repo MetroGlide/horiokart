@@ -1,5 +1,10 @@
 import { useSimulation } from "../contexts/SimulationContext";
-import { useVisualization, LayerKey } from "../contexts/VisualizationContext";
+import {
+  useVisualization,
+  LayerKey,
+  OverlayKey,
+} from "../contexts/VisualizationContext";
+import { useTeleop } from "../contexts/TeleopContext";
 
 interface LayerGroup {
   label: string;
@@ -47,6 +52,30 @@ const LAYER_GROUPS: LayerGroup[] = [
   },
 ];
 
+interface OverlayItem {
+  key: OverlayKey;
+  label: string;
+  description: string;
+}
+
+const OVERLAY_CONFIG: OverlayItem[] = [
+  {
+    key: "joystick",
+    label: "Joystick Pad",
+    description: "操作パッド（選択式、デフォルトOFF）",
+  },
+  {
+    key: "velocityGauge",
+    label: "Velocity Gauge",
+    description: "速度指令値・実測値メーター",
+  },
+  {
+    key: "systemMetrics",
+    label: "System Metrics",
+    description: "CPU / メモリ使用率",
+  },
+];
+
 function Toggle({ value, onChange }: { value: boolean; onChange: () => void }) {
   return (
     <button
@@ -66,7 +95,20 @@ function Toggle({ value, onChange }: { value: boolean; onChange: () => void }) {
 
 export default function SettingPage() {
   const { isSimulation, setIsSimulation } = useSimulation();
-  const { enabled, layers, setEnabled, toggleLayer } = useVisualization();
+  const { enabled, layers, overlays, setEnabled, toggleLayer, toggleOverlay } =
+    useVisualization();
+  const {
+    maxLinear,
+    maxAngular,
+    gaugeMaxLinear,
+    gaugeMaxAngular,
+    gaugeSyncWithPad,
+    setMaxLinear,
+    setMaxAngular,
+    setGaugeMaxLinear,
+    setGaugeMaxAngular,
+    setGaugeSyncWithPad,
+  } = useTeleop();
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -128,6 +170,111 @@ export default function SettingPage() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="bg-gray-800 rounded-lg p-4 space-y-4">
+        <p className="text-xs text-gray-400">Viewer Overlays</p>
+        <p className="text-xs text-gray-500">
+          可視化領域に重ねて表示する要素を設定します。
+        </p>
+        <div className="space-y-2">
+          {OVERLAY_CONFIG.map(({ key, label, description }) => (
+            <div key={key} className="flex items-center gap-3">
+              <Toggle
+                value={overlays[key]}
+                onChange={() => toggleOverlay(key)}
+              />
+              <div>
+                <span className="text-sm text-gray-300">{label}</span>
+                <p className="text-xs text-gray-500">{description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="bg-gray-800 rounded-lg p-4 space-y-4">
+        <p className="text-xs text-gray-400">Teleop</p>
+        <div>
+          <p className="text-xs text-gray-400 mb-2">Pad 速度上限</p>
+          <div className="grid grid-cols-2 gap-4">
+            <label className="flex flex-col gap-1">
+              <span className="text-sm text-gray-300">Max Linear (m/s)</span>
+              <input
+                type="number"
+                min={0.1}
+                max={2.0}
+                step={0.1}
+                value={maxLinear}
+                onChange={(e) => setMaxLinear(Number(e.target.value))}
+                className="w-full bg-gray-700 rounded px-2 py-1 text-sm"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-sm text-gray-300">Max Angular (rad/s)</span>
+              <input
+                type="number"
+                min={0.1}
+                max={2.0}
+                step={0.1}
+                value={maxAngular}
+                onChange={(e) => setMaxAngular(Number(e.target.value))}
+                className="w-full bg-gray-700 rounded px-2 py-1 text-sm"
+              />
+            </label>
+          </div>
+        </div>
+        <div className="pt-3 border-t border-gray-700 space-y-3">
+          <div className="flex items-center gap-3">
+            <Toggle
+              value={gaugeSyncWithPad}
+              onChange={() => setGaugeSyncWithPad(!gaugeSyncWithPad)}
+            />
+            <div>
+              <span className="text-sm text-gray-300">
+                Gauge: Pad 上限と同期
+              </span>
+              <p className="text-xs text-gray-500">
+                ONのときメーター表示上限 = パッド速度上限
+              </p>
+            </div>
+          </div>
+          {!gaugeSyncWithPad && (
+            <div>
+              <p className="text-xs text-gray-400 mb-2">Gauge 表示上限</p>
+              <div className="grid grid-cols-2 gap-4">
+                <label className="flex flex-col gap-1">
+                  <span className="text-sm text-gray-300">
+                    Max Linear (m/s)
+                  </span>
+                  <input
+                    type="number"
+                    min={0.1}
+                    max={5.0}
+                    step={0.1}
+                    value={gaugeMaxLinear}
+                    onChange={(e) => setGaugeMaxLinear(Number(e.target.value))}
+                    className="w-full bg-gray-700 rounded px-2 py-1 text-sm"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-sm text-gray-300">
+                    Max Angular (rad/s)
+                  </span>
+                  <input
+                    type="number"
+                    min={0.1}
+                    max={5.0}
+                    step={0.1}
+                    value={gaugeMaxAngular}
+                    onChange={(e) => setGaugeMaxAngular(Number(e.target.value))}
+                    className="w-full bg-gray-700 rounded px-2 py-1 text-sm"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
