@@ -38,6 +38,21 @@ _BEST_EFFORT_QOS = QoSProfile(
     durability=DurabilityPolicy.VOLATILE,
 )
 
+MONITORED_TOPICS: list[dict] = [
+    {
+        "name": "waypoint_sequencer_node/status",
+        "msg_type": SequencerStatus,
+        "expected_hz": 10.0,
+        "qos": _BEST_EFFORT_QOS,
+    },
+    {
+        "name": "amcl_pose",
+        "msg_type": PoseWithCovarianceStamped,
+        "expected_hz": 1.0,
+        "qos": None,
+    },
+]
+
 
 class DiagnosticsNode(Node):
     def __init__(self):
@@ -45,22 +60,18 @@ class DiagnosticsNode(Node):
 
         self._declare_parameters()
 
-        self._sequencer_monitor = TopicRateMonitor()
-        self._amcl_monitor = TopicRateMonitor()
-        self._amcl_covariance_trace_xy: float = 0.0
-
-        self.create_subscription(
-            SequencerStatus,
-            'waypoint_sequencer_node/status',
-            lambda msg: self._sequencer_monitor.tick(),
-            _BEST_EFFORT_QOS,
-        )
-        self.create_subscription(
-            PoseWithCovarianceStamped,
-            'amcl_pose',
-            self._on_amcl_pose,
-            10,
-        )
+        self._rate_monitors: dict[str, TopicRateMonitor] = {}
+        for topic in MONITORED_TOPICS:
+            name = topic["name"]
+            monitor = TopicRateMonitor()
+            self._rate_monitors[name] = monitor
+            qos = topic["qos"] if topic["qos"] is not None else 10
+            self.create_subscription(
+                topic["msg_type"],
+                name,
+                lambda msg, m=monitor: m.tick(),
+                qos,
+            )
 
         self._pub = self.create_publisher(DiagnosticArray, '/diagnostics', 10)
         self.create_timer(1.0, self._publish)
@@ -73,41 +84,16 @@ class DiagnosticsNode(Node):
             'controller_server',
             'planner_server',
         ])
-        self.declare_parameter('sequencer_expected_hz', 10.0)
-        self.declare_parameter('amcl_expected_hz', 1.0)
         self.declare_parameter('hz_warn_ratio', 0.5)
-        self.declare_parameter('amcl_covariance_warn', 2.0)
-        self.declare_parameter('amcl_covariance_error', 10.0)
 
         self._monitored_nodes: list[str] = list(
             self.get_parameter(
                 'monitored_nodes').get_parameter_value().string_array_value
         )
-        self._sequencer_expected_hz: float = (
-            self.get_parameter(
-                'sequencer_expected_hz').get_parameter_value().double_value
-        )
-        self._amcl_expected_hz: float = (
-            self.get_parameter(
-                'amcl_expected_hz').get_parameter_value().double_value
-        )
         self._hz_warn_ratio: float = (
             self.get_parameter(
                 'hz_warn_ratio').get_parameter_value().double_value
         )
-        self._amcl_warn: float = (
-            self.get_parameter(
-                'amcl_covariance_warn').get_parameter_value().double_value
-        )
-        self._amcl_error: float = (
-            self.get_parameter(
-                'amcl_covariance_error').get_parameter_value().double_value
-        )
-
-    def _on_amcl_pose(self, msg: PoseWithCovarianceStamped) -> None:
-        self._amcl_monitor.tick()
-        cov = msg.pose.covariance
-        self._amcl_covariance_trace_xy = cov[0] + cov[7]
 
     def _make_hz_status(self, name: str, hz: float, expected: float) -> DiagnosticStatus:
         status = DiagnosticStatus()
@@ -149,42 +135,18 @@ class DiagnosticsNode(Node):
     def _check_topics(self) -> list[DiagnosticStatus]:
         return [
             self._make_hz_status(
-                'waypoint_sequencer_node/status',
-                self._sequencer_monitor.hz(),
-                self._sequencer_expected_hz,
-            ),
-            self._make_hz_status(
-                'amcl_pose',
-                self._amcl_monitor.hz(),
-                self._amcl_expected_hz,
-            ),
+                topic["name"],
+                self._rate_monitors[topic["name"]].hz(),
+                topic["expected_hz"],
+            )
+            for topic in MONITORED_TOPICS
         ]
-
-    def _check_amcl_quality(self) -> DiagnosticStatus:
-        status = DiagnosticStatus()
-        status.name = 'localization/amcl_covariance'
-        status.hardware_id = 'amcl'
-        val = self._amcl_covariance_trace_xy
-        status.values.append(KeyValue(key='trace_xy', value=f'{val:.4f}'))
-
-        if val >= self._amcl_error:
-            status.level = DiagnosticStatus.ERROR
-            status.message = f'covariance too large: {val:.3f}'
-        elif val >= self._amcl_warn:
-            status.level = DiagnosticStatus.WARN
-            status.message = f'covariance elevated: {val:.3f}'
-        else:
-            status.level = DiagnosticStatus.OK
-            status.message = f'ok: {val:.3f}'
-
-        return status
 
     def _publish(self) -> None:
         msg = DiagnosticArray()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.status.extend(self._check_nodes())
         msg.status.extend(self._check_topics())
-        msg.status.append(self._check_amcl_quality())
         self._pub.publish(msg)
 
 
