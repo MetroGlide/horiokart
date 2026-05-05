@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 import asyncio
+import json
 import logging
 import math
 import os
 import subprocess
+from pathlib import Path
 
 import docker
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -187,6 +189,11 @@ class DockerManager:
 
 manager = DockerManager()
 
+SETTINGS_DIR = Path(os.environ.get(
+    "UI_DATA_DIR", "/root/ros2_data/mg_ui_local"))
+SETTINGS_FILE = SETTINGS_DIR / "ui_settings.json"
+SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
+
 
 def _result(ok: bool, msg: str) -> dict:
     level = logging.INFO if ok else logging.WARNING
@@ -198,6 +205,30 @@ def _result(ok: bool, msg: str) -> dict:
 @app.get("/status")
 def get_status():
     return manager.get_status()
+
+
+@app.get("/settings")
+def get_settings():
+    if not SETTINGS_FILE.exists():
+        return {}
+    try:
+        return json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.error("get_settings failed: %s", e)
+        return {}
+
+
+@app.post("/settings")
+async def post_settings(request: Request):
+    try:
+        body = await request.json()
+        tmp = SETTINGS_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
+        tmp.rename(SETTINGS_FILE)
+        return {"success": True, "message": ""}
+    except Exception as e:
+        logger.error("post_settings failed: %s", e)
+        return {"success": False, "message": str(e)}
 
 
 @app.post("/slam/start")

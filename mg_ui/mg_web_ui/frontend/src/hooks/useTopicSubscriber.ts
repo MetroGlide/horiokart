@@ -14,7 +14,7 @@ export function useTopicSubscriber<T>(
       setData(msg as T)
     })
     return unsubscribe
-  }, [client, client.status, topic, schemaName])
+  }, [client, client.status, client.channelUpdateCount, topic, schemaName])
 
   return data
 }

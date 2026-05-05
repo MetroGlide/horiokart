@@ -217,6 +217,7 @@ services:
       - HOST_HOME=${HOME}
       - SIMULATION_WORLD=warehouse
       - SIMULATION_ROBOT_NAME=mg
+      - UI_DATA_DIR=/root/ros2_data/mg_ui_local
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - $HOME/.Xauthority/:/root/.Xauthority

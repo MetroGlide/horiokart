@@ -1,12 +1,13 @@
-import { Suspense, useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { MapControls, OrbitControls } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import { FoxgloveClientHandle } from "../../hooks/useFoxgloveClient";
 import { useVisualization } from "../../contexts/VisualizationContext";
-import { useTfBuffer } from "./hooks/useTfBuffer";
+import { useTfBuffer, TfBuffer } from "./hooks/useTfBuffer";
 import { TOPICS } from "../../ros/interfaces";
+import { loadSettings, saveSettings } from "../../utils/settingsApi";
 import MapLayer from "./layers/MapLayer";
 import CostmapLayer from "./layers/CostmapLayer";
 import LaserScanLayer from "./layers/LaserScanLayer";
@@ -67,9 +68,26 @@ function YawControl2D() {
 interface SceneProps {
   client: FoxgloveClientHandle;
   mode: ViewerMode;
+  cameraTarget: "map" | "robot";
 }
 
-function Scene({ client, mode }: SceneProps) {
+function CameraFollowRobot({ tfBuffer }: { tfBuffer: TfBuffer }) {
+  const controls = useThree((state) => state.controls) as {
+    target: THREE.Vector3;
+  } | null;
+
+  useFrame(() => {
+    if (!controls) return;
+    const mat = tfBuffer.lookupTransform("map", "base_link");
+    if (!mat) return;
+    const pos = new THREE.Vector3().setFromMatrixPosition(mat);
+    controls.target.set(pos.x, pos.y, 0);
+  });
+
+  return null;
+}
+
+function Scene({ client, mode, cameraTarget }: SceneProps) {
   const { layers } = useVisualization();
   const tfBuffer = useTfBuffer(client);
 
@@ -84,6 +102,7 @@ function Scene({ client, mode }: SceneProps) {
         <OrbitControls makeDefault />
       )}
       <ambientLight intensity={1} />
+      {cameraTarget === "robot" && <CameraFollowRobot tfBuffer={tfBuffer} />}
 
       {layers.map && <MapLayer client={client} />}
       {layers.globalCostmap && (
@@ -139,12 +158,42 @@ function Scene({ client, mode }: SceneProps) {
 
 interface RosViewerProps {
   client: FoxgloveClientHandle;
-  mode: ViewerMode;
+  initialMode?: ViewerMode;
   className?: string;
 }
 
-export default function RosViewer({ client, mode, className }: RosViewerProps) {
+export default function RosViewer({
+  client,
+  initialMode = "2d",
+  className,
+}: RosViewerProps) {
   const { enabled } = useVisualization();
+  const [viewMode, setViewMode] = useState<ViewerMode>(initialMode);
+  const [cameraTarget, setCameraTarget] = useState<"map" | "robot">("map");
+  const settingsLoadedRef = useRef(false);
+
+  useEffect(() => {
+    if (settingsLoadedRef.current) return;
+    settingsLoadedRef.current = true;
+    loadSettings().then((data) => {
+      const v = data.viewer as
+        | { mode?: string; cameraTarget?: string }
+        | undefined;
+      if (v?.mode === "2d" || v?.mode === "3d") setViewMode(v.mode);
+      if (v?.cameraTarget === "map" || v?.cameraTarget === "robot")
+        setCameraTarget(v.cameraTarget);
+    });
+  }, []);
+
+  const handleSetViewMode = (m: ViewerMode) => {
+    setViewMode(m);
+    saveSettings("viewer", { mode: m, cameraTarget });
+  };
+
+  const handleSetCameraTarget = (t: "map" | "robot") => {
+    setCameraTarget(t);
+    saveSettings("viewer", { mode: viewMode, cameraTarget: t });
+  };
 
   if (!enabled) {
     return (
@@ -159,20 +208,41 @@ export default function RosViewer({ client, mode, className }: RosViewerProps) {
   }
 
   return (
-    <div className={className ?? "w-full h-full"}>
+    <div className={`relative ${className ?? "w-full h-full"}`}>
       <Canvas
-        orthographic={mode === "2d"}
+        key={viewMode}
+        orthographic={viewMode === "2d"}
         camera={
-          mode === "2d"
+          viewMode === "2d"
             ? { zoom: 10, position: [0, 0, 100], near: 0.1, far: 10000 }
             : { fov: 60, position: [0, -20, 20], near: 0.1, far: 10000 }
         }
         gl={{ antialias: false }}
       >
         <Suspense fallback={null}>
-          <Scene client={client} mode={mode} />
+          <Scene client={client} mode={viewMode} cameraTarget={cameraTarget} />
         </Suspense>
       </Canvas>
+      <div className="absolute top-2 right-2 flex gap-1 pointer-events-auto">
+        <button
+          onClick={() => handleSetViewMode(viewMode === "2d" ? "3d" : "2d")}
+          className="bg-gray-800/80 hover:bg-gray-700 text-white text-xs font-medium px-2.5 py-1 rounded border border-gray-600 backdrop-blur-sm"
+        >
+          {viewMode === "2d" ? "3D" : "2D"}
+        </button>
+        <button
+          onClick={() =>
+            handleSetCameraTarget(cameraTarget === "map" ? "robot" : "map")
+          }
+          className={`text-xs font-medium px-2.5 py-1 rounded border backdrop-blur-sm ${
+            cameraTarget === "robot"
+              ? "bg-blue-600/80 border-blue-500 text-white"
+              : "bg-gray-800/80 border-gray-600 text-white hover:bg-gray-700"
+          }`}
+        >
+          {cameraTarget === "map" ? "Robot Follow" : "Map Fixed"}
+        </button>
+      </div>
     </div>
   );
 }

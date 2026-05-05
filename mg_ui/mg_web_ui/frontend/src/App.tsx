@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Routes, Route } from "react-router-dom";
 import { useFoxgloveClient } from "./hooks/useFoxgloveClient";
 import { useSystemManagerClient } from "./hooks/useSystemManagerClient";
@@ -10,10 +11,12 @@ import SystemPage from "./pages/SystemPage";
 import SettingPage from "./pages/SettingPage";
 import NavBar from "./components/NavBar";
 import ConnectionBadge from "./components/ConnectionBadge";
+import SettingModal from "./components/SettingModal";
 
 export default function App() {
   const client = useFoxgloveClient();
   const sysManager = useSystemManagerClient();
+  const [settingOpen, setSettingOpen] = useState(false);
 
   return (
     <SimulationProvider>
@@ -25,7 +28,7 @@ export default function App() {
             </span>
             <ConnectionBadge status={client.status} />
           </header>
-          <NavBar />
+          <NavBar onSettingClick={() => setSettingOpen(true)} />
           <main className="p-4">
             <Routes>
               <Route path="/" element={<TopPage client={client} />} />
@@ -46,6 +49,10 @@ export default function App() {
               <Route path="/setting" element={<SettingPage />} />
             </Routes>
           </main>
+          <SettingModal
+            open={settingOpen}
+            onClose={() => setSettingOpen(false)}
+          />
         </div>
       </VisualizationProvider>
     </SimulationProvider>

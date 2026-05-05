@@ -1,4 +1,13 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  ReactNode,
+} from "react";
+import { loadSettings, saveSettings } from "../utils/settingsApi";
 
 export type LayerKey =
   | "map"
@@ -45,39 +54,36 @@ const VisualizationContext = createContext<VisualizationContextType>({
   toggleLayer: () => {},
 });
 
-function loadFromStorage(): {
-  enabled: boolean;
-  layers: Record<LayerKey, boolean>;
-} {
-  try {
-    const raw = localStorage.getItem("visualizationSettings");
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        enabled: typeof parsed.enabled === "boolean" ? parsed.enabled : true,
-        layers: { ...DEFAULT_LAYERS, ...(parsed.layers ?? {}) },
-      };
-    }
-  } catch {}
-  return { enabled: true, layers: { ...DEFAULT_LAYERS } };
-}
-
 export function VisualizationProvider({ children }: { children: ReactNode }) {
-  const initial = loadFromStorage();
-  const [enabled, setEnabledState] = useState<boolean>(initial.enabled);
-  const [layers, setLayers] = useState<Record<LayerKey, boolean>>(
-    initial.layers,
-  );
+  const [enabled, setEnabledState] = useState<boolean>(true);
+  const [layers, setLayers] = useState<Record<LayerKey, boolean>>({
+    ...DEFAULT_LAYERS,
+  });
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const persist = (
-    nextEnabled: boolean,
-    nextLayers: Record<LayerKey, boolean>,
-  ) => {
-    localStorage.setItem(
-      "visualizationSettings",
-      JSON.stringify({ enabled: nextEnabled, layers: nextLayers }),
-    );
-  };
+  useEffect(() => {
+    loadSettings().then((data) => {
+      const v = data.visualization as
+        | { enabled?: boolean; layers?: Record<string, boolean> }
+        | undefined;
+      if (!v) return;
+      if (typeof v.enabled === "boolean") setEnabledState(v.enabled);
+      if (v.layers) setLayers({ ...DEFAULT_LAYERS, ...v.layers });
+    });
+  }, []);
+
+  const persist = useCallback(
+    (nextEnabled: boolean, nextLayers: Record<LayerKey, boolean>) => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => {
+        saveSettings("visualization", {
+          enabled: nextEnabled,
+          layers: nextLayers,
+        });
+      }, 500);
+    },
+    [],
+  );
 
   const setEnabled = (val: boolean) => {
     setEnabledState(val);

@@ -2,8 +2,9 @@ import { useState } from "react";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { SystemManagerHandle } from "../hooks/useSystemManagerClient";
 import { useSimulation } from "../contexts/SimulationContext";
-import { RosViewer } from "../components/ros-viewer";
 import ApiLogPanel from "../components/ApiLogPanel";
+import SectionCard from "../components/SectionCard";
+import RobotPageLayout from "../components/RobotPageLayout";
 
 export default function SlamPage({
   client,
@@ -32,72 +33,83 @@ export default function SlamPage({
     }
   };
 
-  return (
-    <div className="flex gap-4 h-[calc(100vh-160px)]">
-      <div className="w-72 flex-shrink-0 space-y-4 overflow-y-auto">
-        <section className="bg-gray-800 rounded-lg p-4">
-          <p className="text-xs text-gray-400 mb-2">SLAM Container</p>
-          <div className="flex items-center gap-3">
-            <span
-              className={`w-3 h-3 rounded-full ${
-                slamState === "running" ? "bg-green-500" : "bg-gray-500"
-              }`}
-            />
-            <span className="text-lg font-semibold capitalize">
-              {slamState}
-            </span>
-          </div>
-        </section>
-
-        <section className="bg-gray-800 rounded-lg p-4 space-y-3">
-          <p className="text-xs text-gray-400">SLAM Control</p>
-          <div className="flex flex-wrap gap-3">
-            <button
-              onClick={() => call("/slam/start")}
-              disabled={loading}
-              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
-            >
-              Start SLAM
-            </button>
-            <button
-              onClick={() => call("/slam/stop")}
-              disabled={loading}
-              className="bg-red-600 hover:bg-red-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
-            >
-              Stop SLAM
-            </button>
-            <button
-              onClick={() => call("/map/save")}
-              disabled={loading}
-              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
-            >
-              Save Map
-            </button>
-          </div>
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-        </section>
-
-        {isSimulation && (
-          <section className="bg-gray-800 rounded-lg p-4 space-y-3">
-            <p className="text-xs text-gray-400">Simulation</p>
+  const accordionItems = [
+    {
+      id: "slam",
+      label: "SLAM",
+      children: (
+        <div className="space-y-2">
+          <SectionCard title="SLAM Container">
+            <div className="flex items-center gap-3">
+              <span
+                className={`w-3 h-3 rounded-full ${slamState === "running" ? "bg-green-500" : "bg-gray-500"}`}
+              />
+              <span className="text-lg font-semibold capitalize">
+                {slamState}
+              </span>
+            </div>
+          </SectionCard>
+          <SectionCard title="SLAM Control">
             <div className="flex flex-wrap gap-3">
               <button
-                onClick={() => call("/simulation/reset-pose")}
+                onClick={() => call("/slam/start")}
+                disabled={loading}
+                className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
+              >
+                Start SLAM
+              </button>
+              <button
+                onClick={() => call("/slam/stop")}
+                disabled={loading}
+                className="bg-red-600 hover:bg-red-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
+              >
+                Stop SLAM
+              </button>
+              <button
+                onClick={() => call("/map/save")}
                 disabled={loading}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
               >
-                Reset Robot Pose
+                Save Map
               </button>
             </div>
-          </section>
-        )}
+            {error && <p className="text-red-400 text-sm">{error}</p>}
+          </SectionCard>
+        </div>
+      ),
+    },
+    ...(isSimulation
+      ? [
+          {
+            id: "simulation",
+            label: "シミュレーション",
+            children: (
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => call("/simulation/reset-pose")}
+                  disabled={loading}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
+                >
+                  Reset Robot Pose
+                </button>
+              </div>
+            ),
+          },
+        ]
+      : []),
+    {
+      id: "log",
+      label: "ログ",
+      children: <ApiLogPanel logs={sysManager.logs} />,
+    },
+  ];
 
-        <ApiLogPanel logs={sysManager.logs} />
-      </div>
-
-      <div className="flex-1 min-h-0 bg-gray-900 rounded-lg overflow-hidden border border-gray-700">
-        <RosViewer client={client} mode="2d" className="w-full h-full" />
-      </div>
-    </div>
+  return (
+    <RobotPageLayout
+      client={client}
+      accordionItems={accordionItems}
+      defaultOpen={["slam", ...(isSimulation ? ["simulation"] : [])]}
+      viewerMode="2d"
+    />
   );
 }

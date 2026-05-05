@@ -7,6 +7,7 @@ export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'er
 
 export interface FoxgloveClientHandle {
   status: ConnectionStatus
+  channelUpdateCount: number
   subscribe: (topic: string, schemaName: string, onMessage: (data: unknown) => void) => () => void
   callService: (service: string, payload: unknown) => Promise<unknown>
   publish: (topic: string, schemaName: string, data: unknown) => void
@@ -139,6 +140,7 @@ function normalizeName(name: string): string {
 
 export function useFoxgloveClient(): FoxgloveClientHandle {
   const [status, setStatus] = useState<ConnectionStatus>('connecting')
+  const [channelUpdateCount, setChannelUpdateCount] = useState(0)
   const statusRef = useRef<ConnectionStatus>('connecting')
   const wsRef = useRef<WebSocket | null>(null)
   const channelsByTopicRef = useRef<Map<string, ServerChannel>>(new Map())
@@ -213,6 +215,7 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
               }
             }
           }
+          setChannelUpdateCount((c) => c + 1)
         } else if (op === 'unadvertise') {
           const channelIds = msg['channelIds'] as ChannelId[]
           for (const id of channelIds) {
@@ -411,5 +414,5 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
     ws.send(buf)
   }, [])
 
-  return { status, subscribe, callService, publish }
+  return { status, channelUpdateCount, subscribe, callService, publish }
 }
