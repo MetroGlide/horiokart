@@ -1,6 +1,6 @@
 import { parse } from '@foxglove/rosmsg'
 import { MessageReader, MessageWriter } from '@foxglove/rosmsg2-serialization'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { SCHEMAS } from '../ros/interfaces'
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'error'
@@ -325,6 +325,13 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
         pendingSubsRef.current.set(subId, { topic, onMessage })
         return () => {
           pendingSubsRef.current.delete(subId)
+          if (subscriptionsRef.current.has(subId)) {
+            subscriptionsRef.current.delete(subId)
+            subscriptionChannelsRef.current.delete(subId)
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ op: 'unsubscribe', subscriptionIds: [subId] }))
+            }
+          }
         }
       }
 
@@ -414,5 +421,8 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
     ws.send(buf)
   }, [])
 
-  return { status, channelUpdateCount, subscribe, callService, publish }
+  return useMemo(
+    () => ({ status, channelUpdateCount, subscribe, callService, publish }),
+    [status, channelUpdateCount, subscribe, callService, publish],
+  )
 }
