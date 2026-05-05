@@ -87,26 +87,29 @@ export default function WaypointNavPage({
     "nav2_msgs/msg/CollisionDetectorState",
   );
 
-  const [simLoading, setSimLoading] = useState(false);
-  const [simError, setSimError] = useState<string | null>(null);
+  const [sysLoading, setSysLoading] = useState(false);
+  const [sysError, setSysError] = useState<string | null>(null);
   const { containers, callApi } = sysManager;
+  const navState = containers["navigation"] ?? "unknown";
   const scenarioState = containers["scenario-test"] ?? "unknown";
 
-  const callSim = async (path: string, body?: unknown) => {
-    setSimLoading(true);
-    setSimError(null);
+  const callSystemManager = async (path: string, body?: unknown) => {
+    setSysLoading(true);
+    setSysError(null);
     try {
       const result = await callApi(path, body);
-      if (!result.success) setSimError(result.message);
+      if (!result.success) setSysError(result.message);
     } catch (e) {
-      setSimError(e instanceof Error ? e.message : String(e));
+      setSysError(e instanceof Error ? e.message : String(e));
     } finally {
-      setSimLoading(false);
+      setSysLoading(false);
     }
   };
 
   const handleStart = () =>
     call(SERVICES.WAYPOINT_START, { countdown_ms: countdownMs });
+  const handleStartImmediate = () =>
+    call(SERVICES.WAYPOINT_START, { countdown_ms: 0 });
   const handleStop = () => call(SERVICES.WAYPOINT_STOP, {});
   const handlePause = () =>
     client.publish(TOPICS.WAYPOINT_PAUSE_REQUEST, "mg_msgs/msg/PauseRequest", {
@@ -129,9 +132,9 @@ export default function WaypointNavPage({
   const handleReload = () => call(SERVICES.WAYPOINT_RELOAD, {});
 
   const handleResetRobotPose = (pose: PoseInput) =>
-    callSim("/simulation/reset-pose", pose);
+    callSystemManager("/simulation/reset-pose", pose);
   const handleResetAmclPose = (pose: PoseInput) => {
-    setSimError(null);
+    setSysError(null);
     try {
       client.publish(
         TOPICS.INITIALPOSE,
@@ -139,7 +142,7 @@ export default function WaypointNavPage({
         buildInitialPoseMessage(pose),
       );
     } catch (e) {
-      setSimError(e instanceof Error ? e.message : String(e));
+      setSysError(e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -158,7 +161,33 @@ export default function WaypointNavPage({
   const accordionItems = [
     {
       id: "status",
-      label: "ステータス",
+      label: "コンテナステータス",
+      children: (
+        <div className="space-y-2">
+          <ContainerStatusCard title="Navigation Container" status={navState} />
+          <ServiceControlCard
+            title="Control"
+            buttons={[
+              {
+                label: "Start",
+                onClick: () => callSystemManager("/navigation/start"),
+                variant: "green",
+              },
+              {
+                label: "Stop",
+                onClick: () => callSystemManager("/navigation/stop"),
+                variant: "red",
+              },
+            ]}
+            loading={sysLoading}
+            error={sysError}
+          />
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      label: "WaypointNav ステータス",
       children: (
         <div className="space-y-2">
           <SectionCard title="Waypoint Sequencer State">
@@ -269,19 +298,13 @@ export default function WaypointNavPage({
         <div className="space-y-2">
           <SectionCard title="ナビゲーション制御">
             <div className="flex flex-wrap gap-3 items-end">
-              <div>
-                <label className="block text-xs text-gray-400 mb-1">
-                  Countdown (ms)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  step={500}
-                  value={countdownMs}
-                  onChange={(e) => setCountdownMs(Number(e.target.value))}
-                  className="w-28 bg-gray-700 rounded px-2 py-1 text-sm"
-                />
-              </div>
+              <button
+                onClick={handleStartImmediate}
+                disabled={loading}
+                className="bg-green-700 hover:bg-green-800 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
+              >
+                START IMMEDIATE
+              </button>
               <button
                 onClick={handleStart}
                 disabled={loading}
@@ -310,6 +333,19 @@ export default function WaypointNavPage({
               >
                 RESUME
               </button>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">
+                  Countdown (ms)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={500}
+                  value={countdownMs}
+                  onChange={(e) => setCountdownMs(Number(e.target.value))}
+                  className="w-28 bg-gray-700 rounded px-2 py-1 text-sm"
+                />
+              </div>
               <button
                 onClick={handleReload}
                 disabled={loading}
@@ -352,28 +388,31 @@ export default function WaypointNavPage({
             label: "シミュレーション",
             children: (
               <div className="space-y-2">
-                <ContainerStatusCard title="シナリオ" status={scenarioState} />
+                <ContainerStatusCard
+                  title="シナリオテストコンテナ"
+                  status={scenarioState}
+                />
                 <ServiceControlCard
-                  title="シナリオ制御"
+                  title="シナリオテスト制御"
                   buttons={[
                     {
                       label: "Start",
-                      onClick: () => callSim("/scenario-test/start"),
+                      onClick: () => callSystemManager("/scenario-test/start"),
                       variant: "green",
                     },
                     {
                       label: "Stop",
-                      onClick: () => callSim("/scenario-test/stop"),
+                      onClick: () => callSystemManager("/scenario-test/stop"),
                       variant: "red",
                     },
                   ]}
-                  loading={simLoading}
+                  loading={sysLoading}
                 />
                 <SimulationPoseSection
                   onResetRobot={handleResetRobotPose}
                   onResetAmcl={handleResetAmclPose}
-                  loading={simLoading}
-                  error={simError}
+                  loading={sysLoading}
+                  error={sysError}
                 />
               </div>
             ),
