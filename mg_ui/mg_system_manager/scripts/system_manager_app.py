@@ -28,6 +28,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+COMPOSE_SERVICES: dict[str, str] = {
+    "slam": "slam",
+    "navigation": "navigation",
+    "waypoint-editor": "waypoint-editor",
+    "foxglove-bridge": "foxglove-bridge",
+    "diagnostics": "diagnostics",
+    "scenario-test": "scenario-test",
+}
+
 
 class DockerManager:
     def __init__(self) -> None:
@@ -92,6 +101,29 @@ class DockerManager:
             logger.error("compose up exception service=%s: %s", service, e)
             return False, str(e)
 
+    def exec_in_container(
+        self, service: str, cmd: list[str]
+    ) -> tuple[bool, str]:
+        container = self._get_container(service)
+        if container is None:
+            return False, f"container not found: {service}"
+        try:
+            result = container.exec_run(cmd)
+            output = result.output.decode(errors="replace")
+            ok = result.exit_code == 0
+            if ok:
+                logger.info("exec_in_container succeeded service=%s: %s",
+                            service, output[:200])
+            else:
+                logger.error(
+                    "exec_in_container failed service=%s exit_code=%d: %s",
+                    service, result.exit_code, output[:200])
+            return ok, output
+        except Exception as e:
+            logger.error(
+                "exec_in_container exception service=%s: %s", service, e)
+            return False, str(e)
+
     def get_status(self) -> dict[str, str]:
         containers = self._client.containers.list(
             all=True,
@@ -120,35 +152,17 @@ class DockerManager:
 
     def save_map(self) -> tuple[bool, str]:
         logger.info("save_map")
-        container = self._get_container("slam")
-        if container is None:
-            return False, "slam container not found"
-        try:
-            result = container.exec_run(
-                [
-                    "bash", "-c",
-                    "source /opt/ros/humble/setup.bash && "
-                    "source /root/ros2_ws/install/setup.bash && "
-                    "ros2 service call /map_saver/save_map nav2_msgs/srv/SaveMap "
-                    '"{map_topic: map, map_url: /root/ros2_data/map, image_format: pgm, '
-                    'map_mode: trinary, free_thresh: 0.25, occupied_thresh: 0.65}"',
-                ]
-            )
-            output = result.output.decode(errors="replace")
-            ok = result.exit_code == 0
-            if ok:
-                logger.info("save_map succeeded: %s", output[:200])
-            else:
-                logger.error("save_map failed exit_code=%d: %s",
-                             result.exit_code, output[:200])
-            return ok, output
-        except Exception as e:
-            logger.error("save_map exception: %s", e)
-            return False, str(e)
-
-    def start_waypoint_editor(self) -> tuple[bool, str]:
-        logger.info("start_waypoint_editor")
-        return self._compose_up("waypoint-editor")
+        return self.exec_in_container(
+            "slam",
+            [
+                "bash", "-c",
+                "source /opt/ros/humble/setup.bash && "
+                "source /root/ros2_ws/install/setup.bash && "
+                "ros2 service call /map_saver/save_map nav2_msgs/srv/SaveMap "
+                '"{map_topic: map, map_url: /root/ros2_data/map, image_format: pgm, '
+                'map_mode: trinary, free_thresh: 0.25, occupied_thresh: 0.65}"',
+            ],
+        )
 
     def reset_sim_robot_pose(
         self, x: float, y: float, z: float, yaw: float
@@ -169,22 +183,9 @@ class DockerManager:
             f"--timeout 5000 "
             f"--req '{request}'"
         )
-        container = self._get_container("gazebo-simulation")
-        if container is None:
-            return False, "gazebo-simulation container not found"
-        try:
-            result = container.exec_run(["bash", "-lc", command])
-            output = result.output.decode(errors="replace")
-            ok = result.exit_code == 0
-            if ok:
-                logger.info("reset_sim_robot_pose succeeded: %s", output[:200])
-            else:
-                logger.error(
-                    "reset_sim_robot_pose failed exit_code=%d: %s", result.exit_code, output[:200])
-            return ok, output
-        except Exception as e:
-            logger.error("reset_sim_robot_pose exception: %s", e)
-            return False, str(e)
+        return self.exec_in_container(
+            "gazebo-simulation", ["bash", "-lc", command]
+        )
 
 
 manager = DockerManager()
@@ -200,6 +201,22 @@ def _result(ok: bool, msg: str) -> dict:
     logging.getLogger(__name__).log(
         level, "response success=%s message=%s", ok, msg[:200] if msg else "")
     return {"success": ok, "message": msg}
+
+
+def _make_start_handler(service: str):
+    def handler():
+        ok, msg = manager.start(service)
+        return _result(ok, msg)
+    handler.__name__ = f"start_{service.replace('-', '_')}"
+    return handler
+
+
+def _make_stop_handler(service: str):
+    def handler():
+        ok, msg = manager.stop(service)
+        return _result(ok, msg)
+    handler.__name__ = f"stop_{service.replace('-', '_')}"
+    return handler
 
 
 @app.get("/status")
@@ -231,82 +248,23 @@ async def post_settings(request: Request):
         return {"success": False, "message": str(e)}
 
 
-@app.post("/slam/start")
-def start_slam():
-    ok, msg = manager.start("slam")
-    return _result(ok, msg)
-
-
-@app.post("/slam/stop")
-def stop_slam():
-    ok, msg = manager.stop("slam")
-    return _result(ok, msg)
-
-
-@app.post("/navigation/start")
-def start_navigation():
-    ok, msg = manager.start("navigation")
-    return _result(ok, msg)
-
-
-@app.post("/navigation/stop")
-def stop_navigation():
-    ok, msg = manager.stop("navigation")
-    return _result(ok, msg)
+for _endpoint, _service in COMPOSE_SERVICES.items():
+    app.add_api_route(
+        f"/{_endpoint}/start",
+        _make_start_handler(_service),
+        methods=["POST"],
+    )
+    app.add_api_route(
+        f"/{_endpoint}/stop",
+        _make_stop_handler(_service),
+        methods=["POST"],
+    )
 
 
 @app.post("/map/save")
 async def save_map():
     loop = asyncio.get_event_loop()
     ok, msg = await loop.run_in_executor(None, manager.save_map)
-    return _result(ok, msg)
-
-
-@app.post("/waypoint-editor/start")
-def start_waypoint_editor():
-    ok, msg = manager.start_waypoint_editor()
-    return _result(ok, msg)
-
-
-@app.post("/waypoint-editor/stop")
-def stop_waypoint_editor():
-    ok, msg = manager.stop("waypoint-editor")
-    return _result(ok, msg)
-
-
-@app.post("/foxglove-bridge/start")
-def start_foxglove_bridge():
-    ok, msg = manager.start("foxglove-bridge")
-    return _result(ok, msg)
-
-
-@app.post("/foxglove-bridge/stop")
-def stop_foxglove_bridge():
-    ok, msg = manager.stop("foxglove-bridge")
-    return _result(ok, msg)
-
-
-@app.post("/diagnostics/start")
-def start_diagnostics():
-    ok, msg = manager.start("diagnostics")
-    return _result(ok, msg)
-
-
-@app.post("/diagnostics/stop")
-def stop_diagnostics():
-    ok, msg = manager.stop("diagnostics")
-    return _result(ok, msg)
-
-
-@app.post("/scenario-test/start")
-def start_scenario_test():
-    ok, msg = manager.start("scenario-test")
-    return _result(ok, msg)
-
-
-@app.post("/scenario-test/stop")
-def stop_scenario_test():
-    ok, msg = manager.stop("scenario-test")
     return _result(ok, msg)
 
 
