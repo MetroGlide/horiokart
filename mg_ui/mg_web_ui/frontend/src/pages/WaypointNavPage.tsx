@@ -5,24 +5,23 @@ import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
 import { useServiceCaller } from "../hooks/useServiceCaller";
 import { useNav2Status } from "../hooks/useNav2Status";
 import { useSimulation } from "../contexts/SimulationContext";
-import { useVisualization } from "../contexts/VisualizationContext";
-import { useTeleop } from "../contexts/TeleopContext";
 import {
   SequencerStatus,
-  OdomMsg,
   BoolMsg,
   CollisionDetectorState,
-  TwistMsg,
   GOAL_STATUS,
   GOAL_STATUS_COLOR,
 } from "../types";
 import { TOPICS, SERVICES } from "../ros/interfaces";
-import ApiLogPanel from "../components/ApiLogPanel";
 import SectionCard from "../components/SectionCard";
 import RobotPageLayout from "../components/RobotPageLayout";
-import JoystickPad from "../components/JoystickPad";
 import VelocityGauge from "../components/VelocityGauge";
-import SystemMetrics from "../components/SystemMetrics";
+import ApiLogSection from "../components/sections/ApiLogSection";
+import ContainerStatusCard from "../components/sections/ContainerStatusCard";
+import ServiceControlCard from "../components/sections/ServiceControlCard";
+import SimulationPoseSection, {
+  PoseInput,
+} from "../components/sections/SimulationPoseSection";
 
 const STATE_COLOR: Record<string, string> = {
   IDLE: "text-gray-300",
@@ -33,13 +32,6 @@ const STATE_COLOR: Record<string, string> = {
   SUSPENDED: "text-yellow-500",
   ERROR: "text-red-400",
 };
-
-interface PoseInput {
-  x: number;
-  y: number;
-  z: number;
-  yaw: number;
-}
 
 function buildInitialPoseMessage(pose: PoseInput) {
   const nowMs = Date.now();
@@ -74,13 +66,6 @@ export default function WaypointNavPage({
   const [jumpIndex, setJumpIndex] = useState(0);
   const { call, loading, error } = useServiceCaller(client);
   const { isSimulation } = useSimulation();
-  const { overlays } = useVisualization();
-  const {
-    maxLinear,
-    maxAngular,
-    effectiveGaugeMaxLinear,
-    effectiveGaugeMaxAngular,
-  } = useTeleop();
 
   const status = useTopicSubscriber<SequencerStatus>(
     client,
@@ -89,12 +74,6 @@ export default function WaypointNavPage({
   );
 
   const nav2 = useNav2Status(client);
-
-  const odom = useTopicSubscriber<OdomMsg>(
-    client,
-    TOPICS.ODOM,
-    "nav_msgs/msg/Odometry",
-  );
 
   const emergencyStop = useTopicSubscriber<BoolMsg>(
     client,
@@ -108,25 +87,10 @@ export default function WaypointNavPage({
     "nav2_msgs/msg/CollisionDetectorState",
   );
 
-  const cmdVelMsg = useTopicSubscriber<TwistMsg>(
-    client,
-    TOPICS.CMD_VEL,
-    "geometry_msgs/msg/Twist",
-  );
-
   const [simLoading, setSimLoading] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
-  const [pose, setPose] = useState<PoseInput>({
-    x: 0.0,
-    y: 0.0,
-    z: 0.05,
-    yaw: 0.0,
-  });
   const { containers, callApi } = sysManager;
   const scenarioState = containers["scenario-test"] ?? "unknown";
-
-  const updatePose = (key: keyof PoseInput, value: number) =>
-    setPose((prev) => ({ ...prev, [key]: value }));
 
   const callSim = async (path: string, body?: unknown) => {
     setSimLoading(true);
@@ -164,8 +128,9 @@ export default function WaypointNavPage({
     });
   const handleReload = () => call(SERVICES.WAYPOINT_RELOAD, {});
 
-  const handleResetRobotPose = () => callSim("/simulation/reset-pose", pose);
-  const handleResetAmclPose = () => {
+  const handleResetRobotPose = (pose: PoseInput) =>
+    callSim("/simulation/reset-pose", pose);
+  const handleResetAmclPose = (pose: PoseInput) => {
     setSimError(null);
     try {
       client.publish(
@@ -177,8 +142,6 @@ export default function WaypointNavPage({
       setSimError(e instanceof Error ? e.message : String(e));
     }
   };
-  const handleStartScenario = () => callSim("/scenario-test/start");
-  const handleStopScenario = () => callSim("/scenario-test/stop");
 
   const stateColor = status
     ? (STATE_COLOR[status.state] ?? "text-white")
@@ -294,13 +257,7 @@ export default function WaypointNavPage({
             </div>
           </SectionCard>
           <SectionCard title="Velocity">
-            <VelocityGauge
-              cmdLinear={cmdVelMsg?.linear.x ?? 0}
-              cmdAngular={cmdVelMsg?.angular.z ?? 0}
-              odom={odom}
-              maxLinear={effectiveGaugeMaxLinear}
-              maxAngular={effectiveGaugeMaxAngular}
-            />
+            <VelocityGauge client={client} />
           </SectionCard>
         </div>
       ),
@@ -395,69 +352,29 @@ export default function WaypointNavPage({
             label: "シミュレーション",
             children: (
               <div className="space-y-2">
-                <SectionCard title="シナリオ">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span
-                      className={`w-3 h-3 rounded-full ${scenarioState === "running" ? "bg-green-500" : "bg-gray-500"}`}
-                    />
-                    <span className="text-sm text-gray-300">
-                      {scenarioState}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={handleStartScenario}
-                      disabled={simLoading}
-                      className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
-                    >
-                      Start
-                    </button>
-                    <button
-                      onClick={handleStopScenario}
-                      disabled={simLoading}
-                      className="bg-red-600 hover:bg-red-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
-                    >
-                      Stop
-                    </button>
-                  </div>
-                </SectionCard>
-                <SectionCard title="ポーズリセット">
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    {(["x", "y", "z", "yaw"] as const).map((k) => (
-                      <label key={k} className="text-sm text-gray-300">
-                        <span className="block text-xs text-gray-400 mb-1">
-                          {k === "yaw" ? "yaw(rad)" : k}
-                        </span>
-                        <input
-                          type="number"
-                          step={k === "z" ? "0.01" : "0.1"}
-                          value={pose[k]}
-                          onChange={(e) =>
-                            updatePose(k, Number(e.target.value))
-                          }
-                          className="w-full bg-gray-700 rounded px-2 py-1 text-sm"
-                        />
-                      </label>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={handleResetRobotPose}
-                      disabled={simLoading}
-                      className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
-                    >
-                      Reset Robot Pose
-                    </button>
-                    <button
-                      onClick={handleResetAmclPose}
-                      disabled={simLoading}
-                      className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
-                    >
-                      Reset AMCL Pose
-                    </button>
-                  </div>
-                </SectionCard>
-                {simError && <p className="text-red-400 text-sm">{simError}</p>}
+                <ContainerStatusCard title="シナリオ" status={scenarioState} />
+                <ServiceControlCard
+                  title="シナリオ制御"
+                  buttons={[
+                    {
+                      label: "Start",
+                      onClick: () => callSim("/scenario-test/start"),
+                      variant: "green",
+                    },
+                    {
+                      label: "Stop",
+                      onClick: () => callSim("/scenario-test/stop"),
+                      variant: "red",
+                    },
+                  ]}
+                  loading={simLoading}
+                />
+                <SimulationPoseSection
+                  onResetRobot={handleResetRobotPose}
+                  onResetAmcl={handleResetAmclPose}
+                  loading={simLoading}
+                  error={simError}
+                />
               </div>
             ),
           },
@@ -466,7 +383,7 @@ export default function WaypointNavPage({
     {
       id: "log",
       label: "ログ",
-      children: <ApiLogPanel logs={sysManager.logs} />,
+      children: <ApiLogSection logs={sysManager.logs} />,
     },
   ];
 
@@ -480,31 +397,6 @@ export default function WaypointNavPage({
         ...(isSimulation ? ["simulation"] : []),
       ]}
       viewerMode="3d"
-      showCameraPanel
-      viewerOverlay={
-        <>
-          <div className="absolute top-10 left-2 flex flex-col gap-2 pointer-events-auto w-40">
-            {overlays.velocityGauge && (
-              <VelocityGauge
-                cmdLinear={cmdVelMsg?.linear.x ?? 0}
-                cmdAngular={cmdVelMsg?.angular.z ?? 0}
-                odom={odom}
-                compact
-                maxLinear={effectiveGaugeMaxLinear}
-                maxAngular={effectiveGaugeMaxAngular}
-              />
-            )}
-            {overlays.systemMetrics && (
-              <SystemMetrics client={client} compact />
-            )}
-          </div>
-          {overlays.joystick && (
-            <div className="absolute bottom-4 right-4 pointer-events-auto">
-              <JoystickPad client={client} />
-            </div>
-          )}
-        </>
-      }
     />
   );
 }

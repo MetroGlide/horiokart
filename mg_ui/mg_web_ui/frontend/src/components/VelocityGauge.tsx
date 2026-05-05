@@ -1,4 +1,8 @@
-import { OdomMsg } from "../types";
+import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
+import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
+import { useTeleop } from "../contexts/TeleopContext";
+import { OdomMsg, TwistMsg } from "../types";
+import { TOPICS } from "../ros/interfaces";
 
 interface VelocityBarProps {
   label: string;
@@ -48,22 +52,27 @@ function VelocityBar({
 }
 
 interface VelocityGaugeProps {
-  cmdLinear: number;
-  cmdAngular: number;
-  odom: OdomMsg | null;
+  client: FoxgloveClientHandle;
   compact?: boolean;
-  maxLinear?: number;
-  maxAngular?: number;
 }
 
 export default function VelocityGauge({
-  cmdLinear,
-  cmdAngular,
-  odom,
+  client,
   compact = false,
-  maxLinear = 1.0,
-  maxAngular = 1.0,
 }: VelocityGaugeProps) {
+  const { effectiveGaugeMaxLinear, effectiveGaugeMaxAngular } = useTeleop();
+  const cmdVel = useTopicSubscriber<TwistMsg>(
+    client,
+    TOPICS.CMD_VEL,
+    "geometry_msgs/msg/Twist",
+  );
+  const odom = useTopicSubscriber<OdomMsg>(
+    client,
+    TOPICS.ODOM,
+    "nav_msgs/msg/Odometry",
+  );
+  const cmdLinear = cmdVel?.linear.x ?? 0;
+  const cmdAngular = cmdVel?.angular.z ?? 0;
   const actualLinear = odom?.twist.twist.linear.x ?? null;
   const actualAngular = odom?.twist.twist.angular.z ?? null;
 
@@ -84,14 +93,14 @@ export default function VelocityGauge({
         label="Linear"
         cmdValue={cmdLinear}
         actualValue={actualLinear}
-        maxValue={maxLinear}
+        maxValue={effectiveGaugeMaxLinear}
         unit="m/s"
       />
       <VelocityBar
         label="Angular"
         cmdValue={cmdAngular}
         actualValue={actualAngular}
-        maxValue={maxAngular}
+        maxValue={effectiveGaugeMaxAngular}
         unit="rad/s"
       />
     </div>

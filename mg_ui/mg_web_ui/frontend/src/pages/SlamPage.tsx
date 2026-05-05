@@ -2,9 +2,11 @@ import { useState } from "react";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { SystemManagerHandle } from "../hooks/useSystemManagerClient";
 import { useSimulation } from "../contexts/SimulationContext";
-import ApiLogPanel from "../components/ApiLogPanel";
-import SectionCard from "../components/SectionCard";
 import RobotPageLayout from "../components/RobotPageLayout";
+import ApiLogSection from "../components/sections/ApiLogSection";
+import ContainerStatusCard from "../components/sections/ContainerStatusCard";
+import ServiceControlCard from "../components/sections/ServiceControlCard";
+import SimulationPoseSection from "../components/sections/SimulationPoseSection";
 
 export default function SlamPage({
   client,
@@ -39,42 +41,29 @@ export default function SlamPage({
       label: "SLAM",
       children: (
         <div className="space-y-2">
-          <SectionCard title="SLAM Container">
-            <div className="flex items-center gap-3">
-              <span
-                className={`w-3 h-3 rounded-full ${slamState === "running" ? "bg-green-500" : "bg-gray-500"}`}
-              />
-              <span className="text-lg font-semibold capitalize">
-                {slamState}
-              </span>
-            </div>
-          </SectionCard>
-          <SectionCard title="SLAM Control">
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => call("/slam/start")}
-                disabled={loading}
-                className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
-              >
-                Start SLAM
-              </button>
-              <button
-                onClick={() => call("/slam/stop")}
-                disabled={loading}
-                className="bg-red-600 hover:bg-red-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
-              >
-                Stop SLAM
-              </button>
-              <button
-                onClick={() => call("/map/save")}
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
-              >
-                Save Map
-              </button>
-            </div>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
-          </SectionCard>
+          <ContainerStatusCard title="SLAM Container" status={slamState} />
+          <ServiceControlCard
+            title="SLAM Control"
+            buttons={[
+              {
+                label: "Start SLAM",
+                onClick: () => call("/slam/start"),
+                variant: "green",
+              },
+              {
+                label: "Stop SLAM",
+                onClick: () => call("/slam/stop"),
+                variant: "red",
+              },
+              {
+                label: "Save Map",
+                onClick: () => call("/map/save"),
+                variant: "blue",
+              },
+            ]}
+            loading={loading}
+            error={error}
+          />
         </div>
       ),
     },
@@ -84,15 +73,10 @@ export default function SlamPage({
             id: "simulation",
             label: "シミュレーション",
             children: (
-              <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => call("/simulation/reset-pose")}
-                  disabled={loading}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
-                >
-                  Reset Robot Pose
-                </button>
-              </div>
+              <SimulationPoseSection
+                onResetRobot={(pose) => call("/simulation/reset-pose")}
+                loading={loading}
+              />
             ),
           },
         ]
@@ -100,7 +84,7 @@ export default function SlamPage({
     {
       id: "log",
       label: "ログ",
-      children: <ApiLogPanel logs={sysManager.logs} />,
+      children: <ApiLogSection logs={sysManager.logs} />,
     },
   ];
 

@@ -9,14 +9,17 @@ import {
   ViewerMode,
 } from "./ros-viewer";
 import { ReactNode } from "react";
+import VelocityGauge from "./VelocityGauge";
+import SystemMetrics from "./SystemMetrics";
+import JoystickPad from "./JoystickPad";
 
 interface RobotPageLayoutProps {
   client: FoxgloveClientHandle;
   accordionItems: AccordionItem[];
   defaultOpen?: string[];
   viewerMode?: ViewerMode;
-  showCameraPanel?: boolean;
-  viewerOverlay?: ReactNode;
+  extraPanels?: ReactNode;
+  extraOverlay?: ReactNode;
 }
 
 export default function RobotPageLayout({
@@ -24,10 +27,10 @@ export default function RobotPageLayout({
   accordionItems,
   defaultOpen = [],
   viewerMode,
-  showCameraPanel = false,
-  viewerOverlay,
+  extraPanels,
+  extraOverlay,
 }: RobotPageLayoutProps) {
-  const { enabled: vizEnabled, layers } = useVisualization();
+  const { enabled: vizEnabled, layers, overlays } = useVisualization();
   const hasViewer = vizEnabled && viewerMode != null;
 
   return (
@@ -50,13 +53,24 @@ export default function RobotPageLayout({
               initialMode={viewerMode}
               className="w-full h-full"
             />
-            {viewerOverlay && (
-              <div className="absolute inset-0 pointer-events-none">
-                {viewerOverlay}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute top-10 left-2 flex flex-col gap-2 pointer-events-auto w-40">
+                {overlays.velocityGauge && (
+                  <VelocityGauge client={client} compact />
+                )}
+                {overlays.systemMetrics && (
+                  <SystemMetrics client={client} compact />
+                )}
               </div>
-            )}
+              {overlays.joystick && (
+                <div className="absolute bottom-4 right-4 pointer-events-auto">
+                  <JoystickPad client={client} />
+                </div>
+              )}
+              {extraOverlay}
+            </div>
           </div>
-          {showCameraPanel && layers.cameraImage && (
+          {layers.cameraImage && (
             <div className="flex gap-2 h-40 flex-shrink-0">
               <div className="flex-1 rounded-lg overflow-hidden border border-gray-700">
                 <CameraImagePanel client={client} className="w-full h-full" />
@@ -66,6 +80,7 @@ export default function RobotPageLayout({
               </div>
             </div>
           )}
+          {extraPanels}
         </div>
       )}
     </div>
