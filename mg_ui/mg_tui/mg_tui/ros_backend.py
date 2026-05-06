@@ -1,9 +1,10 @@
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
-from std_msgs.msg import Int16
+from std_msgs.msg import Int16, Bool
 from std_srvs.srv import Trigger
 from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import PoseWithCovarianceStamped
+from nav2_msgs.msg import CollisionDetectorState
 from mg_msgs.msg import SequencerStatus, PauseRequest
 
 from .state import AppState
@@ -35,11 +36,15 @@ class Topics:
         _NODE_NS['WAYPOINT_SEQUENCER'], '/set_next_waypoint_index')
     DIAGNOSTICS = _node_ns(_NODE_NS['DIAGNOSTICS'], '/diagnostics')
     AMCL_POSE = _node_ns(_NODE_NS['LOCALIZATION'], '/amcl_pose')
+    EMERGENCY_STOP = '/motor_driver_node/emergency_stop'
+    COLLISION_STATE = '/collision_detector_state'
 
 
 class Services:
     WAYPOINT_START = _node_ns(_NODE_NS['WAYPOINT_SEQUENCER'], '/start')
     WAYPOINT_STOP = _node_ns(_NODE_NS['WAYPOINT_SEQUENCER'], '/stop')
+    WAYPOINT_RELOAD = _node_ns(
+        _NODE_NS['WAYPOINT_SEQUENCER'], '/reload_waypoints')
 
 
 class RosBackend(Node):
@@ -66,6 +71,18 @@ class RosBackend(Node):
             self._on_amcl,
             10,
         )
+        self.create_subscription(
+            Bool,
+            Topics.EMERGENCY_STOP,
+            self._on_emergency_stop,
+            _BEST_EFFORT_QOS,
+        )
+        self.create_subscription(
+            CollisionDetectorState,
+            Topics.COLLISION_STATE,
+            self._on_collision_state,
+            _BEST_EFFORT_QOS,
+        )
         self._pause_pub = self.create_publisher(
             PauseRequest, Topics.WAYPOINT_PAUSE_REQUEST, 10)
         self._jump_pub = self.create_publisher(
@@ -82,14 +99,21 @@ class RosBackend(Node):
         self._refresh()
 
     def _on_diagnostics(self, msg: DiagnosticArray) -> None:
-        self._state.diag_items = [
-            (s.level, s.name, s.message) for s in msg.status
-        ]
+        self._state.diag_cache.update(msg.status)
         self._refresh()
 
     def _on_amcl(self, msg: PoseWithCovarianceStamped) -> None:
         cov = msg.pose.covariance
         self._state.amcl_cov_xy = cov[0] + cov[7]
+        self._refresh()
+
+    def _on_emergency_stop(self, msg: Bool) -> None:
+        self._state.emergency_stop = msg.data
+        self._refresh()
+
+    def _on_collision_state(self, msg: CollisionDetectorState) -> None:
+        self._state.collision_polygons_active = list(
+            msg.collision_points_polygons)
         self._refresh()
 
     def call_trigger(self, service: str) -> None:

@@ -2,12 +2,14 @@
 """MG-01 Terminal UI entrypoint.
 
 キーバインド:
-  s  START waypoint navigation (3s countdown)
-  x  STOP waypoint navigation
-  p  PAUSE
-  r  RESUME
-  m  Save map (SLAM)
-  q  Quit
+  1-5    タブ切り替え (Top/Waypoint/SLAM/System/Setting)
+  h/l    前後タブ切り替え
+  j/k    ページ内カーソル移動
+  Enter  選択実行
+  s      サービスStart / Settingページ: シミュレーションモード切り替え
+  x      サービスStop
+  J      Waypointページ: インデックスジャンプ
+  q      終了
 """
 import threading
 

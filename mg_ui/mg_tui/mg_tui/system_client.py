@@ -39,3 +39,49 @@ class SystemClient:
             self._refresh()
 
         threading.Thread(target=_do, daemon=True).start()
+
+    def start_service(self, name: str) -> None:
+        def _do() -> None:
+            try:
+                r = requests.post(f'{_BASE_URL}/{name}/start', timeout=10)
+                data = r.json()
+                self._state.last_service_msg = (
+                    f'{name}/start: {"OK" if data["success"] else "FAIL"} {data.get("message", "")}'
+                )
+            except Exception as e:
+                self._state.last_service_msg = f'{name}/start: error {e}'
+            self._refresh()
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def stop_service(self, name: str) -> None:
+        def _do() -> None:
+            try:
+                r = requests.post(f'{_BASE_URL}/{name}/stop', timeout=10)
+                data = r.json()
+                self._state.last_service_msg = (
+                    f'{name}/stop: {"OK" if data["success"] else "FAIL"} {data.get("message", "")}'
+                )
+            except Exception as e:
+                self._state.last_service_msg = f'{name}/stop: error {e}'
+            self._refresh()
+
+        threading.Thread(target=_do, daemon=True).start()
+
+    def reset_pose(self, x: float, y: float, z: float, yaw: float) -> None:
+        def _do() -> None:
+            try:
+                r = requests.post(
+                    f'{_BASE_URL}/simulation/reset-pose',
+                    json={'x': x, 'y': y, 'z': z, 'yaw': yaw},
+                    timeout=10,
+                )
+                data = r.json()
+                self._state.last_service_msg = (
+                    f'reset_pose: {"OK" if data["success"] else "FAIL"} {data.get("message", "")}'
+                )
+            except Exception as e:
+                self._state.last_service_msg = f'reset_pose: error {e}'
+            self._refresh()
+
+        threading.Thread(target=_do, daemon=True).start()

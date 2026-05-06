@@ -1,31 +1,49 @@
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Header, Footer, Static, Label
 from textual.containers import Horizontal, Vertical
+from textual.widgets import ContentSwitcher, Footer, Header, Static
 
-from .state import AppState, DIAG_LEVEL, STATE_STYLE
+from .state import AppState
 from .ros_backend import RosBackend, Services
 from .system_client import SystemClient
+from .widgets import TabSidebar
+from .pages import TopPage, WaypointNavPage, SlamPage, SystemPage, SettingPage
+from .pages.waypoint_nav_page import WaypointNavPage as _WaypointNavPage
+from .pages.slam_page import SlamPage as _SlamPage
+from .pages.system_page import SystemPage as _SystemPage
+from .pages.setting_page import SettingPage as _SettingPage
+
+_TAB_IDS = ['top', 'waypoint', 'slam', 'system', 'setting']
 
 
 class MgTuiApp(App):
+    AUTO_FOCUS = ""
+
     CSS = """
     Screen { layout: vertical; }
-    #top-row { height: 1fr; layout: horizontal; }
-    #seq-panel { width: 1fr; border: solid $primary; padding: 1; }
-    #system-panel { width: 1fr; border: solid $primary; padding: 1; }
-    #diag-panel { height: 1fr; border: solid $warning; padding: 1; overflow-y: auto; }
+    #main-row { height: 1fr; layout: horizontal; }
+    #content-area { width: 1fr; }
     #status-bar { height: 1; background: $surface; }
-    Label.section-title { color: $text-muted; text-style: bold; }
     """
 
     BINDINGS = [
-        Binding('s', 'start_nav', 'Start'),
-        Binding('x', 'stop_nav', 'Stop'),
-        Binding('p', 'pause_nav', 'Pause'),
-        Binding('r', 'resume_nav', 'Resume'),
-        Binding('m', 'save_map', 'Save Map'),
-        Binding('q', 'quit', 'Quit'),
+        Binding('1', 'switch_tab("top")', 'Top', show=False, priority=True),
+        Binding('2', 'switch_tab("waypoint")',
+                'Waypoint', show=False, priority=True),
+        Binding('3', 'switch_tab("slam")', 'SLAM', show=False, priority=True),
+        Binding('4', 'switch_tab("system")',
+                'System', show=False, priority=True),
+        Binding('5', 'switch_tab("setting")',
+                'Setting', show=False, priority=True),
+        Binding('h', 'prev_tab', '[h] Prev Tab', priority=True),
+        Binding('l', 'next_tab', '[l] Next Tab', priority=True),
+        Binding('j', 'cursor_down', '[j] Down'),
+        Binding('k', 'cursor_up', '[k] Up'),
+        Binding('enter', 'execute', 'Execute'),
+        Binding('s', 'page_action_s', '[s] Start/Sim', show=False),
+        Binding('x', 'page_action_x', '[x] Stop', show=False),
+        Binding('J', 'jump_waypoint', '[J] Jump', show=False, priority=True),
+        Binding('q', 'quit', '[q] Quit', priority=True),
     ]
 
     def __init__(self, backend: RosBackend, sys_client: SystemClient, state: AppState):
@@ -33,20 +51,18 @@ class MgTuiApp(App):
         self._backend = backend
         self._sys_client = sys_client
         self._state = state
+        self._current_tab = 'top'
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        with Horizontal(id='top-row'):
-            with Vertical(id='seq-panel'):
-                yield Label('Waypoint Navigation', classes='section-title')
-                yield Static(id='seq-state')
-                yield Static(id='seq-detail')
-            with Vertical(id='system-panel'):
-                yield Label('System', classes='section-title')
-                yield Static(id='system-detail')
-        with Vertical(id='diag-panel'):
-            yield Label('Diagnostics', classes='section-title')
-            yield Static(id='diag-detail')
+        with Horizontal(id='main-row'):
+            yield TabSidebar(id='tab-sidebar')
+            with ContentSwitcher(initial='top', id='content-area'):
+                yield TopPage(id='top')
+                yield WaypointNavPage(id='waypoint')
+                yield SlamPage(id='slam')
+                yield SystemPage(id='system')
+                yield SettingPage(id='setting')
         yield Static(id='status-bar')
         yield Footer()
 
@@ -55,55 +71,122 @@ class MgTuiApp(App):
 
     def _update_ui(self) -> None:
         s = self._state
-
-        style = STATE_STYLE.get(s.seq_state, '')
-        state_text = f'[{style}]{s.seq_state}[/]' if style else s.seq_state
-        self.query_one('#seq-state', Static).update(state_text)
-
-        detail_lines = [
-            f'Index: {s.seq_index + 1} / {s.seq_total}',
-            f'Remaining: {s.seq_distance:.1f} m',
-        ]
-        if s.seq_countdown_ms > 0:
-            detail_lines.append(
-                f'[yellow]Countdown: {s.seq_countdown_ms / 1000:.1f} s[/]')
-        if s.is_paused:
-            detail_lines.append(
-                f'[yellow]Paused by: {", ".join(s.pause_requesters)}[/]')
-        self.query_one('#seq-detail', Static).update('\n'.join(detail_lines))
-
-        slam_state = s.containers.get('slam', '—')
-        nav_state = s.containers.get('navigation', '—')
-        sys_lines = [
-            f'SLAM: [{"green" if slam_state == "running" else "dim"}]{slam_state}[/]',
-            f'NAV:  [{"green" if nav_state == "running" else "dim"}]{nav_state}[/]',
-            f'AMCL cov: {s.amcl_cov_xy:.3f}',
-        ]
-        self.query_one('#system-detail', Static).update('\n'.join(sys_lines))
-
-        diag_lines = []
-        for level, name, message in s.diag_items:
-            label = DIAG_LEVEL.get(level, '?')
-            color = 'green' if level == 0 else (
-                'yellow' if level == 1 else 'red')
-            diag_lines.append(f'[{color}]{label:5}[/] {name}: {message}')
-        self.query_one('#diag-detail', Static).update(
-            '\n'.join(diag_lines) or 'waiting…'
-        )
-
         self.query_one('#status-bar', Static).update(s.last_service_msg)
 
-    def action_start_nav(self) -> None:
-        self._backend.call_trigger(Services.WAYPOINT_START)
+        tab = self._current_tab
+        if tab == 'top':
+            self.query_one('#top', TopPage).refresh_data(s)
+        elif tab == 'waypoint':
+            self.query_one('#waypoint', WaypointNavPage).refresh_data(s)
+        elif tab == 'slam':
+            self.query_one('#slam', SlamPage).refresh_data(s)
+        elif tab == 'system':
+            self.query_one('#system', SystemPage).refresh_data(s)
+        elif tab == 'setting':
+            self.query_one('#setting', SettingPage).refresh_data(s)
 
-    def action_stop_nav(self) -> None:
-        self._backend.call_trigger(Services.WAYPOINT_STOP)
+    def action_switch_tab(self, tab_id: str) -> None:
+        self._current_tab = tab_id
+        self.query_one('#content-area', ContentSwitcher).current = tab_id
+        self.query_one('#tab-sidebar', TabSidebar).active_tab = tab_id
 
-    def action_pause_nav(self) -> None:
-        self._backend.publish_pause(active=True)
+    def action_prev_tab(self) -> None:
+        idx = _TAB_IDS.index(self._current_tab)
+        self.action_switch_tab(_TAB_IDS[(idx - 1) % len(_TAB_IDS)])
 
-    def action_resume_nav(self) -> None:
-        self._backend.publish_pause(active=False)
+    def action_next_tab(self) -> None:
+        idx = _TAB_IDS.index(self._current_tab)
+        self.action_switch_tab(_TAB_IDS[(idx + 1) % len(_TAB_IDS)])
 
-    def action_save_map(self) -> None:
-        self._sys_client.save_map()
+    def action_cursor_down(self) -> None:
+        tab = self._current_tab
+        if tab == 'waypoint':
+            self.query_one('#waypoint', WaypointNavPage).move_cursor_down()
+        elif tab == 'slam':
+            self.query_one('#slam', SlamPage).move_cursor_down()
+        elif tab == 'system':
+            self.query_one('#system', SystemPage).move_cursor_down()
+
+    def action_cursor_up(self) -> None:
+        tab = self._current_tab
+        if tab == 'waypoint':
+            self.query_one('#waypoint', WaypointNavPage).move_cursor_up()
+        elif tab == 'slam':
+            self.query_one('#slam', SlamPage).move_cursor_up()
+        elif tab == 'system':
+            self.query_one('#system', SystemPage).move_cursor_up()
+
+    def action_execute(self) -> None:
+        tab = self._current_tab
+        if tab == 'waypoint':
+            self.query_one('#waypoint', WaypointNavPage).execute_cursor()
+        elif tab == 'slam':
+            self.query_one('#slam', SlamPage).execute_cursor()
+
+    def action_page_action_s(self) -> None:
+        tab = self._current_tab
+        if tab == 'system':
+            self.query_one('#system', SystemPage).action_start_focused()
+        elif tab == 'setting':
+            self.query_one('#setting', SettingPage).toggle_simulation(
+                self._state)
+
+    def action_page_action_x(self) -> None:
+        if self._current_tab == 'system':
+            self.query_one('#system', SystemPage).action_stop_focused()
+
+    def action_jump_waypoint(self) -> None:
+        if self._current_tab == 'waypoint':
+            page = self.query_one('#waypoint', WaypointNavPage)
+            idx = page.get_jump_index()
+            if idx is not None:
+                self._backend.publish_jump(idx)
+                self._state.last_service_msg = f'jump → waypoint {idx}'
+
+    # --- WaypointNavPage action routing ---
+
+    def on_waypoint_nav_page_action_selected(
+        self, event: _WaypointNavPage.ActionSelected
+    ) -> None:
+        label = event.label
+        if label == 'Start (3s)':
+            self._backend.call_trigger(Services.WAYPOINT_START)
+        elif label == 'Start Now':
+            self._backend.call_trigger(Services.WAYPOINT_START)
+        elif label == 'Stop':
+            self._backend.call_trigger(Services.WAYPOINT_STOP)
+        elif label == 'Pause':
+            self._backend.publish_pause(active=True)
+        elif label == 'Resume':
+            self._backend.publish_pause(active=False)
+        elif label == 'Reload Waypoints':
+            self._backend.call_trigger(Services.WAYPOINT_RELOAD)
+        elif label == 'Reset Robot Pose':
+            self._sys_client.reset_pose(0.0, 0.0, 0.0, 0.0)
+        elif label == 'Reset AMCL Pose':
+            self._state.last_service_msg = 'Reset AMCL Pose: not available via TUI'
+
+    # --- SlamPage action routing ---
+
+    def on_slam_page_action_selected(self, event: _SlamPage.ActionSelected) -> None:
+        label = event.label
+        if label == 'Start SLAM':
+            self._sys_client.start_service('slam')
+        elif label == 'Stop SLAM':
+            self._sys_client.stop_service('slam')
+        elif label == 'Save Map':
+            self._sys_client.save_map()
+        elif label == 'Reset Robot Pose':
+            self._sys_client.reset_pose(0.0, 0.0, 0.0, 0.0)
+
+    # --- SystemPage service routing ---
+
+    def on_system_page_service_start_requested(
+        self, event: _SystemPage.ServiceStartRequested
+    ) -> None:
+        self._sys_client.start_service(event.service_key)
+
+    def on_system_page_service_stop_requested(
+        self, event: _SystemPage.ServiceStopRequested
+    ) -> None:
+        self._sys_client.stop_service(event.service_key)
