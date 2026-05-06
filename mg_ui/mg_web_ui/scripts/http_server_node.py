@@ -53,7 +53,9 @@ class HttpServerNode(Node):
     def destroy_node(self) -> None:
         self._server.shutdown()
         self._server.server_close()
-        self._thread.join()
+        self._thread.join(timeout=5.0)
+        if self._thread.is_alive():
+            self.get_logger().warn('http server thread did not terminate in time')
         super().destroy_node()
 
 
