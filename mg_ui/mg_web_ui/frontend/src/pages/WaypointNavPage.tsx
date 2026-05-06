@@ -437,7 +437,7 @@ export default function WaypointNavPage({
       client={client}
       accordionItems={accordionItems}
       defaultOpen={[
-        "status",
+        "waypointnav_status",
         "control",
         ...(isSimulation ? ["simulation"] : []),
       ]}
