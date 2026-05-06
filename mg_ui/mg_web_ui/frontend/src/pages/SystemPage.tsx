@@ -1,117 +1,88 @@
-import { useState } from "react"
-import { useDiagnosticsMap } from "../hooks/useDiagnosticsMap"
-import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient"
-import { SystemManagerHandle } from "../hooks/useSystemManagerClient"
-import { DIAG_COLOR, DIAG_LEVEL } from "../types"
-import ApiLogPanel from "../components/ApiLogPanel"
+import { useState } from "react";
+import { useDiagnosticsMap } from "../hooks/useDiagnosticsMap";
+import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
+import { SystemManagerHandle } from "../hooks/useSystemManagerClient";
+import DiagnosticsTable from "../components/panels/DiagnosticsTable";
+import ApiLogPanel from "../components/panels/ApiLogPanel";
+import SectionLabel from "../components/ui/SectionLabel";
+import ActionButton from "../components/ui/ActionButton";
+import StatusBadge from "../components/ui/StatusBadge";
 
 export default function SystemPage({
   client,
   sysManager,
 }: {
-  client: FoxgloveClientHandle
-  sysManager: SystemManagerHandle
+  client: FoxgloveClientHandle;
+  sysManager: SystemManagerHandle;
 }) {
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const { callApi, containers } = sysManager
-  const diagStatuses = useDiagnosticsMap(client)
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { callApi, containers } = sysManager;
+  const diagStatuses = useDiagnosticsMap(client);
 
-  const SERVICES = [
+  const MANAGED_SERVICES = [
+    { key: "navigation", label: "Navigation" },
+    { key: "slam", label: "SLAM" },
     { key: "foxglove-bridge", label: "Foxglove Bridge" },
     { key: "diagnostics", label: "Diagnostics" },
     { key: "waypoint-editor", label: "Waypoint Editor" },
-  ] as const
+    { key: "gazebo-simulation", label: "Gazebo Simulation" },
+    { key: "rviz2", label: "RViz2" },
+    { key: "rviz2-navigation", label: "RViz2 Navigation" },
+    { key: "rviz2-slam", label: "RViz2 SLAM" },
+  ] as const;
 
-  const handleServiceStart = async (service: string) => {
-    setLoading(true)
-    setError(null)
+  const callService = async (path: string) => {
+    setLoading(true);
+    setError(null);
     try {
-      const result = await callApi(`/${service}/start`)
-      if (!result.success) setError(result.message)
+      const result = await callApi(path);
+      if (!result.success) setError(result.message);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
-
-  const handleServiceStop = async (service: string) => {
-    setLoading(true)
-    setError(null)
-    try {
-      const result = await callApi(`/${service}/stop`)
-      if (!result.success) setError(result.message)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const statusColor = (status: string | undefined) => {
-    if (status === "running") return "text-green-400"
-    if (status === "exited" || status === "dead") return "text-red-400"
-    return "text-gray-400"
-  }
+  };
 
   return (
     <div className="space-y-6">
       <section className="bg-gray-800 rounded-lg p-4 space-y-3">
-        <p className="text-xs text-gray-400">Services</p>
-        {error && <p className="text-red-400 text-sm">{error}</p>}
-        <div className="space-y-2">
-          {SERVICES.map(({ key, label }) => (
+        <SectionLabel text="Services" />
+        <div className="space-y-3">
+          {MANAGED_SERVICES.map(({ key, label }) => (
             <div key={key} className="flex items-center gap-3">
               <span className="w-36 text-sm text-gray-300">{label}</span>
-              <span className={`w-20 text-xs font-mono ${statusColor(containers[key])}`}>
-                {containers[key] ?? "unknown"}
-              </span>
-              <button
-                onClick={() => handleServiceStart(key)}
-                disabled={loading || containers[key] === "running"}
-                className="bg-green-700 hover:bg-green-600 disabled:opacity-40 px-3 py-1 rounded text-xs font-medium"
-              >
-                Start
-              </button>
-              <button
-                onClick={() => handleServiceStop(key)}
-                disabled={loading || containers[key] !== "running"}
-                className="bg-red-700 hover:bg-red-600 disabled:opacity-40 px-3 py-1 rounded text-xs font-medium"
-              >
-                Stop
-              </button>
+              <StatusBadge status={containers[key] ?? "unknown"} />
+              <div className="flex gap-2">
+                <ActionButton
+                  label="Start"
+                  onClick={() => callService(`/${key}/start`)}
+                  variant="green"
+                  size="sm"
+                  disabled={loading}
+                />
+                <ActionButton
+                  label="Stop"
+                  onClick={() => callService(`/${key}/stop`)}
+                  variant="red"
+                  size="sm"
+                  disabled={loading}
+                />
+              </div>
             </div>
           ))}
+          {error && <p className="text-red-400 text-sm">{error}</p>}
         </div>
       </section>
 
       <section className="bg-gray-800 rounded-lg p-4">
-        <p className="text-xs text-gray-400 mb-3">Diagnostics Detail</p>
-        {diagStatuses.length > 0 ? (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-gray-400 text-left border-b border-gray-700">
-                <th className="pb-2 w-16">Level</th>
-                <th className="pb-2">Name</th>
-                <th className="pb-2">Message</th>
-              </tr>
-            </thead>
-            <tbody>
-              {diagStatuses.map((s) => (
-                <tr key={s.name} className="border-b border-gray-700/50">
-                  <td className={`py-2 font-semibold ${DIAG_COLOR[s.level]}`}>{DIAG_LEVEL[s.level]}</td>
-                  <td className="py-2 text-gray-300">{s.name}</td>
-                  <td className="py-2 text-gray-500">{s.message}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="text-sm text-gray-500">waiting for /diagnostics…</p>
-        )}
+        <SectionLabel text="Diagnostics" />
+        <div className="mt-3">
+          <DiagnosticsTable statuses={diagStatuses} />
+        </div>
       </section>
       <ApiLogPanel logs={sysManager.logs} />
     </div>
-  )
+  );
 }

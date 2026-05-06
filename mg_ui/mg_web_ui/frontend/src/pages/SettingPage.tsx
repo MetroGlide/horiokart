@@ -5,6 +5,7 @@ import {
   OverlayKey,
 } from "../contexts/VisualizationContext";
 import { useTeleop } from "../contexts/TeleopContext";
+import Toggle from "../components/ui/Toggle";
 
 interface LayerGroup {
   label: string;
@@ -76,23 +77,6 @@ const OVERLAY_CONFIG: OverlayItem[] = [
   },
 ];
 
-function Toggle({ value, onChange }: { value: boolean; onChange: () => void }) {
-  return (
-    <button
-      onClick={onChange}
-      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-        value ? "bg-blue-600" : "bg-gray-600"
-      }`}
-    >
-      <span
-        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-          value ? "translate-x-6" : "translate-x-1"
-        }`}
-      />
-    </button>
-  );
-}
-
 export default function SettingPage() {
   const { isSimulation, setIsSimulation } = useSimulation();
   const { enabled, layers, overlays, setEnabled, toggleLayer, toggleOverlay } =
@@ -127,8 +111,7 @@ export default function SettingPage() {
           </span>
         </div>
         <p className="text-xs text-gray-500">
-          ON にすると各ページの Simulation
-          関連機能が表示されます。設定は保持されます。
+          Enable to show simulation-related features on each page.
         </p>
       </section>
 
@@ -146,8 +129,7 @@ export default function SettingPage() {
           </span>
         </div>
         <p className="text-xs text-gray-500">
-          OFF にすると RViz
-          ビューア全体が無効化され、関連トピックの購読が停止します。
+          Disable to stop all visualization topic subscriptions.
         </p>
 
         {enabled && (
@@ -196,7 +178,7 @@ export default function SettingPage() {
       <section className="bg-gray-800 rounded-lg p-4 space-y-4">
         <p className="text-xs text-gray-400">Teleop</p>
         <div>
-          <p className="text-xs text-gray-400 mb-2">Pad 速度上限</p>
+          <p className="text-xs text-gray-400 mb-2">Pad speed limit</p>
           <div className="grid grid-cols-2 gap-4">
             <label className="flex flex-col gap-1">
               <span className="text-sm text-gray-300">Max Linear (m/s)</span>
@@ -232,16 +214,16 @@ export default function SettingPage() {
             />
             <div>
               <span className="text-sm text-gray-300">
-                Gauge: Pad 上限と同期
+                Gauge: Sync with pad limits
               </span>
               <p className="text-xs text-gray-500">
-                ONのときメーター表示上限 = パッド速度上限
+                When ON, gauge display limit equals pad speed limit.
               </p>
             </div>
           </div>
           {!gaugeSyncWithPad && (
             <div>
-              <p className="text-xs text-gray-400 mb-2">Gauge 表示上限</p>
+              <p className="text-xs text-gray-400 mb-2">Gauge display limit</p>
               <div className="grid grid-cols-2 gap-4">
                 <label className="flex flex-col gap-1">
                   <span className="text-sm text-gray-300">

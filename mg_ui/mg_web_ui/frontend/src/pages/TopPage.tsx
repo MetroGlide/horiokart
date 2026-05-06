@@ -2,33 +2,33 @@ import { useNavigate } from "react-router-dom";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { useDiagnosticsMap } from "../hooks/useDiagnosticsMap";
 import { useVisualization } from "../contexts/VisualizationContext";
-import { DIAG_COLOR, DIAG_LEVEL } from "../types";
 import SystemMetrics from "../components/SystemMetrics";
+import DiagnosticsTable from "../components/panels/DiagnosticsTable";
 
 const navCards = [
   {
     label: "Waypoint Nav",
     to: "/waypoint",
     icon: "🗺️",
-    description: "ウェイポイントナビゲーション制御",
+    description: "Waypoint navigation control",
   },
   {
     label: "SLAM",
     to: "/slam",
     icon: "📡",
-    description: "SLAM・地図保存・ローカライゼーション",
+    description: "SLAM, map saving, localization",
   },
   {
     label: "System",
     to: "/system",
     icon: "🛠️",
-    description: "サービス管理・診断情報",
+    description: "Service management & diagnostics",
   },
   {
     label: "Setting",
     to: "/setting",
     icon: "⚙️",
-    description: "シミュレーションモード・表示設定",
+    description: "Simulation mode, display settings",
   },
 ];
 
@@ -81,19 +81,10 @@ export default function TopPage({ client }: { client: FoxgloveClientHandle }) {
       {warnCount + errorCount > 0 && (
         <section className="bg-gray-800 rounded-lg p-4">
           <p className="text-xs text-gray-400 mb-2">Alerts</p>
-          <ul className="space-y-1">
-            {diagStatuses
-              .filter((s) => s.level >= 1)
-              .map((s) => (
-                <li key={s.name} className="flex gap-2 text-sm">
-                  <span className={`font-semibold ${DIAG_COLOR[s.level]}`}>
-                    {DIAG_LEVEL[s.level]}
-                  </span>
-                  <span className="text-gray-300">{s.name}</span>
-                  <span className="text-gray-500">{s.message}</span>
-                </li>
-              ))}
-          </ul>
+          <DiagnosticsTable
+            statuses={diagStatuses.filter((s) => s.level >= 1)}
+            compact
+          />
         </section>
       )}
 

@@ -160,11 +160,11 @@ export default function WaypointNavPage({
 
   const accordionItems = [
     {
-      id: "status",
-      label: "コンテナステータス",
+      id: "container_status",
+      label: "Container",
       children: (
         <div className="space-y-2">
-          <ContainerStatusCard title="Navigation Container" status={navState} />
+          <ContainerStatusCard title="Navigation" status={navState} />
           <ServiceControlCard
             title="Control"
             buttons={[
@@ -186,11 +186,11 @@ export default function WaypointNavPage({
       ),
     },
     {
-      id: "status",
-      label: "WaypointNav ステータス",
+      id: "waypointnav_status",
+      label: "Status",
       children: (
         <div className="space-y-2">
-          <SectionCard title="Waypoint Sequencer State">
+          <SectionCard title="Sequencer">
             <p className={`text-3xl font-bold ${stateColor}`}>
               {status?.state ?? "—"}
             </p>
@@ -216,7 +216,7 @@ export default function WaypointNavPage({
               </div>
             )}
           </SectionCard>
-          <SectionCard title="Nav2 Status">
+          <SectionCard title="Nav2">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <span className="text-xs text-gray-400">
@@ -293,10 +293,10 @@ export default function WaypointNavPage({
     },
     {
       id: "control",
-      label: "コントロール",
+      label: "Control",
       children: (
         <div className="space-y-2">
-          <SectionCard title="ナビゲーション制御">
+          <SectionCard title="Navigation Control">
             <div className="flex flex-wrap gap-3 items-end">
               <button
                 onClick={handleStartImmediate}
@@ -356,7 +356,7 @@ export default function WaypointNavPage({
             </div>
             {error && <p className="text-red-400 text-sm">{error}</p>}
           </SectionCard>
-          <SectionCard title="Waypoint Jump">
+          <SectionCard title="Jump">
             <div className="flex gap-3 items-end">
               <div>
                 <label className="block text-xs text-gray-400 mb-1">
@@ -385,15 +385,15 @@ export default function WaypointNavPage({
       ? [
           {
             id: "simulation",
-            label: "シミュレーション",
+            label: "Simulation",
             children: (
               <div className="space-y-2">
                 <ContainerStatusCard
-                  title="シナリオテストコンテナ"
+                  title="Scenario Test"
                   status={scenarioState}
                 />
                 <ServiceControlCard
-                  title="シナリオテスト制御"
+                  title="Scenario Test Control"
                   buttons={[
                     {
                       label: "Start",
@@ -421,7 +421,7 @@ export default function WaypointNavPage({
       : []),
     {
       id: "log",
-      label: "ログ",
+      label: "Log",
       children: <ApiLogSection logs={sysManager.logs} />,
     },
   ];

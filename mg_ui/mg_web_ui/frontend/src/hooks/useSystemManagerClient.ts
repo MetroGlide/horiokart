@@ -1,23 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ApiLog, CallApi, SystemManagerHandle } from '../types/api'
 
-export type CallApi = (
-  path: string,
-  body?: unknown,
-) => Promise<{ success: boolean; message: string }>
-
-export interface ApiLog {
-  id: number
-  timestamp: string
-  path: string
-  success: boolean
-  message: string
-}
-
-export interface SystemManagerHandle {
-  containers: Record<string, string>
-  logs: ApiLog[]
-  callApi: CallApi
-}
+export type { ApiLog, CallApi, SystemManagerHandle }
 
 const BASE_URL = `http://${window.location.hostname}:8001`
 

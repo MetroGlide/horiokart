@@ -41,9 +41,9 @@ export default function SlamPage({
       label: "SLAM",
       children: (
         <div className="space-y-2">
-          <ContainerStatusCard title="SLAM Container" status={slamState} />
+          <ContainerStatusCard title="SLAM" status={slamState} />
           <ServiceControlCard
-            title="SLAM Control"
+            title="Control"
             buttons={[
               {
                 label: "Start SLAM",
@@ -71,7 +71,7 @@ export default function SlamPage({
       ? [
           {
             id: "simulation",
-            label: "シミュレーション",
+            label: "Simulation",
             children: (
               <SimulationPoseSection
                 onResetRobot={(pose) => call("/simulation/reset-pose")}
@@ -83,7 +83,7 @@ export default function SlamPage({
       : []),
     {
       id: "log",
-      label: "ログ",
+      label: "Log",
       children: <ApiLogSection logs={sysManager.logs} />,
     },
   ];
