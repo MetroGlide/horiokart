@@ -55,13 +55,23 @@ export default function SystemPage({
               <span className="w-36 text-sm text-gray-300">{label}</span>
               <StatusBadge status={containers[key] ?? "unknown"} />
               <div className="flex gap-2">
-                <ActionButton
-                  label="Start"
-                  onClick={() => callService(`/${key}/start`)}
-                  variant="green"
-                  size="sm"
-                  disabled={loading}
-                />
+                {containers[key] === "running" ? (
+                  <ActionButton
+                    label="Restart"
+                    onClick={() => callService(`/${key}/restart`)}
+                    variant="blue"
+                    size="sm"
+                    disabled={loading}
+                  />
+                ) : (
+                  <ActionButton
+                    label="Start"
+                    onClick={() => callService(`/${key}/start`)}
+                    variant="green"
+                    size="sm"
+                    disabled={loading}
+                  />
+                )}
                 <ActionButton
                   label="Stop"
                   onClick={() => callService(`/${key}/stop`)}

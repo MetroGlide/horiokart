@@ -6,6 +6,7 @@ import RobotPageLayout from "../components/RobotPageLayout";
 import ApiLogSection from "../components/sections/ApiLogSection";
 import ContainerStatusCard from "../components/sections/ContainerStatusCard";
 import ServiceControlCard from "../components/sections/ServiceControlCard";
+import SectionCard from "../components/layout/SectionCard";
 import SimulationPoseSection from "../components/sections/SimulationPoseSection";
 
 export default function SlamPage({
@@ -17,16 +18,18 @@ export default function SlamPage({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mapDir, setMapDir] = useState("/root/ros2_data");
+  const [mapName, setMapName] = useState("map");
   const { isSimulation } = useSimulation();
 
   const { containers, callApi } = sysManager;
   const slamState = containers["slam"] ?? "unknown";
 
-  const call = async (path: string) => {
+  const call = async (path: string, body?: unknown) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await callApi(path);
+      const result = await callApi(path, body);
       if (!result.success) setError(result.message);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -45,25 +48,55 @@ export default function SlamPage({
           <ServiceControlCard
             title="Control"
             buttons={[
-              {
-                label: "Start SLAM",
-                onClick: () => call("/slam/start"),
-                variant: "green",
-              },
+              slamState === "running"
+                ? {
+                    label: "Restart SLAM",
+                    onClick: () => call("/slam/restart"),
+                    variant: "blue" as const,
+                  }
+                : {
+                    label: "Start SLAM",
+                    onClick: () => call("/slam/start"),
+                    variant: "green" as const,
+                  },
               {
                 label: "Stop SLAM",
                 onClick: () => call("/slam/stop"),
                 variant: "red",
               },
-              {
-                label: "Save Map",
-                onClick: () => call("/map/save"),
-                variant: "blue",
-              },
             ]}
             loading={loading}
             error={error}
           />
+          <SectionCard title="Save Map">
+            <div className="space-y-2">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Directory</label>
+                <input
+                  type="text"
+                  value={mapDir}
+                  onChange={(e) => setMapDir(e.target.value)}
+                  className="w-full bg-gray-700 text-sm text-white px-2 py-1 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Map Name</label>
+                <input
+                  type="text"
+                  value={mapName}
+                  onChange={(e) => setMapName(e.target.value)}
+                  className="w-full bg-gray-700 text-sm text-white px-2 py-1 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <button
+                onClick={() => call("/map/save", { map_dir: mapDir, map_name: mapName })}
+                disabled={loading}
+                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
+              >
+                Save Map
+              </button>
+            </div>
+          </SectionCard>
         </div>
       ),
     },

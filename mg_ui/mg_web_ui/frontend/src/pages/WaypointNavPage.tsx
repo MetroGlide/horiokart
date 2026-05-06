@@ -168,11 +168,17 @@ export default function WaypointNavPage({
           <ServiceControlCard
             title="Control"
             buttons={[
-              {
-                label: "Start",
-                onClick: () => callSystemManager("/navigation/start"),
-                variant: "green",
-              },
+              navState === "running"
+                ? {
+                    label: "Restart",
+                    onClick: () => callSystemManager("/navigation/restart"),
+                    variant: "blue" as const,
+                  }
+                : {
+                    label: "Start",
+                    onClick: () => callSystemManager("/navigation/start"),
+                    variant: "green" as const,
+                  },
               {
                 label: "Stop",
                 onClick: () => callSystemManager("/navigation/stop"),

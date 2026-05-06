@@ -4,6 +4,7 @@ import json
 import logging
 import math
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -154,8 +155,49 @@ class DockerManager:
             logger.error("stop failed service=%s: %s", service, e)
             return False, str(e)
 
-    def save_map(self) -> tuple[bool, str]:
-        logger.info("save_map")
+    def restart(self, service: str) -> tuple[bool, str]:
+        logger.info("docker compose restart %s (cwd=%s)", service, self._host_project_dir)
+        env = os.environ.copy()
+        env["HOME"] = self._host_home
+        try:
+            result = subprocess.run(
+                ["docker", "compose", "restart", service],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=self._host_project_dir,
+                env=env,
+            )
+            stdout = result.stdout.strip()
+            stderr = result.stderr.strip()
+            if result.returncode == 0:
+                logger.info(
+                    "compose restart succeeded service=%s stdout=%s", service, stdout)
+                return True, stdout
+            logger.error("compose restart failed service=%s rc=%d stderr=%s",
+                         service, result.returncode, stderr)
+            return False, stderr
+        except subprocess.TimeoutExpired:
+            logger.error("compose restart timed out service=%s", service)
+            return False, "command timed out"
+        except Exception as e:
+            logger.error("compose restart exception service=%s: %s", service, e)
+            return False, str(e)
+
+    def save_map(self, map_dir: str, map_name: str) -> tuple[bool, str]:
+        logger.info("save_map map_dir=%s map_name=%s", map_dir, map_name)
+        ok, output = self.exec_in_container(
+            "slam",
+            [
+                "bash", "-c",
+                f"if [ -f '{map_dir}/{map_name}.pgm' ] || [ -f '{map_dir}/{map_name}.yaml' ];"
+                " then echo EXISTS; else echo OK; fi",
+            ],
+        )
+        if not ok:
+            return False, output
+        if "EXISTS" in output:
+            return False, f"map already exists: {map_dir}/{map_name}"
         return self.exec_in_container(
             "slam",
             [
@@ -163,8 +205,8 @@ class DockerManager:
                 "source /opt/ros/humble/setup.bash && "
                 "source /root/ros2_ws/install/setup.bash && "
                 "ros2 service call /map_saver/save_map nav2_msgs/srv/SaveMap "
-                '"{map_topic: map, map_url: /root/ros2_data/map, image_format: pgm, '
-                'map_mode: trinary, free_thresh: 0.25, occupied_thresh: 0.65}"',
+                f'"{{map_topic: map, map_url: {map_dir}/{map_name}, image_format: pgm, '
+                'map_mode: trinary, free_thresh: 0.25, occupied_thresh: 0.65}}"',
             ],
         )
 
@@ -223,6 +265,14 @@ def _make_stop_handler(service: str):
     return handler
 
 
+def _make_restart_handler(service: str):
+    def handler():
+        ok, msg = manager.restart(service)
+        return _result(ok, msg)
+    handler.__name__ = f"restart_{service.replace('-', '_')}"
+    return handler
+
+
 @app.get("/status")
 def get_status():
     return manager.get_status()
@@ -263,12 +313,32 @@ for _endpoint, _service in COMPOSE_SERVICES.items():
         _make_stop_handler(_service),
         methods=["POST"],
     )
+    app.add_api_route(
+        f"/{_endpoint}/restart",
+        _make_restart_handler(_service),
+        methods=["POST"],
+    )
+
+
+_MAP_PATH_RE = re.compile(r"^[a-zA-Z0-9/_\-\.]+$")
+_MAP_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
+
+
+class SaveMapRequest(BaseModel):
+    map_dir: str = "/root/ros2_data"
+    map_name: str = "map"
 
 
 @app.post("/map/save")
-async def save_map():
+async def save_map(body: SaveMapRequest):
+    if not _MAP_PATH_RE.match(body.map_dir):
+        return _result(False, "invalid map_dir")
+    if not _MAP_NAME_RE.match(body.map_name):
+        return _result(False, "invalid map_name")
     loop = asyncio.get_event_loop()
-    ok, msg = await loop.run_in_executor(None, manager.save_map)
+    ok, msg = await loop.run_in_executor(
+        None, manager.save_map, body.map_dir, body.map_name
+    )
     return _result(ok, msg)
 
 

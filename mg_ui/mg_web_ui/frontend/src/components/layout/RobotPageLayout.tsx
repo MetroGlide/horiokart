@@ -70,14 +70,18 @@ export default function RobotPageLayout({
               {extraOverlay}
             </div>
           </div>
-          {layers.cameraImage && (
+          {(layers.colorImage || layers.depthImage) && (
             <div className="flex gap-2 h-40 flex-shrink-0">
-              <div className="flex-1 rounded-lg overflow-hidden border border-gray-700">
-                <CameraImagePanel client={client} className="w-full h-full" />
-              </div>
-              <div className="flex-1 rounded-lg overflow-hidden border border-gray-700">
-                <DepthImagePanel client={client} className="w-full h-full" />
-              </div>
+              {layers.colorImage && (
+                <div className="flex-1 rounded-lg overflow-hidden border border-gray-700">
+                  <CameraImagePanel client={client} className="w-full h-full" />
+                </div>
+              )}
+              {layers.depthImage && (
+                <div className="flex-1 rounded-lg overflow-hidden border border-gray-700">
+                  <DepthImagePanel client={client} className="w-full h-full" />
+                </div>
+              )}
             </div>
           )}
           {extraPanels}

@@ -48,7 +48,8 @@ const LAYER_GROUPS: LayerGroup[] = [
     label: "Sensors",
     items: [
       { key: "pointCloud", label: "Point Cloud (Depth)" },
-      { key: "cameraImage", label: "Camera Image" },
+      { key: "colorImage", label: "Color Image" },
+      { key: "depthImage", label: "Depth Image" },
     ],
   },
 ];

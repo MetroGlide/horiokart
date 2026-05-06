@@ -22,7 +22,8 @@ export type LayerKey =
   | "waypointMarkers"
   | "collisionPolygons"
   | "pointCloud"
-  | "cameraImage";
+  | "colorImage"
+  | "depthImage";
 
 export type OverlayKey = "joystick" | "velocityGauge" | "systemMetrics";
 
@@ -39,7 +40,8 @@ const DEFAULT_LAYERS: Record<LayerKey, boolean> = {
   waypointMarkers: true,
   collisionPolygons: false,
   pointCloud: false,
-  cameraImage: false,
+  colorImage: false,
+  depthImage: false,
 };
 
 const DEFAULT_OVERLAYS: Record<OverlayKey, boolean> = {
