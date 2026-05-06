@@ -35,6 +35,10 @@ COMPOSE_SERVICES: dict[str, str] = {
     "foxglove-bridge": "foxglove-bridge",
     "diagnostics": "diagnostics",
     "scenario-test": "scenario-test",
+    "gazebo-simulation": "gazebo-simulation",
+    "rviz2": "rviz2",
+    "rviz2-navigation": "rviz2-navigation",
+    "rviz2-slam": "rviz2-slam",
 }
 
 
