@@ -7,7 +7,11 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Bool
+from nav2_msgs.msg import CollisionDetectorState
 from mg_msgs.msg import SequencerStatus
 
 
@@ -51,6 +55,42 @@ MONITORED_TOPICS: list[dict] = [
         "expected_hz": 1.0,
         "qos": None,
     },
+    {
+        "name": "cmd_vel",
+        "msg_type": Twist,
+        "expected_hz": 10.0,
+        "qos": _BEST_EFFORT_QOS,
+    },
+    {
+        "name": "odom",
+        "msg_type": Odometry,
+        "expected_hz": 20.0,
+        "qos": _BEST_EFFORT_QOS,
+    },
+    {
+        "name": "scan_top_lidar",
+        "msg_type": LaserScan,
+        "expected_hz": 10.0,
+        "qos": _BEST_EFFORT_QOS,
+    },
+    {
+        "name": "scan_front_lidar",
+        "msg_type": LaserScan,
+        "expected_hz": 10.0,
+        "qos": _BEST_EFFORT_QOS,
+    },
+    {
+        "name": "motor_driver_node/emergency_stop",
+        "msg_type": Bool,
+        "expected_hz": 1.0,
+        "qos": None,
+    },
+    {
+        "name": "collision_detector_state",
+        "msg_type": CollisionDetectorState,
+        "expected_hz": 5.0,
+        "qos": _BEST_EFFORT_QOS,
+    },
 ]
 
 
@@ -83,6 +123,8 @@ class DiagnosticsNode(Node):
             'bt_navigator',
             'controller_server',
             'planner_server',
+            'collision_monitor',
+            'motor_driver_node',
         ])
         self.declare_parameter('hz_warn_ratio', 0.5)
 
