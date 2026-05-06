@@ -52,6 +52,8 @@ class HttpServerNode(Node):
 
     def destroy_node(self) -> None:
         self._server.shutdown()
+        self._server.server_close()
+        self._thread.join()
         super().destroy_node()
 
 
