@@ -71,7 +71,9 @@ export default function SlamPage({
           <SectionCard title="Save Map">
             <div className="space-y-2">
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Directory</label>
+                <label className="text-xs text-gray-400 block mb-1">
+                  Directory
+                </label>
                 <input
                   type="text"
                   value={mapDir}
@@ -80,7 +82,9 @@ export default function SlamPage({
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 block mb-1">Map Name</label>
+                <label className="text-xs text-gray-400 block mb-1">
+                  Map Name
+                </label>
                 <input
                   type="text"
                   value={mapName}
@@ -89,7 +93,9 @@ export default function SlamPage({
                 />
               </div>
               <button
-                onClick={() => call("/map/save", { map_dir: mapDir, map_name: mapName })}
+                onClick={() =>
+                  call("/map/save", { map_dir: mapDir, map_name: mapName })
+                }
                 disabled={loading}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded font-medium text-sm"
               >

@@ -156,7 +156,8 @@ class DockerManager:
             return False, str(e)
 
     def restart(self, service: str) -> tuple[bool, str]:
-        logger.info("docker compose restart %s (cwd=%s)", service, self._host_project_dir)
+        logger.info("docker compose restart %s (cwd=%s)",
+                    service, self._host_project_dir)
         env = os.environ.copy()
         env["HOME"] = self._host_home
         try:
@@ -181,7 +182,8 @@ class DockerManager:
             logger.error("compose restart timed out service=%s", service)
             return False, "command timed out"
         except Exception as e:
-            logger.error("compose restart exception service=%s: %s", service, e)
+            logger.error(
+                "compose restart exception service=%s: %s", service, e)
             return False, str(e)
 
     def save_map(self, map_dir: str, map_name: str) -> tuple[bool, str]:
