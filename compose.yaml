@@ -13,7 +13,7 @@ x-runtime-base: &runtime-base
     - .env
   volumes:
     - /tmp/.X11-unix:/tmp/.X11-unix
-    - $HOME/.Xauthority/:/root/.Xauthority
+    - $HOME/.Xauthority:/root/.Xauthority
     - ./:/app/
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
@@ -36,7 +36,7 @@ x-develop-base: &develop-base
     - PYTHONUNBUFFERED=1
   volumes:
     - /tmp/.X11-unix:/tmp/.X11-unix
-    - $HOME/.Xauthority/:/root/.Xauthority
+    - $HOME/.Xauthority:/root/.Xauthority
     - ./:/app/
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
@@ -62,7 +62,7 @@ x-simulation-base: &simulation-base
     - IGN_GAZEBO_RESOURCE_PATH=/root/.ignition/fuel
   volumes:
     - /tmp/.X11-unix:/tmp/.X11-unix
-    - $HOME/.Xauthority/:/root/.Xauthority
+    - $HOME/.Xauthority:/root/.Xauthority
     - ./:/app/
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
@@ -211,6 +211,7 @@ services:
   system-manager:
     <<: *develop-base
     environment:
+      - DISPLAY=${DISPLAY}
       - PYTHONUNBUFFERED=1
       - PROJECT_DIR=/app
       - HOST_PROJECT_DIR=${PWD}
@@ -220,7 +221,7 @@ services:
       - UI_DATA_DIR=/root/ros2_data/mg_ui_local
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
-      - $HOME/.Xauthority/:/root/.Xauthority
+      - $HOME/.Xauthority:/root/.Xauthority
       - ./:/app/
       - ${PWD}:${PWD}
       - /dev:/dev
