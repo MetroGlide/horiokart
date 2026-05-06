@@ -113,7 +113,7 @@ export default function SlamPage({
             label: "Simulation",
             children: (
               <SimulationPoseSection
-                onResetRobot={(pose) => call("/simulation/reset-pose")}
+                onResetRobot={(pose) => call("/simulation/reset-pose", pose)}
                 loading={loading}
               />
             ),
