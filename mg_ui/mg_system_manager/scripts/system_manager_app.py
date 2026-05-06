@@ -20,11 +20,32 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+
+def _get_allowed_origins() -> list[str]:
+    configured_origins = os.environ.get("SYSTEM_MANAGER_ALLOW_ORIGINS")
+    if not configured_origins:
+        return DEFAULT_ALLOWED_ORIGINS
+
+    origins = [
+        origin.strip()
+        for origin in configured_origins.split(",")
+        if origin.strip()
+    ]
+    if origins:
+        return origins
+    return DEFAULT_ALLOWED_ORIGINS
+
+
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_get_allowed_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )

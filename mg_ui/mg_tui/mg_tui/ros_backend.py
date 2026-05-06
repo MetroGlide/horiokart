@@ -112,8 +112,11 @@ class RosBackend(Node):
         self._refresh()
 
     def _on_collision_state(self, msg: CollisionDetectorState) -> None:
-        self._state.collision_polygons_active = list(
-            msg.collision_points_polygons)
+        self._state.collision_polygons_active = [
+            polygon
+            for polygon, detected in zip(msg.polygons, msg.detections)
+            if detected
+        ]
         self._refresh()
 
     def call_trigger(self, service: str) -> None:

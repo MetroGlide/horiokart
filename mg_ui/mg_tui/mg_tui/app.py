@@ -145,14 +145,30 @@ class MgTuiApp(App):
 
     # --- WaypointNavPage action routing ---
 
+    def _call_waypoint_start_sequence(self, countdown_ms: int) -> None:
+        start_sequence = getattr(self._backend, 'call_start_sequence', None)
+        if callable(start_sequence):
+            start_sequence(countdown_ms)
+            return
+
+        start_sequence = getattr(self._backend, 'start_sequence', None)
+        if callable(start_sequence):
+            start_sequence(countdown_ms)
+            return
+
+        self._state.last_service_msg = (
+            'Waypoint start unavailable: StartSequence backend is not configured '
+            f'(countdown_ms={countdown_ms})'
+        )
+
     def on_waypoint_nav_page_action_selected(
         self, event: _WaypointNavPage.ActionSelected
     ) -> None:
         label = event.label
         if label == 'Start (3s)':
-            self._backend.call_trigger(Services.WAYPOINT_START)
+            self._call_waypoint_start_sequence(3000)
         elif label == 'Start Now':
-            self._backend.call_trigger(Services.WAYPOINT_START)
+            self._call_waypoint_start_sequence(0)
         elif label == 'Stop':
             self._backend.call_trigger(Services.WAYPOINT_STOP)
         elif label == 'Pause':
