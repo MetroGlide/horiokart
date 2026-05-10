@@ -101,6 +101,7 @@ FROM develop-pkgs AS develop
 
 ARG ROS_DISTRO
 
+COPY --from=runtime /root/ros2_ws/build /root/ros2_ws/build
 COPY --from=runtime /root/ros2_ws/install /root/ros2_ws/install
 
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc \
@@ -124,13 +125,13 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   ros-${ROS_DISTRO}-ros-gz-image \
   ros-${ROS_DISTRO}-ros-gz-interfaces
 
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,target=/var/lib/apt,sharing=locked \
-  apt-get update \
-  && apt-get install -y software-properties-common \
-  && add-apt-repository ppa:kisak/kisak-mesa \
-  && apt-get upgrade -y \
-  && apt-get autoremove --purge -y
+# RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+#   --mount=type=cache,target=/var/lib/apt,sharing=locked \
+#   apt-get update \
+#   && apt-get install -y software-properties-common \
+#   && add-apt-repository ppa:kisak/kisak-mesa \
+#   && apt-get upgrade -y \
+#   && apt-get autoremove --purge -y
 
 # ==============================================================================
 # Stage: simulation
