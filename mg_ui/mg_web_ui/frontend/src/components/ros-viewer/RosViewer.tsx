@@ -17,10 +17,14 @@ import WaypointMarkers from "./layers/WaypointMarkers";
 import CollisionPolygons from "./layers/CollisionPolygons";
 import ParticleCloud from "./layers/ParticleCloud";
 import PointCloud2Layer from "./layers/PointCloud2Layer";
+import PoseArrowInteraction, {
+  PoseInteractionMode,
+} from "./layers/PoseArrowInteraction";
 
 export type ViewerMode = "2d" | "3d";
+export type ViewerInteractionMode = "none" | PoseInteractionMode;
 
-function YawControl2D() {
+function YawControl2D({ enabled = true }: { enabled?: boolean }) {
   const { camera, gl } = useThree();
   const dragging = useRef(false);
   const lastX = useRef(0);
@@ -29,6 +33,7 @@ function YawControl2D() {
     const el = gl.domElement;
 
     const onDown = (e: MouseEvent) => {
+      if (!enabled) return;
       if (e.button === 2) {
         dragging.current = true;
         lastX.current = e.clientX;
@@ -60,7 +65,7 @@ function YawControl2D() {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [camera, gl]);
+  }, [camera, enabled, gl]);
 
   return null;
 }
@@ -69,6 +74,8 @@ interface SceneProps {
   client: FoxgloveClientHandle;
   mode: ViewerMode;
   cameraTarget: "map" | "robot";
+  interactionMode: ViewerInteractionMode;
+  onPoseSet: (x: number, y: number, yaw: number) => void;
 }
 
 function CameraFollowRobot({ tfBuffer }: { tfBuffer: TfBuffer }) {
@@ -87,7 +94,13 @@ function CameraFollowRobot({ tfBuffer }: { tfBuffer: TfBuffer }) {
   return null;
 }
 
-function Scene({ client, mode, cameraTarget }: SceneProps) {
+function Scene({
+  client,
+  mode,
+  cameraTarget,
+  interactionMode,
+  onPoseSet,
+}: SceneProps) {
   const { layers } = useVisualization();
   const tfBuffer = useTfBuffer(client);
 
@@ -95,8 +108,12 @@ function Scene({ client, mode, cameraTarget }: SceneProps) {
     <>
       {mode === "2d" ? (
         <>
-          <MapControls makeDefault screenSpacePanning />
-          <YawControl2D />
+          <MapControls
+            makeDefault
+            screenSpacePanning
+            enabled={interactionMode === "none"}
+          />
+          <YawControl2D enabled={interactionMode === "none"} />
         </>
       ) : (
         <OrbitControls makeDefault />
@@ -152,6 +169,9 @@ function Scene({ client, mode, cameraTarget }: SceneProps) {
       {layers.pointCloud && (
         <PointCloud2Layer client={client} tfBuffer={tfBuffer} />
       )}
+      {interactionMode !== "none" && (
+        <PoseArrowInteraction mode={interactionMode} onPoseSet={onPoseSet} />
+      )}
     </>
   );
 }
@@ -160,12 +180,16 @@ interface RosViewerProps {
   client: FoxgloveClientHandle;
   initialMode?: ViewerMode;
   className?: string;
+  interactionMode?: ViewerInteractionMode;
+  onPoseSet?: (x: number, y: number, yaw: number) => void;
 }
 
 export default function RosViewer({
   client,
   initialMode = "2d",
   className,
+  interactionMode = "none",
+  onPoseSet,
 }: RosViewerProps) {
   const { enabled } = useVisualization();
   const [viewMode, setViewMode] = useState<ViewerMode>(initialMode);
@@ -184,6 +208,12 @@ export default function RosViewer({
         setCameraTarget(v.cameraTarget);
     });
   }, []);
+
+  useEffect(() => {
+    if (interactionMode !== "none") {
+      setViewMode("2d");
+    }
+  }, [interactionMode]);
 
   const handleSetViewMode = (m: ViewerMode) => {
     setViewMode(m);
@@ -220,7 +250,13 @@ export default function RosViewer({
         gl={{ antialias: false }}
       >
         <Suspense fallback={null}>
-          <Scene client={client} mode={viewMode} cameraTarget={cameraTarget} />
+          <Scene
+            client={client}
+            mode={viewMode}
+            cameraTarget={cameraTarget}
+            interactionMode={interactionMode}
+            onPoseSet={onPoseSet ?? (() => {})}
+          />
         </Suspense>
       </Canvas>
       <div className="absolute top-2 right-2 flex gap-1 pointer-events-auto">

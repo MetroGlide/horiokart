@@ -7,6 +7,7 @@ import {
   CameraImagePanel,
   DepthImagePanel,
   ViewerMode,
+  ViewerInteractionMode,
 } from "../ros-viewer";
 import { ReactNode } from "react";
 import VelocityGauge from "../panels/VelocityGauge";
@@ -18,6 +19,8 @@ interface RobotPageLayoutProps {
   accordionItems: AccordionItem[];
   defaultOpen?: string[];
   viewerMode?: ViewerMode;
+  interactionMode?: ViewerInteractionMode;
+  onPoseSet?: (x: number, y: number, yaw: number) => void;
   extraPanels?: ReactNode;
   extraOverlay?: ReactNode;
 }
@@ -27,6 +30,8 @@ export default function RobotPageLayout({
   accordionItems,
   defaultOpen = [],
   viewerMode,
+  interactionMode,
+  onPoseSet,
   extraPanels,
   extraOverlay,
 }: RobotPageLayoutProps) {
@@ -51,6 +56,8 @@ export default function RobotPageLayout({
             <RosViewer
               client={client}
               initialMode={viewerMode}
+              interactionMode={interactionMode}
+              onPoseSet={onPoseSet}
               className="w-full h-full"
             />
             <div className="absolute inset-0 pointer-events-none">
