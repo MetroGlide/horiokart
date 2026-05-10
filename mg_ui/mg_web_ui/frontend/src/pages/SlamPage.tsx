@@ -40,8 +40,8 @@ export default function SlamPage({
 
   const accordionItems = [
     {
-      id: "slam",
-      label: "SLAM",
+      id: "container_status",
+      label: "Container",
       children: (
         <div className="space-y-2">
           <ContainerStatusCard title="SLAM" status={slamState} />
@@ -68,6 +68,14 @@ export default function SlamPage({
             loading={loading}
             error={error}
           />
+        </div>
+      ),
+    },
+    {
+      id: "control",
+      label: "Control",
+      children: (
+        <div className="space-y-2">
           <SectionCard title="Save Map">
             <div className="space-y-2">
               <div>
@@ -131,7 +139,7 @@ export default function SlamPage({
     <RobotPageLayout
       client={client}
       accordionItems={accordionItems}
-      defaultOpen={["slam", ...(isSimulation ? ["simulation"] : [])]}
+      defaultOpen={["control", ...(isSimulation ? ["simulation"] : [])]}
       viewerMode="2d"
     />
   );
