@@ -20,7 +20,8 @@ _up_flags = $(if $(DETACH),-d,)
         build build-all build-no-cache \
         _collect-deps \
         rviz2 rviz2-slam rviz2-navigation down xhost config \
-        test
+        test \
+        diagnostics system-manager foxglove-bridge web-ui web-ui-dev tui
 
 # --- サービス起動 ---
 
@@ -94,7 +95,7 @@ endif
 	$(COMPOSE_BASE) build $(svc)
 
 build-all: _collect-deps
-	$(COMPOSE_BASE) build slam navigation rosbag-replay gazebo-simulation develop rviz2-slam rviz2-navigation rviz2
+	$(COMPOSE_BASE) build slam navigation rosbag-replay gazebo-simulation develop rviz2-slam rviz2-navigation rviz2 web-ui
 
 build-no-cache: _collect-deps
 ifndef svc
@@ -126,6 +127,27 @@ rviz2-slam:
 
 rviz2-navigation:
 	$(COMPOSE) up $(_up_flags) rviz2-navigation
+
+foxglove-bridge:
+	$(COMPOSE) up $(_up_flags) foxglove-bridge
+
+diagnostics:
+	$(COMPOSE) up $(_up_flags) diagnostics
+
+system-manager:
+	$(COMPOSE) up $(_up_flags) system-manager
+
+web-ui:
+	$(COMPOSE) up $(_up_flags) web-ui
+
+web-ui-dev:
+	$(COMPOSE) up web-ui-dev
+
+tui:
+	$(COMPOSE) run --rm -it develop bash -c \
+	  "source /opt/ros/humble/setup.bash && \
+	   source /root/ros2_ws/install/setup.bash && \
+	   ros2 run mg_tui tui_node.py"
 
 xhost:
 	xhost +local:docker

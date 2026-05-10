@@ -13,6 +13,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/SequencerStatus.msg"
   "msg/WaypointList.msg"
   "srv/StartSequence.srv"
+  "srv/ResetSimRobotPose.srv"
   DEPENDENCIES builtin_interfaces geometry_msgs std_msgs
 )
 

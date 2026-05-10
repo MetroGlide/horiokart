@@ -13,7 +13,7 @@ x-runtime-base: &runtime-base
     - .env
   volumes:
     - /tmp/.X11-unix:/tmp/.X11-unix
-    - $HOME/.Xauthority/:/root/.Xauthority
+    - $HOME/.Xauthority:/root/.Xauthority
     - ./:/app/
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
@@ -36,7 +36,7 @@ x-develop-base: &develop-base
     - PYTHONUNBUFFERED=1
   volumes:
     - /tmp/.X11-unix:/tmp/.X11-unix
-    - $HOME/.Xauthority/:/root/.Xauthority
+    - $HOME/.Xauthority:/root/.Xauthority
     - ./:/app/
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
@@ -62,7 +62,7 @@ x-simulation-base: &simulation-base
     - IGN_GAZEBO_RESOURCE_PATH=/root/.ignition/fuel
   volumes:
     - /tmp/.X11-unix:/tmp/.X11-unix
-    - $HOME/.Xauthority/:/root/.Xauthority
+    - $HOME/.Xauthority:/root/.Xauthority
     - ./:/app/
     - /dev:/dev
     - ${HOME}/ros2_data:/root/ros2_data
@@ -184,3 +184,96 @@ services:
         source /root/ros2_ws/install/setup.bash &&
         rviz2 $${RVIZ_CONFIG:+--display-config $$RVIZ_CONFIG}
       "
+
+  diagnostics:
+    <<: *runtime-base
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        ros2 launch mg_diagnostics diagnostics.launch.py
+      "
+
+  waypoint-editor:
+    <<: *develop-base
+    environment:
+      - DISPLAY=${DISPLAY}
+      - PYTHONUNBUFFERED=1
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        ros2 launch mg_waypoint_navigation waypoint_editor.launch.py
+      "
+
+  system-manager:
+    <<: *develop-base
+    environment:
+      - DISPLAY=${DISPLAY}
+      - PYTHONUNBUFFERED=1
+      - PROJECT_DIR=/app
+      - HOST_PROJECT_DIR=${PWD}
+      - HOST_HOME=${HOME}
+      - SIMULATION_WORLD=warehouse
+      - SIMULATION_ROBOT_NAME=mg
+      - UI_DATA_DIR=/root/ros2_data/mg_ui_local
+      - SYSTEM_MANAGER_ALLOW_ORIGINS=http://localhost:8080,http://localhost:5173
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - $HOME/.Xauthority:/root/.Xauthority
+      - ./:/app/
+      - ${PWD}:${PWD}
+      - /dev:/dev
+      - ${HOME}/ros2_data:/root/ros2_data
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: >
+      bash -c "
+        python3 /app/mg_ui/mg_system_manager/scripts/system_manager_app.py
+      "
+
+  foxglove-bridge:
+    <<: *runtime-base
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        ros2 run foxglove_bridge foxglove_bridge
+          --ros-args
+          -p port:=8765
+          -p address:=0.0.0.0
+          -p send_buffer_limit:=10000000
+          -p use_sim_time:=false
+      "
+
+  web-ui:
+    build:
+      context: .
+      dockerfile: "docker/Dockerfile.base"
+      args:
+        ROS_DISTRO: humble
+      target: web-ui
+    image: mg_web_ui
+    tty: true
+    network_mode: "host"
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        ros2 launch mg_web_ui web_ui.launch.py
+      "
+
+  web-ui-dev:
+    image: node:20-slim
+    network_mode: "host"
+    volumes:
+      - ./mg_ui/mg_web_ui/frontend:/app
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host"

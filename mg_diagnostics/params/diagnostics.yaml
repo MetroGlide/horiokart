@@ -1,0 +1,9 @@
+diagnostics_node:
+  ros__parameters:
+    monitored_nodes:
+      - waypoint_sequencer_node
+      - amcl
+      - bt_navigator
+      - controller_server
+      - planner_server
+    hz_warn_ratio: 0.5

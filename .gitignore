@@ -187,10 +187,42 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-
-# VSCode
-.vscode/
-
-
+# Generic Logs & Output
 log/
 output/
+
+### VSCode & Other IDEs / OS ###
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+### React / TypeScript / Vite ###
+# Dependencies
+node_modules/
+.npm
+
+# Node / Package Manager Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build output & Caches
+dist
+dist-ssr
+*.local
+*.tsbuildinfo
+
+# Vite / React Environment variables (機密情報を含むローカル環境変数)
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

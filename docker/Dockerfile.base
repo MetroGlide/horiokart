@@ -79,9 +79,15 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked \
-  apt-get update \
+  install -m 0755 -d /etc/apt/keyrings \
+  && curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc \
+  && chmod a+r /etc/apt/keyrings/docker.asc \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list \
+  && apt-get update \
   && apt-get install -y --no-install-recommends \
   vim \
+  docker-ce-cli \
+  docker-compose-plugin \
   qtbase5-dev libqt5svg5-dev libzmq3-dev libdw-dev \
   ros-${ROS_DISTRO}-rviz2 \
   ros-${ROS_DISTRO}-foxglove-bridge \
@@ -145,6 +151,38 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   && rosdep install -yir --from-paths src --rosdistro ${ROS_DISTRO}
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && colcon build --symlink-install
+
+RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc \
+  && echo "source /root/ros2_ws/install/setup.bash" >> ~/.bashrc
+
+# ==============================================================================
+# Stage: frontend-builder
+# React フロントエンドをビルドする。ランタイムに Node.js は不要。
+# ==============================================================================
+FROM node:20-slim AS frontend-builder
+
+WORKDIR /frontend
+COPY mg_ui/mg_web_ui/frontend/package*.json ./
+RUN npm install
+COPY mg_ui/mg_web_ui/frontend/ ./
+RUN npm run build
+
+# ==============================================================================
+# Stage: web-ui
+# foxglove_bridge + HTTP静的配信。runtime をベースに dist/ を焼き込む。
+# ==============================================================================
+FROM runtime AS web-ui
+
+ARG ROS_DISTRO
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+  --mount=type=cache,target=/var/lib/apt,sharing=locked \
+  apt-get update \
+  && apt-get install -y --no-install-recommends \
+  ros-${ROS_DISTRO}-foxglove-bridge
+
+COPY --from=frontend-builder /frontend/dist/ /root/ros2_ws/install/mg_web_ui/share/mg_web_ui/frontend/dist/
 
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc \
   && echo "source /root/ros2_ws/install/setup.bash" >> ~/.bashrc
