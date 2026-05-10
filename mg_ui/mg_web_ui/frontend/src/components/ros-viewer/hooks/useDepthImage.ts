@@ -67,7 +67,7 @@ export function useDepthImage(client: FoxgloveClientHandle): string | null {
           const rawBuf = data.buffer as ArrayBuffer
           const safeBuf =
             typeof SharedArrayBuffer !== "undefined" && rawBuf instanceof SharedArrayBuffer
-              ? rawBuf.slice(0)
+              ? (rawBuf as unknown as SharedArrayBuffer).slice(0)
               : rawBuf
           const view = new DataView(safeBuf, data.byteOffset, data.byteLength)
           for (let y = 0; y < image.height; y++) {
