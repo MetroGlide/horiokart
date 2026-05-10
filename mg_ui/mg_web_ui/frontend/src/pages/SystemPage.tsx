@@ -6,7 +6,6 @@ import { useDockerLogStream } from "../hooks/useDockerLogStream";
 import DiagnosticsTable from "../components/panels/DiagnosticsTable";
 import ApiLogPanel from "../components/panels/ApiLogPanel";
 import ServiceLogPanel from "../components/panels/ServiceLogPanel";
-import SectionLabel from "../components/ui/SectionLabel";
 import ActionButton from "../components/ui/ActionButton";
 import StatusBadge from "../components/ui/StatusBadge";
 
@@ -140,99 +139,164 @@ export default function SystemPage({
     ({ key }) => containers[key] === "running",
   );
 
-  return (
-    <div className="space-y-6">
-      <section className="bg-gray-800 rounded-lg p-4 space-y-3">
-        <SectionLabel text="Services" />
-        <div className="flex flex-wrap gap-2">
-          <ActionButton
-            label="Stop All"
-            onClick={callBulkStop}
-            variant="red"
-            size="sm"
-            disabled={loading}
-          />
-          <ActionButton
-            label="Restart Running"
-            onClick={callBulkRestartRunning}
-            variant="blue"
-            size="sm"
-            disabled={loading || !hasRunningService}
-          />
-        </div>
-        <div className="space-y-3">
-          {MANAGED_SERVICES.map(({ key, label }) => (
-            <div key={key} className="flex items-center gap-3 flex-wrap">
-              <span className="w-36 text-sm text-gray-300">{label}</span>
-              <StatusBadge status={containers[key] ?? "unknown"} />
-              <div className="flex gap-2">
-                {containers[key] === "running" ? (
-                  <ActionButton
-                    label="Restart"
-                    onClick={() => callService(`/${key}/restart`)}
-                    variant="blue"
-                    size="sm"
-                    disabled={loading}
-                  />
-                ) : (
-                  <ActionButton
-                    label="Start"
-                    onClick={() => callService(`/${key}/start`)}
-                    variant="green"
-                    size="sm"
-                    disabled={loading}
-                  />
-                )}
-                <ActionButton
-                  label="Stop"
-                  onClick={() => callService(`/${key}/stop`)}
-                  variant="red"
-                  size="sm"
-                  disabled={loading}
-                />
-              </div>
-              <div className="flex items-center gap-4 ml-2">
-                <label className="flex items-center gap-1.5 text-xs text-gray-300 select-none cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={logReceiveSet.has(key)}
-                    onChange={() =>
-                      toggleServiceSet(key, setLogReceiveSet, LOG_RECEIVE_KEY)
-                    }
-                  />
-                  ログ受信
-                </label>
-                <label className="flex items-center gap-1.5 text-xs text-gray-300 select-none cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={logDisplaySet.has(key)}
-                    onChange={() =>
-                      toggleServiceSet(key, setLogDisplaySet, LOG_DISPLAY_KEY)
-                    }
-                  />
-                  ログ表示
-                </label>
-              </div>
-            </div>
-          ))}
-          {error && <p className="text-red-400 text-sm">{error}</p>}
-        </div>
-      </section>
+  const [openSections, setOpenSections] = useState<Set<string>>(
+    () => new Set(["services", "diagnostics", "service-log", "api-log"]),
+  );
 
-      <section className="bg-gray-800 rounded-lg p-4">
-        <SectionLabel text="Diagnostics" />
-        <div className="mt-3">
-          <DiagnosticsTable statuses={diagStatuses} />
-        </div>
-      </section>
-      <ServiceLogPanel
-        entries={entries}
-        displayServices={logDisplaySet}
-        connected={connected}
-        receivingServices={logReceiveSet}
-        onClear={clear}
+  const toggleSection = (id: string) => {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const chevron = (id: string) => (
+    <svg
+      className={`w-4 h-4 flex-shrink-0 transform transition-transform ${
+        openSections.has(id) ? "rotate-90" : ""
+      }`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 5l7 7-7 7"
       />
-      <ApiLogPanel logs={sysManager.logs} />
+    </svg>
+  );
+
+  const accordionHeader = (id: string, label: string) => (
+    <button
+      onClick={() => toggleSection(id)}
+      className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-gray-300 hover:text-white hover:bg-gray-700 transition-colors"
+    >
+      <span>{label}</span>
+      {chevron(id)}
+    </button>
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="bg-gray-800 rounded-lg overflow-hidden">
+        {accordionHeader("services", "Services")}
+        {openSections.has("services") && (
+          <div className="px-4 pb-4 pt-1 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <ActionButton
+                label="Stop All"
+                onClick={callBulkStop}
+                variant="red"
+                size="sm"
+                disabled={loading}
+              />
+              <ActionButton
+                label="Restart Running"
+                onClick={callBulkRestartRunning}
+                variant="blue"
+                size="sm"
+                disabled={loading || !hasRunningService}
+              />
+            </div>
+            <div className="space-y-3">
+              {MANAGED_SERVICES.map(({ key, label }) => (
+                <div key={key} className="flex items-center gap-3 flex-wrap">
+                  <span className="w-36 text-sm text-gray-300">{label}</span>
+                  <StatusBadge status={containers[key] ?? "unknown"} />
+                  <div className="flex gap-2">
+                    {containers[key] === "running" ? (
+                      <ActionButton
+                        label="Restart"
+                        onClick={() => callService(`/${key}/restart`)}
+                        variant="blue"
+                        size="sm"
+                        disabled={loading}
+                      />
+                    ) : (
+                      <ActionButton
+                        label="Start"
+                        onClick={() => callService(`/${key}/start`)}
+                        variant="green"
+                        size="sm"
+                        disabled={loading}
+                      />
+                    )}
+                    <ActionButton
+                      label="Stop"
+                      onClick={() => callService(`/${key}/stop`)}
+                      variant="red"
+                      size="sm"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="flex items-center gap-4 ml-2">
+                    <label className="flex items-center gap-1.5 text-xs text-gray-300 select-none cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={logReceiveSet.has(key)}
+                        onChange={() =>
+                          toggleServiceSet(
+                            key,
+                            setLogReceiveSet,
+                            LOG_RECEIVE_KEY,
+                          )
+                        }
+                      />
+                      ログ受信
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-gray-300 select-none cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={logDisplaySet.has(key)}
+                        onChange={() =>
+                          toggleServiceSet(
+                            key,
+                            setLogDisplaySet,
+                            LOG_DISPLAY_KEY,
+                          )
+                        }
+                      />
+                      ログ表示
+                    </label>
+                  </div>
+                </div>
+              ))}
+              {error && <p className="text-red-400 text-sm">{error}</p>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-gray-800 rounded-lg overflow-hidden">
+        {accordionHeader("diagnostics", "Diagnostics")}
+        {openSections.has("diagnostics") && (
+          <div className="px-4 pb-4 pt-1">
+            <DiagnosticsTable statuses={diagStatuses} />
+          </div>
+        )}
+      </div>
+
+      <div className="bg-gray-800 rounded-lg overflow-hidden">
+        {accordionHeader("service-log", "Service Log")}
+        {openSections.has("service-log") && (
+          <ServiceLogPanel
+            entries={entries}
+            displayServices={logDisplaySet}
+            connected={connected}
+            receivingServices={logReceiveSet}
+            onClear={clear}
+          />
+        )}
+      </div>
+
+      <div className="bg-gray-800 rounded-lg overflow-hidden">
+        {accordionHeader("api-log", "API Log")}
+        {openSections.has("api-log") && <ApiLogPanel logs={sysManager.logs} />}
+      </div>
     </div>
   );
 }
