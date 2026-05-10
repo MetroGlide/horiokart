@@ -13,6 +13,12 @@ export interface ApiLog {
   message: string
 }
 
+export interface LogEntry {
+  id: number
+  service: string
+  line: string
+}
+
 export interface SystemManagerHandle {
   containers: Record<string, string>
   logs: ApiLog[]

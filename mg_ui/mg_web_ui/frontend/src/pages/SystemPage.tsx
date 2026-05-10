@@ -1,12 +1,35 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useDiagnosticsMap } from "../hooks/useDiagnosticsMap";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { SystemManagerHandle } from "../hooks/useSystemManagerClient";
+import { useDockerLogStream } from "../hooks/useDockerLogStream";
 import DiagnosticsTable from "../components/panels/DiagnosticsTable";
 import ApiLogPanel from "../components/panels/ApiLogPanel";
+import ServiceLogPanel from "../components/panels/ServiceLogPanel";
 import SectionLabel from "../components/ui/SectionLabel";
 import ActionButton from "../components/ui/ActionButton";
 import StatusBadge from "../components/ui/StatusBadge";
+
+const LOG_RECEIVE_KEY = "mg_ui_log_receive";
+const LOG_DISPLAY_KEY = "mg_ui_log_display";
+
+function loadServiceSet(storageKey: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(
+      parsed.filter((item): item is string => typeof item === "string"),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function persistServiceSet(storageKey: string, value: Set<string>): void {
+  localStorage.setItem(storageKey, JSON.stringify([...value]));
+}
 
 export default function SystemPage({
   client,
@@ -17,6 +40,12 @@ export default function SystemPage({
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [logReceiveSet, setLogReceiveSet] = useState<Set<string>>(() =>
+    loadServiceSet(LOG_RECEIVE_KEY),
+  );
+  const [logDisplaySet, setLogDisplaySet] = useState<Set<string>>(() =>
+    loadServiceSet(LOG_DISPLAY_KEY),
+  );
   const { callApi, containers } = sysManager;
   const diagStatuses = useDiagnosticsMap(client);
 
@@ -31,6 +60,29 @@ export default function SystemPage({
     { key: "rviz2-navigation", label: "RViz2 Navigation" },
     { key: "rviz2-slam", label: "RViz2 SLAM" },
   ] as const;
+
+  const subscribedServices = useMemo(
+    () => [...logReceiveSet].sort(),
+    [logReceiveSet],
+  );
+  const { entries, connected, clear } = useDockerLogStream(subscribedServices);
+
+  const toggleServiceSet = (
+    key: string,
+    setState: React.Dispatch<React.SetStateAction<Set<string>>>,
+    storageKey: string,
+  ) => {
+    setState((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      persistServiceSet(storageKey, next);
+      return next;
+    });
+  };
 
   const callService = async (path: string) => {
     setLoading(true);
@@ -110,7 +162,7 @@ export default function SystemPage({
         </div>
         <div className="space-y-3">
           {MANAGED_SERVICES.map(({ key, label }) => (
-            <div key={key} className="flex items-center gap-3">
+            <div key={key} className="flex items-center gap-3 flex-wrap">
               <span className="w-36 text-sm text-gray-300">{label}</span>
               <StatusBadge status={containers[key] ?? "unknown"} />
               <div className="flex gap-2">
@@ -139,6 +191,28 @@ export default function SystemPage({
                   disabled={loading}
                 />
               </div>
+              <div className="flex items-center gap-4 ml-2">
+                <label className="flex items-center gap-1.5 text-xs text-gray-300 select-none cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={logReceiveSet.has(key)}
+                    onChange={() =>
+                      toggleServiceSet(key, setLogReceiveSet, LOG_RECEIVE_KEY)
+                    }
+                  />
+                  ログ受信
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-gray-300 select-none cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={logDisplaySet.has(key)}
+                    onChange={() =>
+                      toggleServiceSet(key, setLogDisplaySet, LOG_DISPLAY_KEY)
+                    }
+                  />
+                  ログ表示
+                </label>
+              </div>
             </div>
           ))}
           {error && <p className="text-red-400 text-sm">{error}</p>}
@@ -151,6 +225,13 @@ export default function SystemPage({
           <DiagnosticsTable statuses={diagStatuses} />
         </div>
       </section>
+      <ServiceLogPanel
+        entries={entries}
+        displayServices={logDisplaySet}
+        connected={connected}
+        receivingServices={logReceiveSet}
+        onClear={clear}
+      />
       <ApiLogPanel logs={sysManager.logs} />
     </div>
   );

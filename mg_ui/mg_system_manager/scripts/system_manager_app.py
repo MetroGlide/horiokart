@@ -7,10 +7,11 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import docker
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -379,6 +380,116 @@ async def reset_sim_robot_pose(body: ResetPoseRequest):
         None, manager.reset_sim_robot_pose, body.x, body.y, body.z, body.yaw
     )
     return _result(ok, msg)
+
+
+async def _stream_container_logs(websocket: WebSocket, service: str) -> None:
+    while True:
+        container = manager._get_container(service)
+        if container is None:
+            await websocket.send_json(
+                {"service": service, "error": "container not found"}
+            )
+            await asyncio.sleep(5.0)
+            continue
+
+        container_ref = container.name or container.id
+        if not container_ref:
+            await websocket.send_json(
+                {"service": service, "error": "container reference missing"}
+            )
+            await asyncio.sleep(5.0)
+            continue
+
+        proc = await asyncio.create_subprocess_exec(
+            "docker",
+            "logs",
+            "-f",
+            "--since",
+            "0s",
+            container_ref,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+
+        try:
+            assert proc.stdout is not None
+            async for line in proc.stdout:
+                text = line.decode(errors="replace").rstrip("\n")
+                if text:
+                    await websocket.send_json({"service": service, "line": text})
+            await proc.wait()
+            await asyncio.sleep(5.0)
+        except asyncio.CancelledError:
+            if proc.returncode is None:
+                proc.terminate()
+                await proc.wait()
+            raise
+
+
+def _filter_log_services(raw_services: Any) -> set[str]:
+    if not isinstance(raw_services, list):
+        return set()
+    return {
+        service
+        for service in raw_services
+        if isinstance(service, str) and service in COMPOSE_SERVICES
+    }
+
+
+@app.websocket("/logs/stream")
+async def logs_stream(websocket: WebSocket):
+    origin = websocket.headers.get("origin")
+    if origin and origin not in _get_allowed_origins():
+        await websocket.close(code=1008)
+        return
+
+    await websocket.accept()
+    tasks: dict[str, asyncio.Task[None]] = {}
+
+    def _bind_done_callback(service: str):
+        def _on_done(task: asyncio.Task[None]) -> None:
+            if tasks.get(service) is task:
+                tasks.pop(service, None)
+
+        return _on_done
+
+    async def _cancel_removed(removed_services: set[str]) -> None:
+        removed_tasks: list[asyncio.Task[None]] = []
+        for service in removed_services:
+            task = tasks.pop(service, None)
+            if task is None:
+                continue
+            task.cancel()
+            removed_tasks.append(task)
+        if removed_tasks:
+            await asyncio.gather(*removed_tasks, return_exceptions=True)
+
+    try:
+        while True:
+            raw_message = await websocket.receive_text()
+            try:
+                payload = json.loads(raw_message)
+            except json.JSONDecodeError:
+                continue
+
+            desired_services = _filter_log_services(payload.get("services"))
+            current_services = set(tasks.keys())
+
+            await _cancel_removed(current_services - desired_services)
+
+            for service in desired_services - current_services:
+                task = asyncio.create_task(
+                    _stream_container_logs(websocket, service))
+                task.add_done_callback(_bind_done_callback(service))
+                tasks[service] = task
+    except WebSocketDisconnect:
+        pass
+    finally:
+        remaining_tasks = list(tasks.values())
+        for task in remaining_tasks:
+            task.cancel()
+        if remaining_tasks:
+            await asyncio.gather(*remaining_tasks, return_exceptions=True)
 
 
 if __name__ == "__main__":
