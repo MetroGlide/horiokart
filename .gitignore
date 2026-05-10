@@ -206,6 +206,7 @@ output/
 ### React / TypeScript / Vite ###
 # Dependencies
 node_modules/
+.vite/
 .npm
 
 # Node / Package Manager Logs
