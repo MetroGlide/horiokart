@@ -219,6 +219,7 @@ services:
       - SIMULATION_WORLD=warehouse
       - SIMULATION_ROBOT_NAME=mg
       - UI_DATA_DIR=/root/ros2_data/mg_ui_local
+      - SYSTEM_MANAGER_ALLOW_ORIGINS=http://localhost:8080,http://localhost:5173
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
       - $HOME/.Xauthority:/root/.Xauthority
