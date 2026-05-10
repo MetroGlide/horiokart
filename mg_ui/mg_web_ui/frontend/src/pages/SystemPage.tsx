@@ -45,10 +45,69 @@ export default function SystemPage({
     }
   };
 
+  const callBulkStop = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      for (const { key } of MANAGED_SERVICES) {
+        const result = await callApi(`/${key}/stop`);
+        if (!result.success) {
+          setError(result.message);
+          break;
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const callBulkRestartRunning = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const runningServices = MANAGED_SERVICES.filter(
+        ({ key }) => containers[key] === "running",
+      );
+      for (const { key } of runningServices) {
+        const result = await callApi(`/${key}/restart`);
+        if (!result.success) {
+          setError(result.message);
+          break;
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const hasRunningService = MANAGED_SERVICES.some(
+    ({ key }) => containers[key] === "running",
+  );
+
   return (
     <div className="space-y-6">
       <section className="bg-gray-800 rounded-lg p-4 space-y-3">
         <SectionLabel text="Services" />
+        <div className="flex flex-wrap gap-2">
+          <ActionButton
+            label="Stop All"
+            onClick={callBulkStop}
+            variant="red"
+            size="sm"
+            disabled={loading}
+          />
+          <ActionButton
+            label="Restart Running"
+            onClick={callBulkRestartRunning}
+            variant="blue"
+            size="sm"
+            disabled={loading || !hasRunningService}
+          />
+        </div>
         <div className="space-y-3">
           {MANAGED_SERVICES.map(({ key, label }) => (
             <div key={key} className="flex items-center gap-3">
