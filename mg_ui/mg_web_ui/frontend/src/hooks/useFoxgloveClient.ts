@@ -144,9 +144,12 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
   const statusRef = useRef<ConnectionStatus>('connecting')
   const wsRef = useRef<WebSocket | null>(null)
   const channelsByTopicRef = useRef<Map<string, ServerChannel>>(new Map())
-  const subscriptionsRef = useRef<Map<SubscriptionId, (data: unknown) => void>>(new Map())
   const subscriptionChannelsRef = useRef<Map<SubscriptionId, ServerChannel>>(new Map())
-  const pendingSubsRef = useRef<Map<SubscriptionId, { topic: string; onMessage: (data: unknown) => void }>>(new Map())
+  const wsSubsByTopicRef = useRef<Map<string, SubscriptionId>>(new Map())
+  const subscriptionTopicRef = useRef<Map<SubscriptionId, string>>(new Map())
+  const topicListenersRef = useRef<Map<string, Map<number, (data: unknown) => void>>>(new Map())
+  const pendingTopicListenersRef = useRef<Map<string, Map<number, (data: unknown) => void>>>(new Map())
+  const listenerIdCounterRef = useRef(0)
   const messageReadersRef = useRef<Map<string, MessageReader>>(new Map())
   const messageWritersRef = useRef<Map<string, MessageWriter>>(new Map())
   const clientChIdRef = useRef<Map<string, number>>(new Map())
@@ -179,10 +182,13 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
       updateStatus('disconnected')
       channelsByTopicRef.current.clear()
       subscriptionChannelsRef.current.clear()
+      wsSubsByTopicRef.current.clear()
+      subscriptionTopicRef.current.clear()
+      topicListenersRef.current.clear()
+      pendingTopicListenersRef.current.clear()
       messageReadersRef.current.clear()
       clientChIdRef.current.clear()
       servicesByNameRef.current.clear()
-      pendingSubsRef.current.clear()
       if (mountedRef.current) {
         reconnectTimerRef.current = setTimeout(connect, RECONNECT_INTERVAL_MS)
       }
@@ -205,13 +211,23 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
           }
           const ws = wsRef.current
           if (ws && ws.readyState === WebSocket.OPEN) {
-            for (const [subId, pending] of pendingSubsRef.current) {
-              const channel = channelsByTopicRef.current.get(pending.topic)
-              if (channel) {
-                pendingSubsRef.current.delete(subId)
-                subscriptionsRef.current.set(subId, pending.onMessage)
-                subscriptionChannelsRef.current.set(subId, channel)
-                ws.send(JSON.stringify({ op: 'subscribe', subscriptions: [{ id: subId, channelId: channel.id }] }))
+            for (const [topic, listeners] of pendingTopicListenersRef.current) {
+              if (listeners.size === 0) continue
+              const channel = channelsByTopicRef.current.get(topic)
+              if (!channel) continue
+              pendingTopicListenersRef.current.delete(topic)
+              if (!wsSubsByTopicRef.current.has(topic)) {
+                const wsSubId = ++subIdCounterRef.current
+                wsSubsByTopicRef.current.set(topic, wsSubId)
+                subscriptionTopicRef.current.set(wsSubId, topic)
+                subscriptionChannelsRef.current.set(wsSubId, channel)
+                ws.send(JSON.stringify({ op: 'subscribe', subscriptions: [{ id: wsSubId, channelId: channel.id }] }))
+              }
+              if (!topicListenersRef.current.has(topic)) {
+                topicListenersRef.current.set(topic, new Map())
+              }
+              for (const [lid, handler] of listeners) {
+                topicListenersRef.current.get(topic)!.set(lid, handler)
               }
             }
           }
@@ -262,12 +278,17 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
         const opcode = view.getUint8(0)
 
         if (opcode === MSG_OPCODE_MESSAGE_DATA) {
-          const subId = view.getUint32(1, true) as SubscriptionId
-          const handler = subscriptionsRef.current.get(subId)
-          const channel = subscriptionChannelsRef.current.get(subId)
-          if (!handler) return
+          const wsSubId = view.getUint32(1, true) as SubscriptionId
+          const channel = subscriptionChannelsRef.current.get(wsSubId)
+          const topic = subscriptionTopicRef.current.get(wsSubId)
+          if (!channel || !topic) return
+          const listeners = topicListenersRef.current.get(topic)
+          if (!listeners || listeners.size === 0) return
           const payload = event.data.slice(1 + 4 + 8)
-          handler(decodePayload(payload, channel, messageReadersRef.current))
+          const decoded = decodePayload(payload, channel, messageReadersRef.current)
+          for (const handler of listeners.values()) {
+            handler(decoded)
+          }
         } else if (opcode === MSG_OPCODE_SERVICE_CALL_RESPONSE) {
           const callId = view.getUint32(1 + 4, true)
           const encLen = view.getUint32(1 + 4 + 4, true)
@@ -316,49 +337,64 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
   const subscribe = useCallback(
     (topic: string, _schemaName: string, onMessage: (data: unknown) => void): (() => void) => {
       const ws = wsRef.current
-      const subId = ++subIdCounterRef.current
+      const listenerId = ++listenerIdCounterRef.current
 
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        pendingSubsRef.current.set(subId, { topic, onMessage })
-        return () => {
-          pendingSubsRef.current.delete(subId)
-          if (subscriptionsRef.current.has(subId)) {
-            subscriptionsRef.current.delete(subId)
-            subscriptionChannelsRef.current.delete(subId)
+      const unsubscribe = () => {
+        topicListenersRef.current.get(topic)?.delete(listenerId)
+        pendingTopicListenersRef.current.get(topic)?.delete(listenerId)
+        const activeCount = topicListenersRef.current.get(topic)?.size ?? 0
+        const pendingCount = pendingTopicListenersRef.current.get(topic)?.size ?? 0
+        if (activeCount === 0 && pendingCount === 0) {
+          topicListenersRef.current.delete(topic)
+          pendingTopicListenersRef.current.delete(topic)
+          const wsSubId = wsSubsByTopicRef.current.get(topic)
+          if (wsSubId !== undefined) {
+            wsSubsByTopicRef.current.delete(topic)
+            subscriptionTopicRef.current.delete(wsSubId)
+            subscriptionChannelsRef.current.delete(wsSubId)
             if (wsRef.current?.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({ op: 'unsubscribe', subscriptionIds: [subId] }))
+              wsRef.current.send(JSON.stringify({ op: 'unsubscribe', subscriptionIds: [wsSubId] }))
             }
           }
         }
+      }
+
+      const addPending = () => {
+        if (!pendingTopicListenersRef.current.has(topic)) {
+          pendingTopicListenersRef.current.set(topic, new Map())
+        }
+        pendingTopicListenersRef.current.get(topic)!.set(listenerId, onMessage)
+      }
+
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        addPending()
+        return unsubscribe
       }
 
       const channel = channelsByTopicRef.current.get(topic)
-
       if (!channel) {
-        pendingSubsRef.current.set(subId, { topic, onMessage })
-        return () => {
-          pendingSubsRef.current.delete(subId)
-          if (subscriptionsRef.current.has(subId)) {
-            subscriptionsRef.current.delete(subId)
-            subscriptionChannelsRef.current.delete(subId)
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({ op: 'unsubscribe', subscriptionIds: [subId] }))
-            }
-          }
-        }
+        addPending()
+        return unsubscribe
       }
 
-      subscriptionsRef.current.set(subId, onMessage)
-      subscriptionChannelsRef.current.set(subId, channel)
-      ws.send(JSON.stringify({ op: 'subscribe', subscriptions: [{ id: subId, channelId: channel.id }] }))
-
-      return () => {
-        subscriptionsRef.current.delete(subId)
-        subscriptionChannelsRef.current.delete(subId)
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ op: 'unsubscribe', subscriptionIds: [subId] }))
+      if (wsSubsByTopicRef.current.has(topic)) {
+        if (!topicListenersRef.current.has(topic)) {
+          topicListenersRef.current.set(topic, new Map())
         }
+        topicListenersRef.current.get(topic)!.set(listenerId, onMessage)
+      } else {
+        const wsSubId = ++subIdCounterRef.current
+        wsSubsByTopicRef.current.set(topic, wsSubId)
+        subscriptionTopicRef.current.set(wsSubId, topic)
+        subscriptionChannelsRef.current.set(wsSubId, channel)
+        if (!topicListenersRef.current.has(topic)) {
+          topicListenersRef.current.set(topic, new Map())
+        }
+        topicListenersRef.current.get(topic)!.set(listenerId, onMessage)
+        ws.send(JSON.stringify({ op: 'subscribe', subscriptions: [{ id: wsSubId, channelId: channel.id }] }))
       }
+
+      return unsubscribe
     },
     [],
   )
