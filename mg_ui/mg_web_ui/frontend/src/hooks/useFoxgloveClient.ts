@@ -316,10 +316,23 @@ export function useFoxgloveClient(): FoxgloveClientHandle {
   const subscribe = useCallback(
     (topic: string, _schemaName: string, onMessage: (data: unknown) => void): (() => void) => {
       const ws = wsRef.current
-      if (!ws || ws.readyState !== WebSocket.OPEN) return () => {}
+      const subId = ++subIdCounterRef.current
+
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        pendingSubsRef.current.set(subId, { topic, onMessage })
+        return () => {
+          pendingSubsRef.current.delete(subId)
+          if (subscriptionsRef.current.has(subId)) {
+            subscriptionsRef.current.delete(subId)
+            subscriptionChannelsRef.current.delete(subId)
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ op: 'unsubscribe', subscriptionIds: [subId] }))
+            }
+          }
+        }
+      }
 
       const channel = channelsByTopicRef.current.get(topic)
-      const subId = ++subIdCounterRef.current
 
       if (!channel) {
         pendingSubsRef.current.set(subId, { topic, onMessage })

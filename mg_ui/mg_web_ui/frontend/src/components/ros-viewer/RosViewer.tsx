@@ -240,7 +240,6 @@ export default function RosViewer({
   return (
     <div className={`relative ${className ?? "w-full h-full"}`}>
       <Canvas
-        key={viewMode}
         orthographic={viewMode === "2d"}
         camera={
           viewMode === "2d"
@@ -251,6 +250,7 @@ export default function RosViewer({
       >
         <Suspense fallback={null}>
           <Scene
+            key={viewMode}
             client={client}
             mode={viewMode}
             cameraTarget={cameraTarget}

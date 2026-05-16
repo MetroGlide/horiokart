@@ -74,7 +74,7 @@ export function useNav2Status(client: FoxgloveClientHandle): Nav2Status {
     poll()
     const interval = setInterval(poll, LIFECYCLE_POLL_INTERVAL_MS)
     return () => clearInterval(interval)
-  }, [client, client.status])
+  }, [client.status])
 
   const actionStatus =
     actionStatusMsg && actionStatusMsg.status_list.length > 0
