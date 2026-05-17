@@ -76,20 +76,133 @@ interface SceneProps {
   cameraTarget: "map" | "robot";
   interactionMode: ViewerInteractionMode;
   onPoseSet: (x: number, y: number, yaw: number) => void;
+  resetToken: number;
 }
 
-function CameraFollowRobot({ tfBuffer }: { tfBuffer: TfBuffer }) {
-  const controls = useThree((state) => state.controls) as {
-    target: THREE.Vector3;
-  } | null;
+function CameraFollowRobot({
+  tfBuffer,
+  mode,
+}: {
+  tfBuffer: TfBuffer;
+  mode: ViewerMode;
+}) {
+  const { camera, controls: rawControls } = useThree();
+  const controls = rawControls as { target: THREE.Vector3 } | null;
 
   useFrame(() => {
-    if (!controls) return;
     const mat = tfBuffer.lookupTransform("map", "base_link");
     if (!mat) return;
     const pos = new THREE.Vector3().setFromMatrixPosition(mat);
-    controls.target.set(pos.x, pos.y, 0);
+    if (controls) controls.target.set(pos.x, pos.y, 0);
+    if (mode === "2d") {
+      camera.position.x = pos.x;
+      camera.position.y = pos.y;
+    }
   });
+
+  return null;
+}
+
+interface CameraState2D {
+  position: [number, number, number];
+  target: [number, number, number];
+  zoom: number;
+  up: [number, number, number];
+}
+interface CameraState3D {
+  position: [number, number, number];
+  target: [number, number, number];
+}
+
+function CameraStatePersistence({ mode }: { mode: ViewerMode }) {
+  const { camera, controls: rawControls } = useThree();
+  const controls = rawControls as {
+    target: THREE.Vector3;
+    update: () => void;
+    addEventListener: (type: string, cb: () => void) => void;
+    removeEventListener: (type: string, cb: () => void) => void;
+  } | null;
+  const restored = useRef(false);
+
+  useEffect(() => {
+    if (!controls || restored.current) return;
+    restored.current = true;
+    const settingsKey = mode === "2d" ? "viewer_camera_2d" : "viewer_camera_3d";
+    loadSettings().then((data) => {
+      const saved = data[settingsKey] as
+        | CameraState2D
+        | CameraState3D
+        | undefined;
+      if (!saved) return;
+      camera.position.fromArray(saved.position);
+      controls.target.fromArray(saved.target);
+      if (mode === "2d") {
+        const s2d = saved as CameraState2D;
+        (camera as THREE.OrthographicCamera).zoom = s2d.zoom;
+        camera.up.fromArray(s2d.up);
+      }
+      camera.updateProjectionMatrix();
+      controls.update();
+    });
+  }, [camera, controls, mode]);
+
+  useEffect(() => {
+    if (!controls) return;
+    const save = () => {
+      const settingsKey =
+        mode === "2d" ? "viewer_camera_2d" : "viewer_camera_3d";
+      const base = {
+        position: camera.position.toArray() as [number, number, number],
+        target: controls.target.toArray() as [number, number, number],
+      };
+      const cameraData =
+        mode === "2d"
+          ? {
+              ...base,
+              zoom: (camera as THREE.OrthographicCamera).zoom,
+              up: camera.up.toArray() as [number, number, number],
+            }
+          : base;
+      saveSettings(settingsKey, cameraData);
+    };
+    controls.addEventListener("end", save);
+    return () => controls.removeEventListener("end", save);
+  }, [camera, controls, mode]);
+
+  return null;
+}
+
+function CameraResetter({
+  mode,
+  resetToken,
+}: {
+  mode: ViewerMode;
+  resetToken: number;
+}) {
+  const { camera, controls: rawControls } = useThree();
+  const controls = rawControls as {
+    target: THREE.Vector3;
+    update: () => void;
+  } | null;
+  const prevToken = useRef(0);
+
+  useEffect(() => {
+    if (resetToken === 0 || resetToken === prevToken.current || !controls)
+      return;
+    prevToken.current = resetToken;
+    if (mode === "2d") {
+      camera.position.set(0, 0, 100);
+      camera.up.set(0, 1, 0);
+      (camera as THREE.OrthographicCamera).zoom = 10;
+    } else {
+      camera.position.set(0, -20, 20);
+    }
+    controls.target.set(0, 0, 0);
+    camera.updateProjectionMatrix();
+    controls.update();
+    const settingsKey = mode === "2d" ? "viewer_camera_2d" : "viewer_camera_3d";
+    saveSettings(settingsKey, null);
+  }, [camera, controls, mode, resetToken]);
 
   return null;
 }
@@ -100,6 +213,7 @@ function Scene({
   cameraTarget,
   interactionMode,
   onPoseSet,
+  resetToken,
 }: SceneProps) {
   const { layers } = useVisualization();
   const tfBuffer = useTfBuffer(client);
@@ -118,8 +232,12 @@ function Scene({
       ) : (
         <OrbitControls makeDefault />
       )}
+      <CameraStatePersistence mode={mode} />
+      <CameraResetter mode={mode} resetToken={resetToken} />
       <ambientLight intensity={1} />
-      {cameraTarget === "robot" && <CameraFollowRobot tfBuffer={tfBuffer} />}
+      {cameraTarget === "robot" && (
+        <CameraFollowRobot tfBuffer={tfBuffer} mode={mode} />
+      )}
 
       {layers.map && <MapLayer client={client} />}
       {layers.globalCostmap && (
@@ -194,6 +312,7 @@ export default function RosViewer({
   const { enabled } = useVisualization();
   const [viewMode, setViewMode] = useState<ViewerMode>(initialMode);
   const [cameraTarget, setCameraTarget] = useState<"map" | "robot">("map");
+  const [resetToken, setResetToken] = useState(0);
   const settingsLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -240,6 +359,7 @@ export default function RosViewer({
   return (
     <div className={`relative ${className ?? "w-full h-full"}`}>
       <Canvas
+        key={viewMode}
         orthographic={viewMode === "2d"}
         camera={
           viewMode === "2d"
@@ -250,16 +370,23 @@ export default function RosViewer({
       >
         <Suspense fallback={null}>
           <Scene
-            key={viewMode}
             client={client}
             mode={viewMode}
             cameraTarget={cameraTarget}
             interactionMode={interactionMode}
             onPoseSet={onPoseSet ?? (() => {})}
+            resetToken={resetToken}
           />
         </Suspense>
       </Canvas>
       <div className="absolute top-2 right-2 flex gap-1 pointer-events-auto">
+        <button
+          onClick={() => setResetToken((t) => t + 1)}
+          className="bg-gray-800/80 hover:bg-gray-700 text-white text-xs font-medium px-2.5 py-1 rounded border border-gray-600 backdrop-blur-sm"
+          title="視点をデフォルトに戻す"
+        >
+          Reset
+        </button>
         <button
           onClick={() => handleSetViewMode(viewMode === "2d" ? "3d" : "2d")}
           className="bg-gray-800/80 hover:bg-gray-700 text-white text-xs font-medium px-2.5 py-1 rounded border border-gray-600 backdrop-blur-sm"
