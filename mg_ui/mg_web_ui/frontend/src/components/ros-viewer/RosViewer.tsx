@@ -28,13 +28,23 @@ function YawControl2D({ enabled = true }: { enabled?: boolean }) {
   const { camera, gl } = useThree();
   const dragging = useRef(false);
   const lastX = useRef(0);
+  const touchId = useRef<number | null>(null);
+  const lastTouchX = useRef(0);
 
   useEffect(() => {
     const el = gl.domElement;
 
+    const rotateByDx = (dx: number) => {
+      const angle = -dx * 0.005;
+      const { x, y } = camera.up;
+      const c = Math.cos(angle);
+      const s = Math.sin(angle);
+      camera.up.set(x * c - y * s, x * s + y * c, 0);
+    };
+
     const onDown = (e: MouseEvent) => {
       if (!enabled) return;
-      if (e.button === 2) {
+      if (e.button === 0) {
         dragging.current = true;
         lastX.current = e.clientX;
         e.preventDefault();
@@ -44,26 +54,54 @@ function YawControl2D({ enabled = true }: { enabled?: boolean }) {
       if (!dragging.current) return;
       const dx = e.clientX - lastX.current;
       lastX.current = e.clientX;
-      const angle = -dx * 0.005;
-      const { x, y } = camera.up;
-      const c = Math.cos(angle);
-      const s = Math.sin(angle);
-      camera.up.set(x * c - y * s, x * s + y * c, 0);
+      rotateByDx(dx);
     };
     const onUp = () => {
       dragging.current = false;
     };
-    const onContext = (e: Event) => e.preventDefault();
 
-    el.addEventListener("contextmenu", onContext);
+    const onTouchStart = (e: TouchEvent) => {
+      if (!enabled) return;
+      if (e.touches.length === 1) {
+        touchId.current = e.touches[0].identifier;
+        lastTouchX.current = e.touches[0].clientX;
+        e.preventDefault();
+      }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchId.current === null) return;
+      if (e.touches.length !== 1) {
+        touchId.current = null;
+        return;
+      }
+      const touch = Array.from(e.touches).find(
+        (t) => t.identifier === touchId.current
+      );
+      if (!touch) return;
+      const dx = touch.clientX - lastTouchX.current;
+      lastTouchX.current = touch.clientX;
+      rotateByDx(dx);
+      e.preventDefault();
+    };
+    const onTouchEnd = () => {
+      touchId.current = null;
+    };
+
     el.addEventListener("mousedown", onDown);
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd);
+    el.addEventListener("touchcancel", onTouchEnd);
     return () => {
-      el.removeEventListener("contextmenu", onContext);
       el.removeEventListener("mousedown", onDown);
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
     };
   }, [camera, enabled, gl]);
 
@@ -217,12 +255,39 @@ function Scene({
 }: SceneProps) {
   const { layers } = useVisualization();
   const tfBuffer = useTfBuffer(client);
+  const mapControlsRef = useRef<any>(null);
+  const orbitControlsRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (mode === "2d" && mapControlsRef.current) {
+      mapControlsRef.current.mouseButtons = {
+        LEFT: undefined,
+        MIDDLE: THREE.MOUSE.PAN,
+        RIGHT: undefined,
+      };
+      mapControlsRef.current.touches = {
+        ONE: undefined,
+        TWO: THREE.TOUCH.DOLLY_PAN,
+      };
+    }
+  }, [mode, mapControlsRef.current]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (mode === "3d" && orbitControlsRef.current) {
+      orbitControlsRef.current.mouseButtons = {
+        LEFT: THREE.MOUSE.ROTATE,
+        MIDDLE: THREE.MOUSE.PAN,
+        RIGHT: undefined,
+      };
+    }
+  }, [mode, orbitControlsRef.current]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
       {mode === "2d" ? (
         <>
           <MapControls
+            ref={mapControlsRef}
             makeDefault
             screenSpacePanning
             enabled={interactionMode === "none"}
@@ -230,7 +295,7 @@ function Scene({
           <YawControl2D enabled={interactionMode === "none"} />
         </>
       ) : (
-        <OrbitControls makeDefault />
+        <OrbitControls ref={orbitControlsRef} makeDefault />
       )}
       <CameraStatePersistence mode={mode} />
       <CameraResetter mode={mode} resetToken={resetToken} />
