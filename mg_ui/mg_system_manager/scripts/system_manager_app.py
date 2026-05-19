@@ -208,6 +208,37 @@ class DockerManager:
                 "compose restart exception service=%s: %s", service, e)
             return False, str(e)
 
+    def start_rosbag(self, file: str, topics: list[str]) -> tuple[bool, str]:
+        logger.info("start_rosbag file=%s topics=%s", file, topics)
+        env = os.environ.copy()
+        env["HOME"] = self._host_home
+        env["ROSBAG_FILE"] = file
+        env["ROSBAG_TOPICS"] = " ".join(topics) if topics else ""
+        try:
+            result = subprocess.run(
+                ["docker", "compose", "up", "-d", "rosbag-replay"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=self._host_project_dir,
+                env=env,
+            )
+            stdout = result.stdout.strip()
+            stderr = result.stderr.strip()
+            if result.returncode == 0:
+                logger.info(
+                    "rosbag start succeeded stdout=%s", stdout)
+                return True, stdout
+            logger.error("rosbag start failed rc=%d stderr=%s",
+                         result.returncode, stderr)
+            return False, stderr
+        except subprocess.TimeoutExpired:
+            logger.error("rosbag start timed out")
+            return False, "command timed out"
+        except Exception as e:
+            logger.error("rosbag start exception: %s", e)
+            return False, str(e)
+
     def save_map(self, map_dir: str, map_name: str) -> tuple[bool, str]:
         logger.info("save_map map_dir=%s map_name=%s", map_dir, map_name)
         ok, output = self.exec_in_container(
@@ -378,6 +409,69 @@ async def reset_sim_robot_pose(body: ResetPoseRequest):
     loop = asyncio.get_event_loop()
     ok, msg = await loop.run_in_executor(
         None, manager.reset_sim_robot_pose, body.x, body.y, body.z, body.yaw
+    )
+    return _result(ok, msg)
+
+
+_ROSBAG_FILE_RE = re.compile(r"^[a-zA-Z0-9/_\-\.]+$")
+_ROSBAG_TOPIC_RE = re.compile(r"^[a-zA-Z0-9/_\-\.]+$")
+
+
+def _parse_env_file(path: Path) -> dict[str, str]:
+    """シンプルな .env パーサー。${VAR} 形式の変数参照を展開する。"""
+    env: dict[str, str] = {}
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip()
+            value = re.sub(
+                r"\$\{([^}]+)\}",
+                lambda m: env.get(m.group(1), os.environ.get(m.group(1), "")),
+                value,
+            )
+            env[key] = value
+    except Exception as e:
+        logger.warning("parse_env_file failed path=%s: %s", path, e)
+    return env
+
+
+@app.get("/rosbag-replay/env")
+def rosbag_replay_env():
+    env_path = Path(manager._project_dir) / ".env"
+    env = _parse_env_file(env_path)
+    raw_topics = env.get("ROSBAG_TOPICS", "")
+    topics = [t for t in raw_topics.split() if t]
+    return {"file": env.get("ROSBAG_FILE", ""), "topics": topics}
+
+
+class RosbagStartRequest(BaseModel):
+    file: str
+    topics: list[str] = []
+
+
+@app.post("/rosbag-replay/start")
+async def rosbag_replay_start(body: RosbagStartRequest):
+    if not _ROSBAG_FILE_RE.match(body.file):
+        return _result(False, "invalid file path")
+    for topic in body.topics:
+        if not _ROSBAG_TOPIC_RE.match(topic):
+            return _result(False, f"invalid topic: {topic}")
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(
+        None, manager.start_rosbag, body.file, body.topics
+    )
+    return _result(ok, msg)
+
+
+@app.post("/rosbag-replay/stop")
+async def rosbag_replay_stop():
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(
+        None, manager.stop, "rosbag-replay"
     )
     return _result(ok, msg)
 

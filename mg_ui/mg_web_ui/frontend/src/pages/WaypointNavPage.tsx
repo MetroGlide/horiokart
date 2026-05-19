@@ -5,6 +5,7 @@ import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
 import { useServiceCaller } from "../hooks/useServiceCaller";
 import { useNav2Status } from "../hooks/useNav2Status";
 import { useSimulation } from "../contexts/SimulationContext";
+import { useRosbagReplay } from "../contexts/RosbagReplayContext";
 import {
   SequencerStatus,
   BoolMsg,
@@ -22,6 +23,7 @@ import ServiceControlCard from "../components/sections/ServiceControlCard";
 import SimulationPoseSection, {
   PoseInput,
 } from "../components/sections/SimulationPoseSection";
+import RosbagReplaySection from "../components/sections/RosbagReplaySection";
 
 const STATE_COLOR: Record<string, string> = {
   IDLE: "text-gray-300",
@@ -84,6 +86,7 @@ export default function WaypointNavPage({
   >("none");
   const { call, loading, error } = useServiceCaller(client);
   const { isSimulation } = useSimulation();
+  const { isRosbagReplayVisible } = useRosbagReplay();
 
   const status = useTopicSubscriber<SequencerStatus>(
     client,
@@ -509,6 +512,17 @@ export default function WaypointNavPage({
                   error={sysError}
                 />
               </div>
+            ),
+          },
+        ]
+      : []),
+    ...(isRosbagReplayVisible
+      ? [
+          {
+            id: "rosbag-replay",
+            label: "Rosbag Replay",
+            children: (
+              <RosbagReplaySection client={client} sysManager={sysManager} />
             ),
           },
         ]

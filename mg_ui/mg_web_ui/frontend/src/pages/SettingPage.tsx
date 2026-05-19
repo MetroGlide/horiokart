@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSimulation } from "../contexts/SimulationContext";
+import { useRosbagReplay } from "../contexts/RosbagReplayContext";
 import {
   useVisualization,
   LayerKey,
@@ -81,6 +82,7 @@ const OVERLAY_CONFIG: OverlayItem[] = [
 
 export default function SettingPage() {
   const { isSimulation, setIsSimulation } = useSimulation();
+  const { isRosbagReplayVisible, setIsRosbagReplayVisible } = useRosbagReplay();
   const { enabled, layers, overlays, setEnabled, toggleLayer, toggleOverlay } =
     useVisualization();
   const {
@@ -153,6 +155,31 @@ export default function SettingPage() {
             </div>
             <p className="text-xs text-gray-500">
               Enable to show simulation-related features on each page.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className="bg-gray-800 rounded-lg p-4 space-y-3">
+        {sectionHeader("rosbag-replay", "Rosbag Replay")}
+        {openSections.has("rosbag-replay") && (
+          <div className="space-y-4 pt-1">
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-300">Rosbag Replay</span>
+              <Toggle
+                value={isRosbagReplayVisible}
+                onChange={() =>
+                  setIsRosbagReplayVisible(!isRosbagReplayVisible)
+                }
+              />
+              <span
+                className={`text-sm font-semibold ${isRosbagReplayVisible ? "text-blue-400" : "text-gray-500"}`}
+              >
+                {isRosbagReplayVisible ? "ON" : "OFF"}
+              </span>
+            </div>
+            <p className="text-xs text-gray-500">
+              Enable to show rosbag replay controls on each page.
             </p>
           </div>
         )}

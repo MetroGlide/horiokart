@@ -102,11 +102,13 @@ services:
       - PYTHONUNBUFFERED=1
       - SIMULATION=true
       - USE_RVIZ=false
+      - ROSBAG_FILE=${ROSBAG_FILE}
+      - ROSBAG_TOPICS=${ROSBAG_TOPICS:-}
     command: >
       bash -c "
         source /opt/ros/humble/setup.bash &&
         source /root/ros2_ws/install/setup.bash &&
-        ros2 launch mg_navigation bag_play.launch.py
+        ros2 bag play $$ROSBAG_FILE $${ROSBAG_TOPICS:+--topics $$ROSBAG_TOPICS} --clock
       "
 
   gazebo-simulation:
