@@ -8,6 +8,12 @@ import {
 } from "../contexts/VisualizationContext";
 import { useTeleop } from "../contexts/TeleopContext";
 import Toggle from "../components/ui/Toggle";
+import {
+  getSysManagerUrl,
+  getSysManagerDefaultUrl,
+  setSysManagerUrl,
+  resetSysManagerUrl,
+} from "../utils/systemManagerConfig";
 
 interface LayerGroup {
   label: string;
@@ -102,6 +108,19 @@ export default function SettingPage() {
     () => new Set(),
   );
 
+  const [sysManagerUrl, setSysManagerUrlState] = useState(() =>
+    getSysManagerUrl(),
+  );
+
+  const handleSysManagerUrlBlur = () => {
+    setSysManagerUrl(sysManagerUrl);
+  };
+
+  const handleSysManagerUrlReset = () => {
+    resetSysManagerUrl();
+    setSysManagerUrlState(getSysManagerDefaultUrl());
+  };
+
   const toggleSection = (id: string) => {
     setOpenSections((prev) => {
       const next = new Set(prev);
@@ -137,6 +156,37 @@ export default function SettingPage() {
 
   return (
     <div className="space-y-3 max-w-2xl mx-auto">
+      <section className="bg-gray-800 rounded-lg p-4 space-y-3">
+        {sectionHeader("connection", "Connection")}
+        {openSections.has("connection") && (
+          <div className="space-y-3 pt-1">
+            <div>
+              <label className="text-xs text-gray-400 block mb-1">
+                System Manager URL
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={sysManagerUrl}
+                  onChange={(e) => setSysManagerUrlState(e.target.value)}
+                  onBlur={handleSysManagerUrlBlur}
+                  className="flex-1 bg-gray-700 text-sm text-white px-2 py-1 rounded border border-gray-600 focus:outline-none focus:border-blue-500"
+                />
+                <button
+                  onClick={handleSysManagerUrlReset}
+                  className="px-3 py-1 rounded text-sm font-medium bg-gray-600 hover:bg-gray-500 text-gray-200 flex-shrink-0"
+                >
+                  Reset
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Default: {getSysManagerDefaultUrl()}
+              </p>
+            </div>
+          </div>
+        )}
+      </section>
+
       <section className="bg-gray-800 rounded-lg p-4 space-y-3">
         {sectionHeader("simulation", "Simulation")}
         {openSections.has("simulation") && (

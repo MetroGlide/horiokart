@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LogEntry } from "../types/api";
+import { getSysManagerUrl } from "../utils/systemManagerConfig";
 
-const LOG_WS_URL = `ws://${window.location.hostname}:8001/logs/stream`;
 const MAX_LOG_ENTRIES = 500;
 const FLUSH_INTERVAL_MS = 100;
 const RECONNECT_DELAY_MS = 3000;
@@ -62,7 +62,9 @@ export function useDockerLogStream(subscribedServices: string[]) {
       if (!mountedRef.current) return;
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
 
-      const ws = new WebSocket(LOG_WS_URL);
+      const ws = new WebSocket(
+        getSysManagerUrl().replace(/^http/, "ws") + "/logs/stream",
+      );
       wsRef.current = ws;
 
       ws.onopen = () => {

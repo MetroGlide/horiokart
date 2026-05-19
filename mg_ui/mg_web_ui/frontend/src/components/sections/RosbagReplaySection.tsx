@@ -4,6 +4,7 @@ import { SystemManagerHandle } from "../../hooks/useSystemManagerClient";
 import { useServiceCaller } from "../../hooks/useServiceCaller";
 import { SERVICES } from "../../ros/services";
 import { loadSettings, saveSettings } from "../../utils/settingsApi";
+import { getSysManagerUrl } from "../../utils/systemManagerConfig";
 import SectionCard from "../layout/SectionCard";
 import ContainerStatusCard from "./ContainerStatusCard";
 import ValueConfirmDialog from "../ui/ValueConfirmDialog";
@@ -97,8 +98,7 @@ export default function RosbagReplaySection({
     setSysLoading(true);
     setSysError(null);
     try {
-      const BASE_URL = `http://${window.location.hostname}:8001`;
-      const res = await fetch(`${BASE_URL}/rosbag-replay/env`);
+      const res = await fetch(`${getSysManagerUrl()}/rosbag-replay/env`);
       const data = await res.json();
       const envFile: string = data.file ?? "";
       const envTopics: string = (data.topics as string[]).join(", ");
