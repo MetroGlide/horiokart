@@ -86,6 +86,17 @@ const OVERLAY_CONFIG: OverlayItem[] = [
   },
 ];
 
+const TABS = [
+  { id: "connection", label: "Connection" },
+  { id: "simulation", label: "Simulation" },
+  { id: "rosbag-replay", label: "Rosbag Replay" },
+  { id: "visualization", label: "Visualization" },
+  { id: "overlays", label: "Viewer Overlays" },
+  { id: "teleop", label: "Teleop" },
+] as const;
+
+type TabId = (typeof TABS)[number]["id"];
+
 export default function SettingPage() {
   const { isSimulation, setIsSimulation } = useSimulation();
   const { isRosbagReplayVisible, setIsRosbagReplayVisible } = useRosbagReplay();
@@ -104,9 +115,7 @@ export default function SettingPage() {
     setGaugeSyncWithPad,
   } = useTeleop();
 
-  const [openSections, setOpenSections] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [activeTab, setActiveTab] = useState<TabId>("connection");
 
   const [sysManagerUrl, setSysManagerUrlState] = useState(() =>
     getSysManagerUrl(),
@@ -121,45 +130,27 @@ export default function SettingPage() {
     setSysManagerUrlState(getSysManagerDefaultUrl());
   };
 
-  const toggleSection = (id: string) => {
-    setOpenSections((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const sectionHeader = (id: string, label: string) => (
-    <button
-      onClick={() => toggleSection(id)}
-      className="w-full flex items-center justify-between text-xs font-semibold text-gray-400 hover:text-gray-200 transition-colors"
-    >
-      <span>{label}</span>
-      <svg
-        className={`w-4 h-4 flex-shrink-0 transform transition-transform ${
-          openSections.has(id) ? "rotate-90" : ""
-        }`}
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9 5l7 7-7 7"
-        />
-      </svg>
-    </button>
-  );
-
   return (
-    <div className="space-y-3 max-w-2xl mx-auto">
-      <section className="bg-gray-800 rounded-lg p-4 space-y-3">
-        {sectionHeader("connection", "Connection")}
-        {openSections.has("connection") && (
-          <div className="space-y-3 pt-1">
+    <div className="flex h-full">
+      <nav className="w-40 flex-shrink-0 flex flex-col gap-1 p-2 border-r border-gray-700">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`text-left px-3 py-2 rounded text-sm transition-colors ${
+              activeTab === tab.id
+                ? "bg-gray-700 text-white"
+                : "text-gray-400 hover:text-gray-200 hover:bg-gray-700/50"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="flex-1 overflow-y-auto p-4">
+        {activeTab === "connection" && (
+          <div className="space-y-3">
             <div>
               <label className="text-xs text-gray-400 block mb-1">
                 System Manager URL
@@ -185,12 +176,9 @@ export default function SettingPage() {
             </div>
           </div>
         )}
-      </section>
 
-      <section className="bg-gray-800 rounded-lg p-4 space-y-3">
-        {sectionHeader("simulation", "Simulation")}
-        {openSections.has("simulation") && (
-          <div className="space-y-4 pt-1">
+        {activeTab === "simulation" && (
+          <div className="space-y-4">
             <div className="flex items-center gap-4">
               <span className="text-sm text-gray-300">Simulation Mode</span>
               <Toggle
@@ -208,12 +196,9 @@ export default function SettingPage() {
             </p>
           </div>
         )}
-      </section>
 
-      <section className="bg-gray-800 rounded-lg p-4 space-y-3">
-        {sectionHeader("rosbag-replay", "Rosbag Replay")}
-        {openSections.has("rosbag-replay") && (
-          <div className="space-y-4 pt-1">
+        {activeTab === "rosbag-replay" && (
+          <div className="space-y-4">
             <div className="flex items-center gap-4">
               <span className="text-sm text-gray-300">Rosbag Replay</span>
               <Toggle
@@ -233,12 +218,9 @@ export default function SettingPage() {
             </p>
           </div>
         )}
-      </section>
 
-      <section className="bg-gray-800 rounded-lg p-4 space-y-3">
-        {sectionHeader("visualization", "Visualization")}
-        {openSections.has("visualization") && (
-          <div className="space-y-4 pt-1">
+        {activeTab === "visualization" && (
+          <div className="space-y-4">
             <div className="flex items-center gap-4">
               <span className="text-sm text-gray-300">
                 Enable Visualization
@@ -276,12 +258,9 @@ export default function SettingPage() {
             )}
           </div>
         )}
-      </section>
 
-      <section className="bg-gray-800 rounded-lg p-4 space-y-3">
-        {sectionHeader("overlays", "Viewer Overlays")}
-        {openSections.has("overlays") && (
-          <div className="space-y-4 pt-1">
+        {activeTab === "overlays" && (
+          <div className="space-y-4">
             <p className="text-xs text-gray-500">
               可視化領域に重ねて表示する要素を設定します。
             </p>
@@ -301,12 +280,9 @@ export default function SettingPage() {
             </div>
           </div>
         )}
-      </section>
 
-      <section className="bg-gray-800 rounded-lg p-4 space-y-3">
-        {sectionHeader("teleop", "Teleop")}
-        {openSections.has("teleop") && (
-          <div className="space-y-4 pt-1">
+        {activeTab === "teleop" && (
+          <div className="space-y-4">
             <div>
               <p className="text-xs text-gray-400 mb-2">Pad speed limit</p>
               <div className="grid grid-cols-2 gap-4">
@@ -399,7 +375,7 @@ export default function SettingPage() {
             </div>
           </div>
         )}
-      </section>
+      </div>
     </div>
   );
 }
