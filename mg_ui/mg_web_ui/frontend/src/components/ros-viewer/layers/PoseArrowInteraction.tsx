@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useThree } from "@react-three/fiber";
 
@@ -27,48 +27,61 @@ export default function PoseArrowInteraction({
   );
   const [dragStart, setDragStart] = useState<GroundPoint | null>(null);
   const [dragEnd, setDragEnd] = useState<GroundPoint | null>(null);
-  const [dragging, setDragging] = useState(false);
 
-  const resolveGroundPoint = (e: MouseEvent): GroundPoint | null => {
-    const rect = gl.domElement.getBoundingClientRect();
-    pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-    raycaster.setFromCamera(pointer, camera);
-    const hit = new THREE.Vector3();
-    if (!raycaster.ray.intersectPlane(groundPlane, hit)) return null;
-    return { x: hit.x, y: hit.y };
-  };
+  const draggingRef = useRef(false);
+  const dragStartRef = useRef<GroundPoint | null>(null);
+  const dragEndRef = useRef<GroundPoint | null>(null);
+  const onPoseSetRef = useRef(onPoseSet);
+  useEffect(() => {
+    onPoseSetRef.current = onPoseSet;
+  }, [onPoseSet]);
 
   useEffect(() => {
     const el = gl.domElement;
     const prevCursor = el.style.cursor;
     el.style.cursor = "crosshair";
 
+    const resolveGroundPoint = (e: MouseEvent): GroundPoint | null => {
+      const rect = el.getBoundingClientRect();
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hit = new THREE.Vector3();
+      if (!raycaster.ray.intersectPlane(groundPlane, hit)) return null;
+      return { x: hit.x, y: hit.y };
+    };
+
     const onDown = (e: MouseEvent) => {
       if (e.button !== 0) return;
       const point = resolveGroundPoint(e);
       if (!point) return;
       e.preventDefault();
-      setDragging(true);
+      draggingRef.current = true;
+      dragStartRef.current = point;
+      dragEndRef.current = point;
       setDragStart(point);
       setDragEnd(point);
     };
 
     const onMove = (e: MouseEvent) => {
-      if (!dragging) return;
+      if (!draggingRef.current) return;
       const point = resolveGroundPoint(e);
       if (!point) return;
+      dragEndRef.current = point;
       setDragEnd(point);
     };
 
     const onUp = (e: MouseEvent) => {
-      if (!dragging || !dragStart) return;
-      const point = resolveGroundPoint(e) ?? dragEnd ?? dragStart;
-      const dx = point.x - dragStart.x;
-      const dy = point.y - dragStart.y;
+      if (!draggingRef.current || !dragStartRef.current) return;
+      const point = resolveGroundPoint(e) ?? dragEndRef.current ?? dragStartRef.current;
+      const start = dragStartRef.current;
+      const dx = point.x - start.x;
+      const dy = point.y - start.y;
       const yaw = Math.atan2(dy, dx);
-      onPoseSet(dragStart.x, dragStart.y, yaw);
-      setDragging(false);
+      onPoseSetRef.current(start.x, start.y, yaw);
+      draggingRef.current = false;
+      dragStartRef.current = null;
+      dragEndRef.current = null;
       setDragStart(null);
       setDragEnd(null);
     };
@@ -83,17 +96,7 @@ export default function PoseArrowInteraction({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [
-    camera,
-    dragEnd,
-    dragStart,
-    dragging,
-    gl,
-    groundPlane,
-    onPoseSet,
-    pointer,
-    raycaster,
-  ]);
+  }, [camera, gl, groundPlane, pointer, raycaster]);
 
   if (!dragStart || !dragEnd) return null;
 
