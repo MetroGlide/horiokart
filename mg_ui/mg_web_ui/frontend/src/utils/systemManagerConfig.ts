@@ -1,4 +1,5 @@
 const STORAGE_KEY = "sysManagerBaseUrl";
+export const SYS_MANAGER_URL_CHANGED_EVENT = "sysManagerUrlChanged";
 
 function defaultUrl(): string {
   return `http://${window.location.hostname}:8001`;
@@ -18,8 +19,10 @@ export function setSysManagerUrl(url: string): void {
   } else {
     localStorage.removeItem(STORAGE_KEY);
   }
+  window.dispatchEvent(new CustomEvent(SYS_MANAGER_URL_CHANGED_EVENT));
 }
 
 export function resetSysManagerUrl(): void {
   localStorage.removeItem(STORAGE_KEY);
+  window.dispatchEvent(new CustomEvent(SYS_MANAGER_URL_CHANGED_EVENT));
 }
