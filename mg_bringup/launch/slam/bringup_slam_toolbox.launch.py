@@ -37,11 +37,13 @@ def generate_launch_description():
         "record_bag", default="false")
 
     use_ekf_arg = launch_argument_creator.create(
-        "use_ekf", default="False")
+        "use_ekf", default="false")
     ekf_params_file_arg = launch_argument_creator.create(
         "ekf_params_file", default="ekf_slam.yaml")
+    navsat_params_file_arg = launch_argument_creator.create(
+        "navsat_params_file", default="navsat_transform.yaml")
     ekf_odom_topic_arg = launch_argument_creator.create(
-        "ekf_odom_topic", default="ekf_odom")
+        "ekf_odom_topic", default="odometry/filtered")
 
     use_odom_arg = launch_argument_creator.create(
         "use_odom", default="true")
@@ -83,7 +85,24 @@ def generate_launch_description():
                     ("odometry/filtered", ekf_odom_topic_arg.launch_config),
                 ],
             ),
-
+            Node(
+                package="robot_localization",
+                executable="navsat_transform_node",
+                name="navsat_transform_node",
+                output="screen",
+                parameters=[
+                    {"use_sim_time": simulation_arg.launch_config},
+                    PathJoinSubstitution(
+                        [drivers_pkg_share, "params",
+                            navsat_params_file_arg.launch_config]
+                    ),
+                ],
+                remappings=[
+                    # EKFの出力トピックをフィードバックとして購読する
+                    ("odometry/filtered", ekf_odom_topic_arg.launch_config),
+                    ("gps/fix", "/gps/fix"),
+                ],
+            ),
         ],
         condition=launch.conditions.IfCondition(
             use_ekf_arg.launch_config),

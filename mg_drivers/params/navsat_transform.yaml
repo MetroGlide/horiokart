@@ -1,0 +1,22 @@
+navsat_transform_node:
+  ros__parameters:
+    # GPS座標系とロボット座標系の間の磁気偏角（ラジアン）。設置地域に合わせて調整する
+    magnetic_declination_radians: 0.0
+
+    # ロボット起動時のyaw角オフセット（ラジアン）。ロボットが東向きなら0.0
+    yaw_offset: 0.0
+
+    # 2D動作用: GPS高度を0に固定する
+    zero_altitude: true
+
+    # UTM座標系のTFをbroadcastしない（map/odomフレームのみ使用）
+    broadcast_utm_transform: false
+
+    # フィルタ済みGPS位置をパブリッシュしない
+    publish_filtered_gps: false
+
+    # IMU不使用: /odomのyawを方位角として使用する
+    use_odometry_yaw: true
+
+    # 最初のGPS受信を原点（datum）に設定する
+    wait_for_datum: false
