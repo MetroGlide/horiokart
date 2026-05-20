@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { LogEntry } from "../types/api";
-import { getSysManagerUrl } from "../utils/systemManagerConfig";
+import {
+  getSysManagerUrl,
+  SYS_MANAGER_URL_CHANGED_EVENT,
+} from "../utils/systemManagerConfig";
 
 const MAX_LOG_ENTRIES = 500;
 const FLUSH_INTERVAL_MS = 100;
@@ -15,6 +18,13 @@ interface StreamMessage {
 export function useDockerLogStream(subscribedServices: string[]) {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [connected, setConnected] = useState(false);
+  const [baseUrl, setBaseUrl] = useState(() => getSysManagerUrl());
+
+  useEffect(() => {
+    const handler = () => setBaseUrl(getSysManagerUrl());
+    window.addEventListener(SYS_MANAGER_URL_CHANGED_EVENT, handler);
+    return () => window.removeEventListener(SYS_MANAGER_URL_CHANGED_EVENT, handler);
+  }, []);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -63,7 +73,7 @@ export function useDockerLogStream(subscribedServices: string[]) {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
 
       const ws = new WebSocket(
-        getSysManagerUrl().replace(/^http/, "ws") + "/logs/stream",
+        baseUrl.replace(/^http/, "ws") + "/logs/stream",
       );
       wsRef.current = ws;
 
@@ -134,7 +144,7 @@ export function useDockerLogStream(subscribedServices: string[]) {
 
       setConnected(false);
     };
-  }, []);
+  }, [baseUrl]);
 
   useEffect(() => {
     lastServicesRef.current = servicePayload;
