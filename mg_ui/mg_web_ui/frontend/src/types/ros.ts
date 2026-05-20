@@ -283,3 +283,18 @@ export interface TwistMsg {
   linear: { x: number; y: number; z: number }
   angular: { x: number; y: number; z: number }
 }
+
+export interface NavSatStatus {
+  status: number
+  service: number
+}
+
+export interface NavSatFix {
+  header: Header
+  status: NavSatStatus
+  latitude: number
+  longitude: number
+  altitude: number
+  position_covariance: number[]
+  position_covariance_type: number
+}

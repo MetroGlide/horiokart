@@ -25,7 +25,12 @@ export type LayerKey =
   | "colorImage"
   | "depthImage";
 
-export type OverlayKey = "joystick" | "velocityGauge" | "systemMetrics";
+export type OverlayKey =
+  | "joystick"
+  | "velocityGauge"
+  | "systemMetrics"
+  | "gpsStatus"
+  | "gpsMap";
 
 const DEFAULT_LAYERS: Record<LayerKey, boolean> = {
   map: true,
@@ -48,6 +53,8 @@ const DEFAULT_OVERLAYS: Record<OverlayKey, boolean> = {
   joystick: false,
   velocityGauge: true,
   systemMetrics: true,
+  gpsStatus: true,
+  gpsMap: true,
 };
 
 interface VisualizationContextType {

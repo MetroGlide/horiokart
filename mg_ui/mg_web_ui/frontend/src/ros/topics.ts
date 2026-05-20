@@ -31,4 +31,5 @@ export const TOPICS = {
   COLLISION_STATE: '/collision_detector_state',
   CPU_USAGE: '/cpu_usage',
   MEMORY_USAGE: '/memory_usage',
+  GPS_FIX: '/gps/fix',
 } as const

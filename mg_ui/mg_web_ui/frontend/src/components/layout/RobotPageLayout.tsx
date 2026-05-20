@@ -13,6 +13,9 @@ import { ReactNode, useState } from "react";
 import VelocityGauge from "../panels/VelocityGauge";
 import SystemMetrics from "../panels/SystemMetrics";
 import JoystickPad from "../panels/JoystickPad";
+import GpsStatusOverlay from "../panels/GpsStatusOverlay";
+import GpsMapOverlay from "../panels/GpsMapOverlay";
+import { useGpsFix } from "../../hooks/useGpsFix";
 
 interface RobotPageLayoutProps {
   client: FoxgloveClientHandle;
@@ -36,6 +39,7 @@ export default function RobotPageLayout({
   extraOverlay,
 }: RobotPageLayoutProps) {
   const { enabled: vizEnabled, layers, overlays } = useVisualization();
+  const { fix, trail } = useGpsFix(client);
   const hasViewer = vizEnabled && viewerMode != null;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -142,7 +146,15 @@ export default function RobotPageLayout({
                     {overlays.systemMetrics && (
                       <SystemMetrics client={client} compact />
                     )}
+                    {overlays.gpsStatus && (
+                      <GpsStatusOverlay fix={fix} />
+                    )}
                   </div>
+                  {overlays.gpsMap && (
+                    <div className="absolute bottom-4 left-10 pointer-events-auto">
+                      <GpsMapOverlay fix={fix} trail={trail} />
+                    </div>
+                  )}
                   {overlays.joystick && (
                     <div className="absolute bottom-4 right-4 pointer-events-auto">
                       <JoystickPad client={client} />
