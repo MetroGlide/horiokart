@@ -99,9 +99,18 @@ export default function RosbagReplaySection({
     setSysError(null);
     try {
       const res = await fetch(`${getSysManagerUrl()}/rosbag-replay/env`);
-      const data = await res.json();
-      const envFile: string = data.file ?? "";
-      const envTopics: string = (data.topics as string[]).join(", ");
+      if (!res.ok) {
+        throw new Error(`Failed to load rosbag replay env: ${res.status} ${res.statusText}`);
+      }
+      const data: unknown = await res.json();
+      const payload =
+        typeof data === "object" && data !== null
+          ? (data as { file?: unknown; topics?: unknown })
+          : {};
+      const envFile = typeof payload.file === "string" ? payload.file : "";
+      const envTopics = Array.isArray(payload.topics)
+        ? payload.topics.filter((topic): topic is string => typeof topic === "string").join(", ")
+        : "";
       setPendingFile(envFile);
       setPendingTopics(envTopics);
       setDialogOpen(true);
