@@ -476,11 +476,13 @@ async def rosbag_replay_stop():
     return _result(ok, msg)
 
 
-async def _stream_container_logs(websocket: WebSocket, service: str) -> None:
+async def _stream_container_logs(
+    queue: asyncio.Queue, service: str
+) -> None:
     while True:
         container = manager._get_container(service)
         if container is None:
-            await websocket.send_json(
+            await queue.put(
                 {"service": service, "error": "container not found"}
             )
             await asyncio.sleep(5.0)
@@ -488,7 +490,7 @@ async def _stream_container_logs(websocket: WebSocket, service: str) -> None:
 
         container_ref = container.name or container.id
         if not container_ref:
-            await websocket.send_json(
+            await queue.put(
                 {"service": service, "error": "container reference missing"}
             )
             await asyncio.sleep(5.0)
@@ -510,7 +512,7 @@ async def _stream_container_logs(websocket: WebSocket, service: str) -> None:
             async for line in proc.stdout:
                 text = line.decode(errors="replace").rstrip("\n")
                 if text:
-                    await websocket.send_json({"service": service, "line": text})
+                    await queue.put({"service": service, "line": text})
             await proc.wait()
             await asyncio.sleep(5.0)
         except asyncio.CancelledError:
@@ -538,7 +540,15 @@ async def logs_stream(websocket: WebSocket):
         return
 
     await websocket.accept()
+    send_queue: asyncio.Queue[dict] = asyncio.Queue()
     tasks: dict[str, asyncio.Task[None]] = {}
+
+    async def _sender() -> None:
+        while True:
+            msg = await send_queue.get()
+            await websocket.send_json(msg)
+
+    sender_task: asyncio.Task[None] = asyncio.create_task(_sender())
 
     def _bind_done_callback(service: str):
         def _on_done(task: asyncio.Task[None]) -> None:
@@ -573,7 +583,7 @@ async def logs_stream(websocket: WebSocket):
 
             for service in desired_services - current_services:
                 task = asyncio.create_task(
-                    _stream_container_logs(websocket, service))
+                    _stream_container_logs(send_queue, service))
                 task.add_done_callback(_bind_done_callback(service))
                 tasks[service] = task
     except WebSocketDisconnect:
@@ -584,6 +594,8 @@ async def logs_stream(websocket: WebSocket):
             task.cancel()
         if remaining_tasks:
             await asyncio.gather(*remaining_tasks, return_exceptions=True)
+        sender_task.cancel()
+        await asyncio.gather(sender_task, return_exceptions=True)
 
 
 if __name__ == "__main__":
