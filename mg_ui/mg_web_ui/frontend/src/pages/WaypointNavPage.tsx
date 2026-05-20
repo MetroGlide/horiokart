@@ -5,6 +5,7 @@ import { useTopicSubscriber } from "../hooks/useTopicSubscriber";
 import { useServiceCaller } from "../hooks/useServiceCaller";
 import { useNav2Status } from "../hooks/useNav2Status";
 import { useSimulation } from "../contexts/SimulationContext";
+import { useRosbagReplay } from "../contexts/RosbagReplayContext";
 import {
   SequencerStatus,
   BoolMsg,
@@ -22,6 +23,7 @@ import ServiceControlCard from "../components/sections/ServiceControlCard";
 import SimulationPoseSection, {
   PoseInput,
 } from "../components/sections/SimulationPoseSection";
+import RosbagReplaySection from "../components/sections/RosbagReplaySection";
 
 const STATE_COLOR: Record<string, string> = {
   IDLE: "text-gray-300",
@@ -55,6 +57,21 @@ function buildInitialPoseMessage(pose: PoseInput) {
   };
 }
 
+function buildNavGoalMessage(pose: PoseInput) {
+  const nowMs = Date.now();
+  const sec = Math.floor(nowMs / 1000);
+  const nanosec = Math.floor((nowMs % 1000) * 1_000_000);
+  const qz = Math.sin(pose.yaw / 2.0);
+  const qw = Math.cos(pose.yaw / 2.0);
+  return {
+    header: { stamp: { sec, nanosec }, frame_id: "map" },
+    pose: {
+      position: { x: pose.x, y: pose.y, z: 0.0 },
+      orientation: { x: 0.0, y: 0.0, z: qz, w: qw },
+    },
+  };
+}
+
 export default function WaypointNavPage({
   client,
   sysManager,
@@ -64,8 +81,12 @@ export default function WaypointNavPage({
 }) {
   const [countdownMs, setCountdownMs] = useState(3000);
   const [jumpIndex, setJumpIndex] = useState(0);
+  const [interactionMode, setInteractionMode] = useState<
+    "none" | "pose_estimate" | "nav_goal"
+  >("none");
   const { call, loading, error } = useServiceCaller(client);
   const { isSimulation } = useSimulation();
+  const { isRosbagReplayVisible } = useRosbagReplay();
 
   const status = useTopicSubscriber<SequencerStatus>(
     client,
@@ -143,6 +164,29 @@ export default function WaypointNavPage({
       );
     } catch (e) {
       setSysError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleMapPoseSet = (x: number, y: number, yaw: number) => {
+    setSysError(null);
+    try {
+      if (interactionMode === "pose_estimate") {
+        client.publish(
+          TOPICS.INITIALPOSE,
+          "geometry_msgs/msg/PoseWithCovarianceStamped",
+          buildInitialPoseMessage({ x, y, z: 0.0, yaw }),
+        );
+      } else if (interactionMode === "nav_goal") {
+        client.publish(
+          TOPICS.GOAL_POSE,
+          "geometry_msgs/msg/PoseStamped",
+          buildNavGoalMessage({ x, y, z: 0.0, yaw }),
+        );
+      }
+    } catch (e) {
+      setSysError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setInteractionMode("none");
     }
   };
 
@@ -384,6 +428,53 @@ export default function WaypointNavPage({
               </button>
             </div>
           </SectionCard>
+          <SectionCard title="Map Interaction">
+            <div className="flex flex-wrap gap-2 items-center">
+              <button
+                onClick={() =>
+                  setInteractionMode(
+                    interactionMode === "pose_estimate"
+                      ? "none"
+                      : "pose_estimate",
+                  )
+                }
+                className={`px-3 py-2 rounded font-medium text-sm ${
+                  interactionMode === "pose_estimate"
+                    ? "bg-yellow-500 text-gray-900"
+                    : "bg-gray-600 hover:bg-gray-500 text-white"
+                }`}
+              >
+                2D Pose Estimate
+              </button>
+              <button
+                onClick={() =>
+                  setInteractionMode(
+                    interactionMode === "nav_goal" ? "none" : "nav_goal",
+                  )
+                }
+                className={`px-3 py-2 rounded font-medium text-sm ${
+                  interactionMode === "nav_goal"
+                    ? "bg-orange-500 text-white"
+                    : "bg-gray-600 hover:bg-gray-500 text-white"
+                }`}
+              >
+                Nav2 Goal
+              </button>
+              {interactionMode !== "none" && (
+                <button
+                  onClick={() => setInteractionMode("none")}
+                  className="px-3 py-2 rounded font-medium text-sm bg-gray-700 hover:bg-gray-600 text-white"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
+            {interactionMode !== "none" && (
+              <p className="mt-2 text-xs text-gray-400">
+                マップをクリックしてドラッグし、位置と向きを指定してください。
+              </p>
+            )}
+          </SectionCard>
         </div>
       ),
     },
@@ -425,6 +516,17 @@ export default function WaypointNavPage({
           },
         ]
       : []),
+    ...(isRosbagReplayVisible
+      ? [
+          {
+            id: "rosbag-replay",
+            label: "Rosbag Replay",
+            children: (
+              <RosbagReplaySection client={client} sysManager={sysManager} />
+            ),
+          },
+        ]
+      : []),
     {
       id: "log",
       label: "Log",
@@ -441,7 +543,9 @@ export default function WaypointNavPage({
         "control",
         ...(isSimulation ? ["simulation"] : []),
       ]}
-      viewerMode="3d"
+      viewerMode="2d"
+      interactionMode={interactionMode}
+      onPoseSet={handleMapPoseSet}
     />
   );
 }

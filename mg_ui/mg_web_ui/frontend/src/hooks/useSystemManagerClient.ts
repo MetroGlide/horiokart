@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ApiLog, CallApi, SystemManagerHandle } from '../types/api'
+import { getSysManagerUrl } from '../utils/systemManagerConfig'
 
 export type { ApiLog, CallApi, SystemManagerHandle }
-
-const BASE_URL = `http://${window.location.hostname}:8001`
 
 export function useSystemManagerClient(): SystemManagerHandle {
   const [containers, setContainers] = useState<Record<string, string>>({})
@@ -12,7 +11,7 @@ export function useSystemManagerClient(): SystemManagerHandle {
 
   useEffect(() => {
     const poll = () =>
-      fetch(`${BASE_URL}/status`)
+      fetch(`${getSysManagerUrl()}/status`)
         .then((r) => r.json())
         .then(setContainers)
         .catch(() => {})
@@ -22,7 +21,7 @@ export function useSystemManagerClient(): SystemManagerHandle {
   }, [])
 
   const callApi: CallApi = useCallback(async (path, body) => {
-    const r = await fetch(`${BASE_URL}${path}`, {
+    const r = await fetch(`${getSysManagerUrl()}${path}`, {
       method: 'POST',
       headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
       body: body !== undefined ? JSON.stringify(body) : undefined,

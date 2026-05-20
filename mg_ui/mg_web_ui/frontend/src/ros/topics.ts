@@ -6,6 +6,7 @@ export const TOPICS = {
   WAYPOINT_SET_NEXT_INDEX: nodeNs(NODE_NS.WAYPOINT_SEQUENCER, '/set_next_waypoint_index'),
   DIAGNOSTICS: nodeNs(NODE_NS.DIAGNOSTICS, '/diagnostics'),
   INITIALPOSE: nodeNs(NODE_NS.LOCALIZATION, '/initialpose'),
+  GOAL_POSE: '/goal_pose',
   NAV_ACTION_STATUS: '/navigate_to_pose/_action/status',
   AMCL_POSE: '/amcl_pose',
   MAP: '/map',

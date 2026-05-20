@@ -71,7 +71,7 @@ export default function SettingModal({ open, onClose }: SettingModalProps) {
             </button>
           </div>
         </div>
-        <div className="overflow-y-auto p-4">
+        <div className="flex-1 overflow-hidden">
           <SettingPage />
         </div>
       </div>

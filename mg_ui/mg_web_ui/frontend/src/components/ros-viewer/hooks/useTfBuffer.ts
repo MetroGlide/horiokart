@@ -28,7 +28,7 @@ export function useTfBuffer(client: FoxgloveClientHandle): TfBuffer {
       unsubTf()
       unsubStatic()
     }
-  }, [client, client.status])
+  }, [client.status])
 
   // BFS from sourceFrame up through parent links to reach targetFrame.
   // Each TransformStamped with child_frame_id=C represents the transform from C to its parent P:

@@ -5,6 +5,7 @@ import { useSystemManagerClient } from "./hooks/useSystemManagerClient";
 import { SimulationProvider } from "./contexts/SimulationContext";
 import { VisualizationProvider } from "./contexts/VisualizationContext";
 import { TeleopProvider } from "./contexts/TeleopContext";
+import { RosbagReplayProvider } from "./contexts/RosbagReplayContext";
 import TopPage from "./pages/TopPage";
 import WaypointNavPage from "./pages/WaypointNavPage";
 import SlamPage from "./pages/SlamPage";
@@ -21,45 +22,52 @@ export default function App() {
 
   return (
     <SimulationProvider>
-      <VisualizationProvider>
-        <TeleopProvider>
-          <div className="min-h-screen bg-gray-900 text-white">
-            <header className="flex items-center justify-between px-4 py-3 bg-gray-800 shadow-md">
-              <span className="text-lg font-bold tracking-wide">
-                MG-01 Control UI
-              </span>
-              <ConnectionBadge status={client.status} />
-            </header>
-            <NavBar onSettingClick={() => setSettingOpen(true)} />
-            <main className="p-4">
-              <Routes>
-                <Route path="/" element={<TopPage client={client} />} />
-                <Route
-                  path="/waypoint"
-                  element={
-                    <WaypointNavPage client={client} sysManager={sysManager} />
-                  }
-                />
-                <Route
-                  path="/slam"
-                  element={<SlamPage client={client} sysManager={sysManager} />}
-                />
-                <Route
-                  path="/system"
-                  element={
-                    <SystemPage client={client} sysManager={sysManager} />
-                  }
-                />
-                <Route path="/setting" element={<SettingPage />} />
-              </Routes>
-            </main>
-            <SettingModal
-              open={settingOpen}
-              onClose={() => setSettingOpen(false)}
-            />
-          </div>
-        </TeleopProvider>
-      </VisualizationProvider>
+      <RosbagReplayProvider>
+        <VisualizationProvider>
+          <TeleopProvider>
+            <div className="min-h-screen bg-gray-900 text-white">
+              <header className="flex items-center justify-between px-4 py-3 bg-gray-800 shadow-md">
+                <span className="text-lg font-bold tracking-wide">
+                  MG-01 Control UI
+                </span>
+                <ConnectionBadge status={client.status} />
+              </header>
+              <NavBar onSettingClick={() => setSettingOpen(true)} />
+              <main className="p-4">
+                <Routes>
+                  <Route path="/" element={<TopPage client={client} />} />
+                  <Route
+                    path="/waypoint"
+                    element={
+                      <WaypointNavPage
+                        client={client}
+                        sysManager={sysManager}
+                      />
+                    }
+                  />
+                  <Route
+                    path="/slam"
+                    element={
+                      <SlamPage client={client} sysManager={sysManager} />
+                    }
+                  />
+                  <Route
+                    path="/system"
+                    element={
+                      <SystemPage client={client} sysManager={sysManager} />
+                    }
+                  />
+                  <Route path="/setting" element={<SettingPage />} />
+                </Routes>
+              </main>
+              <SettingModal
+                open={settingOpen}
+                onClose={() => setSettingOpen(false)}
+              />
+            </div>
+          </TeleopProvider>
+        </VisualizationProvider>
+      </RosbagReplayProvider>
     </SimulationProvider>
   );
 }

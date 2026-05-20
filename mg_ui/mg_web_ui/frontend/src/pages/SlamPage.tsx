@@ -2,12 +2,14 @@ import { useState } from "react";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { SystemManagerHandle } from "../hooks/useSystemManagerClient";
 import { useSimulation } from "../contexts/SimulationContext";
+import { useRosbagReplay } from "../contexts/RosbagReplayContext";
 import RobotPageLayout from "../components/RobotPageLayout";
 import ApiLogSection from "../components/sections/ApiLogSection";
 import ContainerStatusCard from "../components/sections/ContainerStatusCard";
 import ServiceControlCard from "../components/sections/ServiceControlCard";
 import SectionCard from "../components/layout/SectionCard";
 import SimulationPoseSection from "../components/sections/SimulationPoseSection";
+import RosbagReplaySection from "../components/sections/RosbagReplaySection";
 
 export default function SlamPage({
   client,
@@ -21,6 +23,7 @@ export default function SlamPage({
   const [mapDir, setMapDir] = useState("/root/ros2_data");
   const [mapName, setMapName] = useState("map");
   const { isSimulation } = useSimulation();
+  const { isRosbagReplayVisible } = useRosbagReplay();
 
   const { containers, callApi } = sysManager;
   const slamState = containers["slam"] ?? "unknown";
@@ -124,6 +127,17 @@ export default function SlamPage({
                 onResetRobot={(pose) => call("/simulation/reset-pose", pose)}
                 loading={loading}
               />
+            ),
+          },
+        ]
+      : []),
+    ...(isRosbagReplayVisible
+      ? [
+          {
+            id: "rosbag-replay",
+            label: "Rosbag Replay",
+            children: (
+              <RosbagReplaySection client={client} sysManager={sysManager} />
             ),
           },
         ]

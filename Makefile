@@ -32,7 +32,7 @@ navigation:
 	$(COMPOSE) up $(_up_flags) navigation
 
 rosbag-replay:
-	$(COMPOSE) up $(_up_flags) rosbag-replay
+	$(COMPOSE) run --rm -it rosbag-replay
 
 gazebo-simulation:
 	$(COMPOSE) up $(_up_flags) gazebo-simulation
