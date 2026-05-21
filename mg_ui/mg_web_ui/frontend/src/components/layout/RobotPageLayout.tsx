@@ -38,7 +38,12 @@ export default function RobotPageLayout({
   extraPanels,
   extraOverlay,
 }: RobotPageLayoutProps) {
-  const { enabled: vizEnabled, layers, overlays } = useVisualization();
+  const {
+    enabled: vizEnabled,
+    layers,
+    overlays,
+    gpsMapSize,
+  } = useVisualization();
   const { fix, trail } = useGpsFix(client);
   const hasViewer = vizEnabled && viewerMode != null;
 
@@ -146,13 +151,16 @@ export default function RobotPageLayout({
                     {overlays.systemMetrics && (
                       <SystemMetrics client={client} compact />
                     )}
-                    {overlays.gpsStatus && (
-                      <GpsStatusOverlay fix={fix} />
-                    )}
+                    {overlays.gpsStatus && <GpsStatusOverlay fix={fix} />}
                   </div>
                   {overlays.gpsMap && (
                     <div className="absolute bottom-4 left-10 pointer-events-auto">
-                      <GpsMapOverlay fix={fix} trail={trail} />
+                      <GpsMapOverlay
+                        fix={fix}
+                        trail={trail}
+                        mapWidth={gpsMapSize === "default" ? 192 : 384}
+                        mapHeight={gpsMapSize === "2x-square" ? 384 : 192}
+                      />
                     </div>
                   )}
                   {overlays.joystick && (

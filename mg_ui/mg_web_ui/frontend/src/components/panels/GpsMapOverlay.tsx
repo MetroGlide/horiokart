@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Map, Marker } from "pigeon-maps";
 import { NavSatFix } from "../../types/ros";
 
-const MAP_SIZE = 192;
 const DEFAULT_CENTER: [number, number] = [35.6895, 139.6917];
 const DEFAULT_ZOOM = 17;
 
@@ -11,6 +10,8 @@ function mercatorProject(
   lng: number,
   center: [number, number],
   zoom: number,
+  width: number,
+  height: number,
 ): [number, number] {
   const TILE = 256;
   const scale = TILE * Math.pow(2, zoom);
@@ -20,17 +21,24 @@ function mercatorProject(
     return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * scale;
   };
   return [
-    MAP_SIZE / 2 + (toMx(lng) - toMx(center[1])),
-    MAP_SIZE / 2 + (toMy(lat) - toMy(center[0])),
+    width / 2 + (toMx(lng) - toMx(center[1])),
+    height / 2 + (toMy(lat) - toMy(center[0])),
   ];
 }
 
 interface GpsMapOverlayProps {
   fix: NavSatFix | null;
   trail: [number, number][];
+  mapWidth?: number;
+  mapHeight?: number;
 }
 
-export default function GpsMapOverlay({ fix, trail }: GpsMapOverlayProps) {
+export default function GpsMapOverlay({
+  fix,
+  trail,
+  mapWidth = 192,
+  mapHeight = 192,
+}: GpsMapOverlayProps) {
   const hasFix = fix !== null && fix.status.status >= 0;
   const position: [number, number] | undefined = hasFix
     ? [fix.latitude, fix.longitude]
@@ -49,7 +57,14 @@ export default function GpsMapOverlay({ fix, trail }: GpsMapOverlayProps) {
     trail.length >= 2
       ? trail
           .map(([lat, lng], i) => {
-            const [x, y] = mercatorProject(lat, lng, center, zoom);
+            const [x, y] = mercatorProject(
+              lat,
+              lng,
+              center,
+              zoom,
+              mapWidth,
+              mapHeight,
+            );
             return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
           })
           .join(" ")
@@ -57,14 +72,14 @@ export default function GpsMapOverlay({ fix, trail }: GpsMapOverlayProps) {
 
   return (
     <div
-      className="w-48 h-48 rounded-lg overflow-hidden border border-gray-600/50 shadow-lg"
-      style={{ position: "relative" }}
+      className="rounded-lg overflow-hidden border border-gray-600/50 shadow-lg"
+      style={{ position: "relative", width: mapWidth, height: mapHeight }}
     >
       <Map
         center={center}
         zoom={zoom}
-        width={MAP_SIZE}
-        height={MAP_SIZE}
+        width={mapWidth}
+        height={mapHeight}
         onBoundsChanged={({ center: c, zoom: z }) => {
           setCenter(c);
           setZoom(z);
@@ -79,8 +94,8 @@ export default function GpsMapOverlay({ fix, trail }: GpsMapOverlayProps) {
             position: "absolute",
             top: 0,
             left: 0,
-            width: MAP_SIZE,
-            height: MAP_SIZE,
+            width: mapWidth,
+            height: mapHeight,
             pointerEvents: "none",
           }}
         >

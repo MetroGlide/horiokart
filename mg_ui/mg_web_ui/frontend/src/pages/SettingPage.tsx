@@ -5,6 +5,7 @@ import {
   useVisualization,
   LayerKey,
   OverlayKey,
+  GpsMapSize,
 } from "../contexts/VisualizationContext";
 import { useTeleop } from "../contexts/TeleopContext";
 import Toggle from "../components/ui/Toggle";
@@ -84,6 +85,16 @@ const OVERLAY_CONFIG: OverlayItem[] = [
     label: "System Metrics",
     description: "CPU / メモリ使用率",
   },
+  {
+    key: "gpsStatus",
+    label: "GPS Status",
+    description: "GPS Fix状態・緯度・経度・高度",
+  },
+  {
+    key: "gpsMap",
+    label: "GPS Map",
+    description: "OSMミニマップ・GPS軌跡表示",
+  },
 ];
 
 const TABS = [
@@ -100,8 +111,16 @@ type TabId = (typeof TABS)[number]["id"];
 export default function SettingPage() {
   const { isSimulation, setIsSimulation } = useSimulation();
   const { isRosbagReplayVisible, setIsRosbagReplayVisible } = useRosbagReplay();
-  const { enabled, layers, overlays, setEnabled, toggleLayer, toggleOverlay } =
-    useVisualization();
+  const {
+    enabled,
+    layers,
+    overlays,
+    setEnabled,
+    toggleLayer,
+    toggleOverlay,
+    gpsMapSize,
+    setGpsMapSize,
+  } = useVisualization();
   const {
     maxLinear,
     maxAngular,
@@ -278,6 +297,37 @@ export default function SettingPage() {
                 </div>
               ))}
             </div>
+            {overlays.gpsMap && (
+              <div className="pt-3 border-t border-gray-700">
+                <p className="text-xs text-gray-400 mb-2">GPS Map サイズ</p>
+                <div className="flex gap-2">
+                  {(
+                    [
+                      { value: "default", label: "標準", sub: "192×192" },
+                      {
+                        value: "2x-square",
+                        label: "2倍 正方形",
+                        sub: "384×384",
+                      },
+                      { value: "2x-wide", label: "2倍 横長", sub: "384×192" },
+                    ] as { value: GpsMapSize; label: string; sub: string }[]
+                  ).map(({ value, label, sub }) => (
+                    <button
+                      key={value}
+                      onClick={() => setGpsMapSize(value)}
+                      className={`flex-1 px-2 py-2 rounded text-xs border transition-colors ${
+                        gpsMapSize === value
+                          ? "bg-blue-600 border-blue-500 text-white"
+                          : "bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600"
+                      }`}
+                    >
+                      <div className="font-medium">{label}</div>
+                      <div className="text-gray-400 mt-0.5">{sub}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
