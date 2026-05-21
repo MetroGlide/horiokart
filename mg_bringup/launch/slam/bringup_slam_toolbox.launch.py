@@ -37,7 +37,7 @@ def generate_launch_description():
         "record_bag", default="false")
 
     use_ekf_arg = launch_argument_creator.create(
-        "use_ekf", default="false")
+        "use_ekf", default="False")
     ekf_params_file_arg = launch_argument_creator.create(
         "ekf_params_file", default="ekf_slam.yaml")
     navsat_params_file_arg = launch_argument_creator.create(
