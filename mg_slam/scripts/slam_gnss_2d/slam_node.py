@@ -6,7 +6,9 @@
 """
 from __future__ import annotations
 
+import logging
 import math
+import time
 
 import rclpy
 from geometry_msgs.msg import PoseStamped
@@ -62,6 +64,11 @@ class SlamGnss2DNode(Node):
 
         self.create_timer(1.0 / map_publish_hz, self._publish_map_timer)
 
+        self._scan_recv_count = 0
+        self._odom_miss_count = 0
+        self._node_count = 0
+        self._last_stat_time = time.monotonic()
+
         self.get_logger().info(
             f'slam_gnss_2d_node started (Phase 1: OdomOnly)\n'
             f'  scan: {scan_topic}, odom: {odom_topic}\n'
@@ -81,19 +88,44 @@ class SlamGnss2DNode(Node):
         self.declare_parameter('map_publish_hz', 1.0)
 
     def _on_scan(self, scan: ScanData) -> None:
+        self._scan_recv_count += 1
         odom = self._odom_source.get_odom_at(scan.timestamp)
         if odom is None:
+            self._odom_miss_count += 1
+            self.get_logger().warn(
+                f'No odom for scan ts={scan.timestamp:.3f} (miss #{self._odom_miss_count})'
+            )
             return
 
         node = self._pose_graph.add_scan(scan, odom)
         if node is None:
+            self.get_logger().debug(
+                f'Scan #{self._scan_recv_count} rejected: '
+                f'below threshold at ({odom.x:.2f}, {odom.y:.2f})'
+            )
             return
+
+        self._node_count += 1
+        if self._node_count == 1 or self._node_count % 10 == 0:
+            self.get_logger().info(
+                f'Node #{node.index}: x={node.x:.2f} y={node.y:.2f} '
+                f'yaw={math.degrees(node.yaw):.1f}deg'
+            )
 
         self._renderer.add_node(node)
         self._map_dirty = True
         self._publish_path(node)
 
     def _publish_map_timer(self) -> None:
+        now = time.monotonic()
+        if now - self._last_stat_time >= 30.0:
+            self.get_logger().info(
+                f'[stat] nodes={self._node_count}, '
+                f'scans={self._scan_recv_count}, '
+                f'odom_miss={self._odom_miss_count}'
+            )
+            self._last_stat_time = now
+
         if not self._map_dirty:
             return
         self._map_dirty = False
@@ -109,6 +141,10 @@ class SlamGnss2DNode(Node):
         msg.info.origin.position.y = origin_y
         msg.data = data.flatten().tolist()
         self._map_pub.publish(msg)
+        self.get_logger().debug(
+            f'Map published: occupied={int((data == 100).sum())}, '
+            f'free={int((data == 0).sum())} px'
+        )
 
     def _publish_path(self, node) -> None:
         pose = PoseStamped()
@@ -129,6 +165,8 @@ class SlamGnss2DNode(Node):
 
 
 def main(args=None):
+    logging.basicConfig(level=logging.INFO,
+                        format='%(name)s %(levelname)s: %(message)s')
     rclpy.init(args=args)
     node = SlamGnss2DNode()
     try:

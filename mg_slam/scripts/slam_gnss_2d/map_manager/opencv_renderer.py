@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import cv2
 
 from .base import MapRendererBase
 from ..data_types import PoseNode
+
+_logger = logging.getLogger(__name__)
 
 
 class OpenCVRenderer(MapRendererBase):
@@ -37,6 +41,8 @@ class OpenCVRenderer(MapRendererBase):
         self._origin_x = origin_x
         self._origin_y = origin_y
         self._map = np.full((map_size, map_size), 128, dtype=np.uint8)
+        self._oob_robot_warned = False
+        self._render_count = 0
 
     def add_node(self, node: PoseNode) -> None:
         if node.scan is None:
@@ -76,9 +82,21 @@ class OpenCVRenderer(MapRendererBase):
 
         robot_px, robot_py = self._world_to_pixel(node.x, node.y)
         if not self._in_bounds(robot_px, robot_py):
+            if not self._oob_robot_warned:
+                _logger.warning(
+                    f'Robot out of map bounds: '
+                    f'world=({node.x:.2f}, {node.y:.2f}) -> pixel=({robot_px}, {robot_py}), '
+                    f'map_size={self._map_size}, '
+                    f'origin=({self._origin_x:.1f}, {self._origin_y:.1f}). '
+                    f'Adjust map_origin_x/y or map_size in params.'
+                )
+                self._oob_robot_warned = True
             return
 
+        self._render_count += 1
         valid_indices = np.where(valid_mask)[0]
+        hit_count = 0
+        oob_hits = 0
         for i in valid_indices:
             r = float(scan.ranges[i])
             a = float(angles[i])
@@ -89,7 +107,21 @@ class OpenCVRenderer(MapRendererBase):
 
             hit_px, hit_py = self._world_to_pixel(wx, wy)
             if not self._in_bounds(hit_px, hit_py):
+                oob_hits += 1
                 continue
 
+            hit_count += 1
             cv2.line(self._map, (robot_px, robot_py), (hit_px, hit_py), 255, 1)
             self._map[hit_py, hit_px] = 0
+
+        if self._render_count == 1:
+            _logger.info(
+                f'First render: robot=({node.x:.2f}, {node.y:.2f}), '
+                f'hits={hit_count}, oob_hits={oob_hits}'
+            )
+        elif self._render_count % 10 == 0:
+            _logger.info(
+                f'Render #{self._render_count}: '
+                f'robot=({node.x:.2f}, {node.y:.2f}), '
+                f'hits={hit_count}, oob_hits={oob_hits}'
+            )

@@ -31,6 +31,7 @@ class ROS2ScanSource(ScanSourceBase):
         self._topic = topic
         self._callback: Optional[Callable[[ScanData], None]] = None
         self._sub = None
+        self._recv_count = 0
 
     def set_scan_callback(self, callback: Callable[[ScanData], None]) -> None:
         self._callback = callback
@@ -48,6 +49,13 @@ class ROS2ScanSource(ScanSourceBase):
     def _on_msg(self, msg: LaserScan) -> None:
         if self._callback is None:
             return
+        self._recv_count += 1
+        if self._recv_count == 1 or self._recv_count % 100 == 0:
+            self._node.get_logger().info(
+                f'ScanSource [{self._topic}]: #{self._recv_count}, '
+                f'{len(msg.ranges)} ranges, '
+                f'range=[{msg.range_min:.2f}, {msg.range_max:.2f}]m'
+            )
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         self._callback(ScanData(
             timestamp=stamp,
@@ -71,6 +79,8 @@ class ROS2OdomSource(OdomSourceBase):
         self._topic = topic
         self._buffer: deque[OdomData] = deque(maxlen=_ODOM_BUFFER_SIZE)
         self._sub = None
+        self._recv_count = 0
+        self._empty_warned = False
 
     def start(self) -> None:
         self._sub = self._node.create_subscription(
@@ -84,16 +94,37 @@ class ROS2OdomSource(OdomSourceBase):
 
     def get_odom_at(self, timestamp: float) -> Optional[OdomData]:
         if not self._buffer:
+            if not self._empty_warned:
+                self._node.get_logger().warn(
+                    f'OdomSource [{self._topic}]: buffer is empty'
+                )
+                self._empty_warned = True
             return None
-        return min(self._buffer, key=lambda o: abs(o.timestamp - timestamp))
+        best = min(self._buffer, key=lambda o: abs(o.timestamp - timestamp))
+        dt = abs(best.timestamp - timestamp)
+        if dt > 0.5:
+            self._node.get_logger().warn(
+                f'OdomSource: large time delta {dt:.3f}s '
+                f'(scan={timestamp:.3f}, odom={best.timestamp:.3f})'
+            )
+        return best
 
     def _on_msg(self, msg: Odometry) -> None:
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        yaw = _quaternion_to_yaw(msg.pose.pose.orientation)
+        self._recv_count += 1
+        if self._recv_count == 1 or self._recv_count % 100 == 0:
+            self._node.get_logger().info(
+                f'OdomSource [{self._topic}]: #{self._recv_count}, '
+                f'x={msg.pose.pose.position.x:.2f} '
+                f'y={msg.pose.pose.position.y:.2f} '
+                f'yaw={math.degrees(yaw):.1f}deg'
+            )
         self._buffer.append(OdomData(
             timestamp=stamp,
             x=msg.pose.pose.position.x,
             y=msg.pose.pose.position.y,
-            yaw=_quaternion_to_yaw(msg.pose.pose.orientation),
+            yaw=yaw,
         ))
 
 
