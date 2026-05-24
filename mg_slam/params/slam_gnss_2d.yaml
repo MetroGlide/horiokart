@@ -1,0 +1,11 @@
+slam_gnss_2d_node:
+  ros__parameters:
+    scan_topic: /scan_top_lidar
+    odom_topic: /odom
+    map_resolution: 0.05
+    map_size: 2000
+    map_origin_x: -50.0
+    map_origin_y: -50.0
+    min_translation: 0.3
+    min_rotation: 0.1
+    map_publish_hz: 1.0
