@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 import numpy as np
 import cv2
@@ -20,37 +21,59 @@ class OpenCVRenderer(MapRendererBase):
           0 = occupied（ヒット点を上書き）
 
     to_occupancy_array() で ROS2 OccupancyGrid 形式（-1 / 0 / 100）に変換して返す。
+    マップの境界は rerender_all() が呼ばれるたびに全ノードから動的に計算される。
     """
 
     def __init__(
         self,
         resolution: float = 0.05,
-        map_size: int = 2000,
-        origin_x: float = -50.0,
-        origin_y: float = -50.0,
+        expansion_margin: float = 100.0,
     ) -> None:
         """
         Args:
             resolution: マップの解像度 [m/pixel]
-            map_size: マップの一辺のピクセル数（正方形）
-            origin_x: マップ左下隅のワールド座標 X [m]
-            origin_y: マップ左下隅のワールド座標 Y [m]
+            expansion_margin: 境界計算時に全ノード位置に追加するマージン [m]
         """
         self._resolution = resolution
-        self._map_size = map_size
-        self._origin_x = origin_x
-        self._origin_y = origin_y
-        self._map = np.full((map_size, map_size), 128, dtype=np.uint8)
-        self._oob_robot_warned = False
+        self._expansion_margin = expansion_margin
+        self._map_size = 1
+        self._origin_x = 0.0
+        self._origin_y = 0.0
+        self._map = np.full((1, 1), 128, dtype=np.uint8)
         self._render_count = 0
 
-    def add_node(self, node: PoseNode) -> None:
+    def add_node(self, node: PoseNode) -> bool:
         if node.scan is None:
-            return
+            return True
+        robot_px, robot_py = self._world_to_pixel(node.x, node.y)
+        if not self._in_bounds(robot_px, robot_py):
+            return False
         self._render_node(node)
+        return True
 
     def rerender_all(self, nodes: list[PoseNode]) -> None:
-        self._map.fill(128)
+        if not nodes:
+            return
+        all_x = [n.x for n in nodes]
+        all_y = [n.y for n in nodes]
+        new_origin_x = min(all_x) - self._expansion_margin
+        new_origin_y = min(all_y) - self._expansion_margin
+        new_max_x = max(all_x) + self._expansion_margin
+        new_max_y = max(all_y) + self._expansion_margin
+        new_size = max(
+            math.ceil((new_max_x - new_origin_x) / self._resolution),
+            math.ceil((new_max_y - new_origin_y) / self._resolution),
+        )
+        _logger.info(
+            f'Map recomputed: size={new_size}px '
+            f'({new_size * self._resolution:.0f}m), '
+            f'origin=({new_origin_x:.1f}, {new_origin_y:.1f})'
+        )
+        self._origin_x = new_origin_x
+        self._origin_y = new_origin_y
+        self._map_size = new_size
+        self._map = np.full((new_size, new_size), 128, dtype=np.uint8)
+        self._render_count = 0
         for node in nodes:
             if node.scan is not None:
                 self._render_node(node)
@@ -82,15 +105,6 @@ class OpenCVRenderer(MapRendererBase):
 
         robot_px, robot_py = self._world_to_pixel(node.x, node.y)
         if not self._in_bounds(robot_px, robot_py):
-            if not self._oob_robot_warned:
-                _logger.warning(
-                    f'Robot out of map bounds: '
-                    f'world=({node.x:.2f}, {node.y:.2f}) -> pixel=({robot_px}, {robot_py}), '
-                    f'map_size={self._map_size}, '
-                    f'origin=({self._origin_x:.1f}, {self._origin_y:.1f}). '
-                    f'Adjust map_origin_x/y or map_size in params.'
-                )
-                self._oob_robot_warned = True
             return
 
         self._render_count += 1

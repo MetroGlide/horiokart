@@ -14,8 +14,13 @@ class MapRendererBase(ABC):
     """
 
     @abstractmethod
-    def add_node(self, node: PoseNode) -> None:
-        """新しいポーズノードを受け取り、インクリメンタルにマップを更新する（オンライン用）。"""
+    def add_node(self, node: PoseNode) -> bool:
+        """新しいポーズノードを受け取り、インクリメンタルにマップを更新する（オンライン用）。
+
+        Returns:
+            True: レンダリング成功
+            False: ロボット位置がマップ範囲外（呼び出し元は rerender_all() を呼ぶこと）
+        """
         raise NotImplementedError
 
     @abstractmethod

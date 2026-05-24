@@ -29,9 +29,7 @@ class SlamGnss2DNode(Node):
         scan_topic = self.get_parameter('scan_topic').value
         odom_topic = self.get_parameter('odom_topic').value
         resolution = self.get_parameter('map_resolution').value
-        map_size = self.get_parameter('map_size').value
-        origin_x = self.get_parameter('map_origin_x').value
-        origin_y = self.get_parameter('map_origin_y').value
+        expansion_margin = self.get_parameter('map_expansion_margin').value
         min_trans = self.get_parameter('min_translation').value
         min_rot = self.get_parameter('min_rotation').value
         map_publish_hz = self.get_parameter('map_publish_hz').value
@@ -45,9 +43,7 @@ class SlamGnss2DNode(Node):
         )
         self._renderer = OpenCVRenderer(
             resolution=resolution,
-            map_size=map_size,
-            origin_x=origin_x,
-            origin_y=origin_y,
+            expansion_margin=expansion_margin,
         )
 
         self._map_pub = self.create_publisher(
@@ -72,17 +68,14 @@ class SlamGnss2DNode(Node):
         self.get_logger().info(
             f'slam_gnss_2d_node started (Phase 1: OdomOnly)\n'
             f'  scan: {scan_topic}, odom: {odom_topic}\n'
-            f'  map: {map_size}x{map_size}px @ {resolution}m/px, '
-            f'origin=({origin_x}, {origin_y})'
+            f'  map: dynamic @ {resolution}m/px, margin={expansion_margin}m'
         )
 
     def _declare_params(self) -> None:
         self.declare_parameter('scan_topic', '/scan_top_lidar')
         self.declare_parameter('odom_topic', '/odom')
         self.declare_parameter('map_resolution', 0.05)
-        self.declare_parameter('map_size', 2000)
-        self.declare_parameter('map_origin_x', -50.0)
-        self.declare_parameter('map_origin_y', -50.0)
+        self.declare_parameter('map_expansion_margin', 100.0)
         self.declare_parameter('min_translation', 0.3)
         self.declare_parameter('min_rotation', 0.1)
         self.declare_parameter('map_publish_hz', 1.0)
@@ -112,7 +105,8 @@ class SlamGnss2DNode(Node):
                 f'yaw={math.degrees(node.yaw):.1f}deg'
             )
 
-        self._renderer.add_node(node)
+        if not self._renderer.add_node(node):
+            self._renderer.rerender_all(self._pose_graph.get_nodes())
         self._map_dirty = True
         self._publish_path(node)
 

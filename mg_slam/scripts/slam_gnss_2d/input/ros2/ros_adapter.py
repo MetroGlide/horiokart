@@ -6,6 +6,7 @@ from typing import Callable, Optional
 
 import numpy as np
 import rclpy
+import tf2_ros
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan, NavSatFix
@@ -32,6 +33,10 @@ class ROS2ScanSource(ScanSourceBase):
         self._callback: Optional[Callable[[ScanData], None]] = None
         self._sub = None
         self._recv_count = 0
+        self._tf_buffer = tf2_ros.Buffer()
+        self._tf_listener = tf2_ros.TransformListener(self._tf_buffer, node)
+        self._lidar_yaw: float = 0.0
+        self._lidar_tf_ready: bool = False
 
     def set_scan_callback(self, callback: Callable[[ScanData], None]) -> None:
         self._callback = callback
@@ -49,6 +54,25 @@ class ROS2ScanSource(ScanSourceBase):
     def _on_msg(self, msg: LaserScan) -> None:
         if self._callback is None:
             return
+
+        if not self._lidar_tf_ready:
+            try:
+                tf = self._tf_buffer.lookup_transform(
+                    'base_link', msg.header.frame_id, rclpy.time.Time()
+                )
+                self._lidar_yaw = _quaternion_to_yaw(tf.transform.rotation)
+                self._lidar_tf_ready = True
+                self._node.get_logger().info(
+                    f'ScanSource: TF resolved '
+                    f'[{msg.header.frame_id} -> base_link]: '
+                    f'yaw={math.degrees(self._lidar_yaw):.1f}deg'
+                )
+            except tf2_ros.TransformException as e:
+                self._node.get_logger().warn(
+                    f'ScanSource: TF not yet available, skipping scan ({e})'
+                )
+                return
+
         self._recv_count += 1
         if self._recv_count == 1 or self._recv_count % 100 == 0:
             self._node.get_logger().info(
@@ -60,7 +84,7 @@ class ROS2ScanSource(ScanSourceBase):
         self._callback(ScanData(
             timestamp=stamp,
             ranges=np.array(msg.ranges, dtype=np.float32),
-            angle_min=msg.angle_min,
+            angle_min=msg.angle_min + self._lidar_yaw,
             angle_increment=msg.angle_increment,
             range_min=msg.range_min,
             range_max=msg.range_max,
