@@ -75,7 +75,7 @@ ROSメッセージ型はInputLayer内でのみ使用する。
 class ScanData:
     timestamp: float        # ROSタイムスタンプ（秒）
     ranges: np.ndarray      # 距離データ (float32)
-    angle_min: float
+    angle_min: float        # base_link フレーム基準（アダプター層が保証する不変条件）
     angle_increment: float
     range_min: float = 0.1
     range_max: float = 30.0
@@ -179,8 +179,9 @@ def optimize(self, nodes: list[PoseNode]) -> list[PoseNode]
 ### MapRendererBase
 
 ```python
-def add_node(self, node: PoseNode) -> None
+def add_node(self, node: PoseNode) -> bool
     # インクリメンタル更新（オンライン用）
+    # True: 描画成功 / False: ロボット位置がマップ範囲外（呼び出し元は rerender_all() を呼ぶ）
 
 def rerender_all(self, nodes: list[PoseNode]) -> None
     # 全ノードから再描画（グラフ最適化後のバッチ更新用）

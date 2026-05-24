@@ -1,6 +1,6 @@
 # slam_gnss_2d 開発フェーズ定義
 
-**現在フェーズ: Phase 1**
+**現在フェーズ: Phase 2**
 
 ---
 
@@ -21,10 +21,15 @@
 
 ### 完了条件
 
-- [ ] rosbagをリプレイして `/slam_gnss_2d/map` に OccupancyGrid が 1 Hz 以上で配信される
-- [ ] `/slam_gnss_2d/path` に走行軌跡 (nav_msgs/Path) が配信される
-- [ ] RViz2 でリアルタイムにマップと軌跡を確認できる
-- [ ] `python3 -c "from slam_gnss_2d.data_types import ScanData"` がエラーなし
+- [x] rosbagをリプレイして `/slam_gnss_2d/map` に OccupancyGrid が 1 Hz 以上で配信される
+- [x] `/slam_gnss_2d/path` に走行軌跡 (nav_msgs/Path) が配信される
+- [x] RViz2 でリアルタイムにマップと軌跡を確認できる
+- [x] `python3 -c "from slam_gnss_2d.data_types import ScanData"` がエラーなし
+
+### Phase 2 への引継ぎ条件
+
+- `ScanData.angle_min` は base_link フレーム基準である。アダプター層が保証する不変条件であり、コアロジックはこれを将来にわたって前提としてよい。
+- LiDAR 位置オフセット（0.23 m）は Phase 1 で意図的に未補正。レイ原点はロボット中心としている。Phase 2 以降で要検討。
 
 ### スタブ（Phase 1では `raise NotImplementedError`）
 
@@ -38,6 +43,11 @@
 ---
 
 ## Phase 2 — スキャンマッチングを導入する
+
+### 前提条件
+
+- `ScanData.angle_min` は base_link フレーム基準であること（`ROS2ScanSource` が保証）
+- `ScanMatchingBuilder` はこの不変条件を引き継ぎ、独自のフレーム変換を行わない
 
 ### 実装スコープ
 

@@ -14,14 +14,14 @@ applyTo: "mg_slam/scripts/slam_gnss_2d/**"
 
 ---
 
-## 現在フェーズ: Phase 1（オドメトリのみでマップ作成）
+## 現在フェーズ: Phase 2（スキャンマッチング導入）
 
-Phase 1 の実装対象:
+Phase 2 の実装対象:
 
-- `data_types.py` / `input/base.py` / `input/ros2/ros_adapter.py`
-- `pose_graph/odom_builder.py` / `map_manager/opencv_renderer.py` / `slam_node.py`
+- `scan_matching/base.py` / `scan_matching/icp_matcher.py`
+- `pose_graph/scan_matching_builder.py`
 
-Phase 2〜4 のファイルは ABC スタブのみ（`raise NotImplementedError`）。
+Phase 1 完了済み（Odom SLAM 動作確認済み）。
 
 ---
 
@@ -55,6 +55,16 @@ raise NotImplementedError("ICPMatcher は Phase 2 で実装予定です")
 
 Phase 1〜3 では GNSS データをポーズグラフの拘束に使わない。
 Phase 1〜3 では `GnssSourceBase` を使わない。
+
+### 5. アダプター層がセンサーフレームを正規化する
+
+`input/ros2/ros_adapter.py` が `ScanData` を生成する時点で、スキャン角度を
+base_link フレームに正規化すること。センサーの取付け回転は `/tf_static`（URDF から
+`robot_state_publisher` が配信）から取得し、YAML パラメータ化しない。
+センサー物理配置の単一の正解は URDF にあり、YAML に二重管理すると URDF との乖離が
+実行時まで検出できない。
+コアロジック（`pose_graph/`, `map_manager/` 等）は `ScanData.angle_min` が
+base_link フレームであることを前提としてよい。
 
 ---
 
