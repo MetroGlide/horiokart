@@ -10,4 +10,4 @@ slam_gnss_2d_node:
     pose_graph_builder: scan_matching # "odom_only" | "scan_matching"
     icp_max_iterations: 30
     icp_tolerance: 0.0001
-    icp_max_correspondence_dist: 0.5
+    icp_max_correspondence_dist: 1.0

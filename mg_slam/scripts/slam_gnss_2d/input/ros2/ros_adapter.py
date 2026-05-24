@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import bisect
 import math
 from collections import deque
 from typing import Callable, Optional
@@ -22,6 +23,11 @@ def _quaternion_to_yaw(q) -> float:
     siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
     cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
     return math.atan2(siny_cosp, cosy_cosp)
+
+
+def _angle_diff(a: float, b: float) -> float:
+    """角度差 a - b を [-pi, pi] に正規化して返す。"""
+    return math.atan2(math.sin(a - b), math.cos(a - b))
 
 
 class ROS2ScanSource(ScanSourceBase):
@@ -124,14 +130,30 @@ class ROS2OdomSource(OdomSourceBase):
                 )
                 self._empty_warned = True
             return None
-        best = min(self._buffer, key=lambda o: abs(o.timestamp - timestamp))
-        dt = abs(best.timestamp - timestamp)
-        if dt > 0.5:
-            self._node.get_logger().warn(
-                f'OdomSource: large time delta {dt:.3f}s '
-                f'(scan={timestamp:.3f}, odom={best.timestamp:.3f})'
-            )
-        return best
+        buf = sorted(self._buffer, key=lambda o: o.timestamp)
+        timestamps = [o.timestamp for o in buf]
+        idx = bisect.bisect_left(timestamps, timestamp)
+        if idx == 0 or idx >= len(buf):
+            best = buf[0] if idx == 0 else buf[-1]
+            dt = abs(best.timestamp - timestamp)
+            if dt > 0.5:
+                self._node.get_logger().warn(
+                    f'OdomSource: large time delta {dt:.3f}s '
+                    f'(scan={timestamp:.3f}, odom={best.timestamp:.3f})'
+                )
+            return best
+        prev = buf[idx - 1]
+        next_ = buf[idx]
+        t_span = next_.timestamp - prev.timestamp
+        if t_span < 1e-9:
+            return prev
+        alpha = (timestamp - prev.timestamp) / t_span
+        return OdomData(
+            timestamp=timestamp,
+            x=prev.x + alpha * (next_.x - prev.x),
+            y=prev.y + alpha * (next_.y - prev.y),
+            yaw=prev.yaw + alpha * _angle_diff(next_.yaw, prev.yaw),
+        )
 
     def _on_msg(self, msg: Odometry) -> None:
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9

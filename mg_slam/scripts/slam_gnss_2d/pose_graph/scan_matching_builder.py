@@ -94,13 +94,11 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
                 import logging
                 logging.getLogger(__name__).warning(
                     f'ICPMatcher did not converge at node {len(self._nodes)}; '
-                    'falling back to odometry'
+                    'discarding scan'
                 )
-                dx_icp, dy_icp, dyaw_icp = dx_local, dy_local, dyaw_delta
-                edge_info = _ODOM_INFORMATION.copy()
-            else:
-                dx_icp, dy_icp, dyaw_icp = result.dx, result.dy, result.dyaw
-                edge_info = result.information
+                return None
+            dx_icp, dy_icp, dyaw_icp = result.dx, result.dy, result.dyaw
+            edge_info = result.information
         else:
             dx_icp, dy_icp, dyaw_icp = dx_local, dy_local, dyaw_delta
             edge_info = _ODOM_INFORMATION.copy()
