@@ -54,3 +54,27 @@ class PoseNode:
     y: float
     yaw: float
     scan: Optional[ScanData] = None
+
+
+@dataclass
+class MatchResult:
+    """スキャンマッチングの結果。ScanMatcherBase.match() が返す。"""
+
+    dx: float
+    dy: float
+    dyaw: float
+    converged: bool
+    # shape (3, 3) — 拘束の情報行列。Phase 3 の GTSAMOptimizer が使用。
+    information: np.ndarray
+
+
+@dataclass
+class PoseEdge:
+    """ポーズグラフのノード間拘束辺。Phase 3 の GTSAMOptimizer が使用。"""
+
+    from_index: int
+    to_index: int
+    dx: float
+    dy: float
+    dyaw: float
+    information: np.ndarray  # shape (3, 3)

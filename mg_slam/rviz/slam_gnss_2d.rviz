@@ -5,12 +5,13 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Global Options1
+        - /TF1
         - /Map1
         - /Map1/Topic1
         - /Path1
         - /LaserScan1
       Splitter Ratio: 0.5
-    Tree Height: 1473
+    Tree Height: 1515
   - Class: rviz_common/Selection
     Name: Selection
   - Class: rviz_common/Views
@@ -173,90 +174,92 @@ Visualization Manager:
         base_footprint:
           Value: true
         base_link:
-          Value: true
+          Value: false
         camera_bottom_screw_frame:
-          Value: true
+          Value: false
         camera_color_frame:
-          Value: true
+          Value: false
         camera_color_optical_frame:
-          Value: true
+          Value: false
         camera_depth_frame:
-          Value: true
+          Value: false
         camera_depth_optical_frame:
-          Value: true
+          Value: false
         camera_infra1_frame:
-          Value: true
+          Value: false
         camera_infra1_optical_frame:
-          Value: true
+          Value: false
         camera_infra2_frame:
-          Value: true
+          Value: false
         camera_infra2_optical_frame:
-          Value: true
+          Value: false
         camera_link:
-          Value: true
+          Value: false
         camera_link_base:
-          Value: true
+          Value: false
         caster_link:
-          Value: true
+          Value: false
         front_lrf_link:
-          Value: true
+          Value: false
         gps_link:
-          Value: true
+          Value: false
         left_wheel_link:
-          Value: true
+          Value: false
         livox_lidar_link:
-          Value: true
+          Value: false
         map:
           Value: true
         odom:
           Value: true
         right_wheel_link:
-          Value: true
+          Value: false
         top_frame_link:
-          Value: true
+          Value: false
         top_lrf_link:
-          Value: true
+          Value: false
         utm:
-          Value: true
-      Marker Scale: 1
+          Value: false
+      Marker Scale: 5
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: true
       Tree:
-        odom:
-          base_footprint:
-            base_link:
-              caster_link:
-                {}
-              front_lrf_link:
-                {}
-              gps_link:
-                {}
-              left_wheel_link:
-                {}
-              right_wheel_link:
-                {}
-              top_frame_link:
-                camera_link_base:
-                  camera_bottom_screw_frame:
-                    camera_link:
-                      camera_color_frame:
-                        camera_color_optical_frame:
-                          {}
-                      camera_depth_frame:
-                        camera_depth_optical_frame:
-                          {}
-                      camera_infra1_frame:
-                        camera_infra1_optical_frame:
-                          {}
-                      camera_infra2_frame:
-                        camera_infra2_optical_frame:
-                          {}
-                livox_lidar_link:
-                  {}
-                top_lrf_link:
-                  {}
+        utm:
+          map:
+            odom:
+              base_footprint:
+                base_link:
+                  caster_link:
+                    {}
+                  front_lrf_link:
+                    {}
+                  gps_link:
+                    {}
+                  left_wheel_link:
+                    {}
+                  right_wheel_link:
+                    {}
+                  top_frame_link:
+                    camera_link_base:
+                      camera_bottom_screw_frame:
+                        camera_link:
+                          camera_color_frame:
+                            camera_color_optical_frame:
+                              {}
+                          camera_depth_frame:
+                            camera_depth_optical_frame:
+                              {}
+                          camera_infra1_frame:
+                            camera_infra1_optical_frame:
+                              {}
+                          camera_infra2_frame:
+                            camera_infra2_optical_frame:
+                              {}
+                    livox_lidar_link:
+                      {}
+                    top_lrf_link:
+                      {}
       Update Interval: 0
       Value: true
     - Alpha: 0.699999988079071
@@ -380,11 +383,11 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Scale: 10
+      Scale: 20.942628860473633
       Target Frame: base_link
       Value: TopDownOrtho (rviz_default_plugins)
-      X: 0
-      Y: 0
+      X: 5.776455879211426
+      Y: -9.269745826721191
     Saved: ~
 Window Geometry:
   Displays:
@@ -392,7 +395,7 @@ Window Geometry:
   Height: 2089
   Hide Left Dock: true
   Hide Right Dock: false
-  QMainWindow State: 000000ff00000000fd0000000200000000000004c6000007c7fc0200000003fb000000100044006900730070006c00610079007300000000440000068c000000eb00fffffffb0000001200530065006c0065006300740069006f006e0000000227000000e60000006b00fffffffb0000000800540069006d006500000006d7000001340000003a00ffffff0000000100000307000007c7fc0200000001fb0000000a005600690065007700730000000044000007c7000000b900ffffff00000eba000007c700000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000200000000000004c6000007c7fc0200000003fb000000100044006900730070006c0061007900730000000044000006b6000000eb00fffffffb0000001200530065006c0065006300740069006f006e0000000227000000e60000006b00fffffffb0000000800540069006d006500000007010000010a0000003a00ffffff0000000100000307000007c7fc0200000001fb0000000a005600690065007700730000000044000007c7000000b900ffffff00000eba000007c700000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Selection:
     collapsed: false
   Time:

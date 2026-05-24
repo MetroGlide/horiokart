@@ -3,8 +3,12 @@ from __future__ import annotations
 import math
 from typing import Optional
 
+import numpy as np
+
 from .base import PoseGraphBuilderBase
-from ..data_types import OdomData, PoseNode, ScanData
+from ..data_types import OdomData, PoseEdge, PoseNode, ScanData
+
+_ODOM_INFORMATION = np.diag([100.0, 100.0, 50.0])
 
 
 def _angle_diff(a: float, b: float) -> float:
@@ -63,6 +67,28 @@ class OdomOnlyBuilder(PoseGraphBuilderBase):
 
     def get_nodes(self) -> list[PoseNode]:
         return list(self._nodes)
+
+    def get_edges(self) -> list[PoseEdge]:
+        edges: list[PoseEdge] = []
+        for i in range(1, len(self._nodes)):
+            prev = self._nodes[i - 1]
+            curr = self._nodes[i]
+            c = math.cos(-prev.yaw)
+            s = math.sin(-prev.yaw)
+            dx_w = curr.x - prev.x
+            dy_w = curr.y - prev.y
+            dx_local = c * dx_w - s * dy_w
+            dy_local = s * dx_w + c * dy_w
+            dyaw = _angle_diff(curr.yaw, prev.yaw)
+            edges.append(PoseEdge(
+                from_index=prev.index,
+                to_index=curr.index,
+                dx=dx_local,
+                dy=dy_local,
+                dyaw=dyaw,
+                information=_ODOM_INFORMATION.copy(),
+            ))
+        return edges
 
     def reset(self) -> None:
         self._nodes.clear()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""slam_gnss_2d Phase 1 ROS2 エントリポイント。
+"""slam_gnss_2d ROS2 エントリポイント。
 
 どのコンポーネント実装を組み合わせるかをここで決定する。
 コアロジック（pose_graph / map_manager）は ROS に非依存。
@@ -11,14 +11,15 @@ import math
 import time
 
 import rclpy
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped
 from nav_msgs.msg import OccupancyGrid, Path
 from rclpy.node import Node
+from tf2_ros import TransformBroadcaster
 
+from slam_gnss_2d.component_factory import build_pose_graph_builder
 from slam_gnss_2d.data_types import ScanData
 from slam_gnss_2d.input.ros2.ros_adapter import ROS2OdomSource, ROS2ScanSource
 from slam_gnss_2d.map_manager.opencv_renderer import OpenCVRenderer
-from slam_gnss_2d.pose_graph.odom_builder import OdomOnlyBuilder
 
 
 class SlamGnss2DNode(Node):
@@ -33,13 +34,20 @@ class SlamGnss2DNode(Node):
         min_trans = self.get_parameter('min_translation').value
         min_rot = self.get_parameter('min_rotation').value
         map_publish_hz = self.get_parameter('map_publish_hz').value
+        builder_type = self.get_parameter('pose_graph_builder').value
+        icp_max_iter = self.get_parameter('icp_max_iterations').value
+        icp_tol = self.get_parameter('icp_tolerance').value
+        icp_max_dist = self.get_parameter('icp_max_correspondence_dist').value
 
-        # 差し替えポイント: ここの実装クラスを差し替えるだけで動作が変わる
         self._scan_source = ROS2ScanSource(self, scan_topic)
         self._odom_source = ROS2OdomSource(self, odom_topic)
-        self._pose_graph = OdomOnlyBuilder(
+        self._pose_graph = build_pose_graph_builder(
+            builder_type=builder_type,
             min_translation=min_trans,
             min_rotation=min_rot,
+            icp_max_iterations=icp_max_iter,
+            icp_tolerance=icp_tol,
+            icp_max_correspondence_dist=icp_max_dist,
         )
         self._renderer = OpenCVRenderer(
             resolution=resolution,
@@ -49,16 +57,21 @@ class SlamGnss2DNode(Node):
         self._map_pub = self.create_publisher(
             OccupancyGrid, 'slam_gnss_2d/map', 1)
         self._path_pub = self.create_publisher(Path, 'slam_gnss_2d/path', 1)
+        self._tf_broadcaster = TransformBroadcaster(self)
 
         self._path_msg = Path()
-        self._path_msg.header.frame_id = 'odom'
+        self._path_msg.header.frame_id = 'map'
         self._map_dirty = False
+        self._map_to_odom_x = 0.0
+        self._map_to_odom_y = 0.0
+        self._map_to_odom_yaw = 0.0
 
         self._scan_source.set_scan_callback(self._on_scan)
         self._odom_source.start()
         self._scan_source.start()
 
         self.create_timer(1.0 / map_publish_hz, self._publish_map_timer)
+        self.create_timer(0.1, self._publish_tf)
 
         self._scan_recv_count = 0
         self._odom_miss_count = 0
@@ -66,7 +79,7 @@ class SlamGnss2DNode(Node):
         self._last_stat_time = time.monotonic()
 
         self.get_logger().info(
-            f'slam_gnss_2d_node started (Phase 1: OdomOnly)\n'
+            f'slam_gnss_2d_node started (builder={builder_type})\n'
             f'  scan: {scan_topic}, odom: {odom_topic}\n'
             f'  map: dynamic @ {resolution}m/px, margin={expansion_margin}m'
         )
@@ -79,6 +92,10 @@ class SlamGnss2DNode(Node):
         self.declare_parameter('min_translation', 0.3)
         self.declare_parameter('min_rotation', 0.1)
         self.declare_parameter('map_publish_hz', 1.0)
+        self.declare_parameter('pose_graph_builder', 'scan_matching')
+        self.declare_parameter('icp_max_iterations', 30)
+        self.declare_parameter('icp_tolerance', 1e-4)
+        self.declare_parameter('icp_max_correspondence_dist', 0.5)
 
     def _on_scan(self, scan: ScanData) -> None:
         self._scan_recv_count += 1
@@ -98,6 +115,7 @@ class SlamGnss2DNode(Node):
             )
             return
 
+        self._update_map_to_odom(node, odom)
         self._node_count += 1
         if self._node_count == 1 or self._node_count % 10 == 0:
             self.get_logger().info(
@@ -127,7 +145,7 @@ class SlamGnss2DNode(Node):
         data, origin_x, origin_y, resolution = self._renderer.to_occupancy_array()
         msg = OccupancyGrid()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = 'odom'
+        msg.header.frame_id = 'map'
         msg.info.resolution = resolution
         msg.info.width = int(data.shape[1])
         msg.info.height = int(data.shape[0])
@@ -140,10 +158,37 @@ class SlamGnss2DNode(Node):
             f'free={int((data == 0).sum())} px'
         )
 
+    def _update_map_to_odom(self, node, odom) -> None:
+        """最新キーフレームから map->odom 変換を更新する。
+
+        map_T_odom = map_T_base * inv(odom_T_base)
+        """
+        c_o = math.cos(odom.yaw)
+        s_o = math.sin(odom.yaw)
+        inv_x = -(c_o * odom.x + s_o * odom.y)
+        inv_y = -(-s_o * odom.x + c_o * odom.y)
+        c_m = math.cos(node.yaw)
+        s_m = math.sin(node.yaw)
+        self._map_to_odom_x = node.x + c_m * inv_x - s_m * inv_y
+        self._map_to_odom_y = node.y + s_m * inv_x + c_m * inv_y
+        self._map_to_odom_yaw = node.yaw - odom.yaw
+
+    def _publish_tf(self) -> None:
+        t = TransformStamped()
+        t.header.stamp = self.get_clock().now().to_msg()
+        t.header.frame_id = 'map'
+        t.child_frame_id = 'odom'
+        t.transform.translation.x = self._map_to_odom_x
+        t.transform.translation.y = self._map_to_odom_y
+        t.transform.translation.z = 0.0
+        t.transform.rotation.w = math.cos(self._map_to_odom_yaw / 2.0)
+        t.transform.rotation.z = math.sin(self._map_to_odom_yaw / 2.0)
+        self._tf_broadcaster.sendTransform(t)
+
     def _publish_path(self, node) -> None:
         pose = PoseStamped()
         pose.header.stamp = self.get_clock().now().to_msg()
-        pose.header.frame_id = 'odom'
+        pose.header.frame_id = 'map'
         pose.pose.position.x = node.x
         pose.pose.position.y = node.y
         pose.pose.orientation.w = math.cos(node.yaw / 2.0)

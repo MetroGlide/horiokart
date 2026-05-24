@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from ..data_types import OdomData, PoseNode, ScanData
+from ..data_types import OdomData, PoseEdge, PoseNode, ScanData
 
 
 class PoseGraphBuilderBase(ABC):
@@ -24,6 +24,11 @@ class PoseGraphBuilderBase(ABC):
     @abstractmethod
     def get_nodes(self) -> list[PoseNode]:
         """現在のすべてのノードを時系列順に返す。"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_edges(self) -> list[PoseEdge]:
+        """ノード間の拘束辺をすべて返す。Phase 3 の GTSAMOptimizer が使用する。"""
         raise NotImplementedError
 
     @abstractmethod

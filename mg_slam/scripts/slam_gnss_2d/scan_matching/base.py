@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from ..data_types import OdomData, ScanData
+from ..data_types import MatchResult, OdomData, ScanData
 
 
 class ScanMatcherBase(ABC):
@@ -17,15 +17,17 @@ class ScanMatcherBase(ABC):
         src: ScanData,
         dst: ScanData,
         initial_guess: OdomData,
-    ) -> tuple[float, float, float]:
-        """src を dst に合わせ込み、補正後の相対変換 (dx, dy, dyaw) を返す。
+    ) -> MatchResult:
+        """src を基準として dst をマッチングし、補正後の相対変換を返す。
 
         Args:
-            src: 前フレームのスキャン（基準）
-            dst: 現フレームのスキャン（変換対象）
-            initial_guess: オドメトリから得られる初期推定値
+            src: 前フレームのスキャン（基準スキャン）
+            dst: 現フレームのスキャン（変換対象スキャン）
+            initial_guess: オドメトリから得られる初期推定値。
+                x/y/yaw は src フレームを基準とした相対デルタ。
 
         Returns:
-            (dx, dy, dyaw): スキャンマッチングによる補正後の相対移動量
+            MatchResult: 補正後の相対変換と収束状態、情報行列。
+                converged=False の場合、呼び出し元はオドメトリ値で代替すること。
         """
         raise NotImplementedError
