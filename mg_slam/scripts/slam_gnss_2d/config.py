@@ -43,3 +43,6 @@ class SlamConfig:
     # ローカルマップパラメータ（scan_reference == "scan_to_local_map" のとき使用）
     local_map_window: int = 20      # スライディングウィンドウ幅 [ノード数]
     local_map_radius: float = 15.0  # 参照点群の抽出半径 [m]
+
+    # スキャンマッチング失敗対策
+    matcher_max_failure_streak: int = 5  # 連続失敗がこの回数に達したら odom フォールバック

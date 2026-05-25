@@ -25,6 +25,7 @@ def build_pose_graph_builder(config: SlamConfig) -> PoseGraphBuilderBase:
             provider=_build_reference_provider(config),
             min_translation=config.min_translation,
             min_rotation=config.min_rotation,
+            max_failure_streak=config.matcher_max_failure_streak,
         )
     elif config.pose_graph_builder == 'odom_only':
         from .pose_graph.odom_builder import OdomOnlyBuilder

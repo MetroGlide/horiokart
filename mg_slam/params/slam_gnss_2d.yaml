@@ -20,4 +20,6 @@ slam_gnss_2d_node:
     ndt_cell_size: 1.0
 
     local_map_window: 20
-    local_map_radius: 15.0
+    local_map_radius: 20.0
+
+    matcher_max_failure_streak: 5 # この回数連続失敗で odom フォールバック

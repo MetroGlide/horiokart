@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 from typing import Optional
 
@@ -10,7 +11,11 @@ from ..data_types import OdomData, PoseEdge, PoseNode, ScanData
 from ..scan_matching.base import ScanMatcherBase
 from ..scan_matching.reference_provider.base import ReferenceProviderBase
 
+_logger = logging.getLogger(__name__)
+
 _ODOM_INFORMATION = np.diag([100.0, 100.0, 50.0])
+# streak 超過時の odom フォールバックに使用する低信頼度情報行列
+_ODOM_FALLBACK_INFORMATION = np.diag([10.0, 10.0, 5.0])
 
 
 def _angle_diff(a: float, b: float) -> float:
@@ -36,14 +41,20 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
         provider: ReferenceProviderBase,
         min_translation: float = 0.3,
         min_rotation: float = 0.1,
+        max_failure_streak: int = 5,
     ) -> None:
         self._matcher = matcher
         self._provider = provider
         self._min_translation = min_translation
         self._min_rotation = min_rotation
+        self._max_failure_streak = max_failure_streak
         self._nodes: list[PoseNode] = []
         self._last_odom: Optional[OdomData] = None
         self._edges: list[PoseEdge] = []
+        self._failure_streak: int = 0
+        self.icp_attempt_count: int = 0
+        self.icp_success_count: int = 0
+        self.odom_fallback_count: int = 0
 
     def add_scan(self, scan: ScanData, odom: OdomData) -> Optional[PoseNode]:
         if not self._nodes:
@@ -90,20 +101,35 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
         # スキャンマッチング
         src_pts = self._provider.get_reference_pts()
         if src_pts is not None:
+            self.icp_attempt_count += 1
             result = self._matcher.match(
                 src_pts=src_pts,
                 dst=scan,
                 initial_guess=initial_guess,
             )
             if not result.converged:
-                import logging
-                logging.getLogger(__name__).warning(
-                    f'Matcher did not converge at node {len(self._nodes)}; '
-                    'discarding scan'
+                self._failure_streak += 1
+                _logger.warning(
+                    f'Matcher did not converge at node {len(self._nodes)} '
+                    f'(init dx={initial_guess.x:.3f}m dy={initial_guess.y:.3f}m '
+                    f'dyaw={math.degrees(initial_guess.yaw):.1f}deg, '
+                    f'streak={self._failure_streak}/{self._max_failure_streak})'
                 )
-                return None
-            dx_icp, dy_icp, dyaw_icp = result.dx, result.dy, result.dyaw
-            edge_info = result.information
+                if self._failure_streak < self._max_failure_streak:
+                    return None
+                _logger.warning(
+                    f'Failure streak limit reached at node {len(self._nodes)}; '
+                    'falling back to odometry'
+                )
+                dx_icp, dy_icp, dyaw_icp = dx_local, dy_local, dyaw_delta
+                edge_info = _ODOM_FALLBACK_INFORMATION.copy()
+                self._failure_streak = 0
+                self.odom_fallback_count += 1
+            else:
+                self._failure_streak = 0
+                self.icp_success_count += 1
+                dx_icp, dy_icp, dyaw_icp = result.dx, result.dy, result.dyaw
+                edge_info = result.information
         else:
             dx_icp, dy_icp, dyaw_icp = dx_local, dy_local, dyaw_delta
             edge_info = _ODOM_INFORMATION.copy()
@@ -150,3 +176,4 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
         self._nodes.clear()
         self._edges.clear()
         self._last_odom = None
+        self._failure_streak = 0

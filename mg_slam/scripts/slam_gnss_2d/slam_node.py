@@ -107,6 +107,9 @@ class SlamGnss2DNode(Node):
         self.declare_parameter('local_map_window', 20)
         self.declare_parameter('local_map_radius', 15.0)  # 参照点群の抽出半径 [m]
 
+        # 連続失敗上限（この回数連続失敗で odom フォールバック）
+        self.declare_parameter('matcher_max_failure_streak', 5)
+
     def _build_config(self) -> SlamConfig:
         return SlamConfig(
             scan_topic=self.get_parameter('scan_topic').value,
@@ -127,6 +130,8 @@ class SlamGnss2DNode(Node):
             ndt_cell_size=self.get_parameter('ndt_cell_size').value,
             local_map_window=self.get_parameter('local_map_window').value,
             local_map_radius=self.get_parameter('local_map_radius').value,
+            matcher_max_failure_streak=self.get_parameter(
+                'matcher_max_failure_streak').value,
         )
 
     def _on_scan(self, scan: ScanData) -> None:
@@ -163,10 +168,20 @@ class SlamGnss2DNode(Node):
     def _publish_map_timer(self) -> None:
         now = time.monotonic()
         if now - self._last_stat_time >= 30.0:
+            pg = self._pose_graph
+            icp_stat = ''
+            if hasattr(pg, 'icp_attempt_count') and pg.icp_attempt_count > 0:
+                rate = pg.icp_success_count / pg.icp_attempt_count * 100
+                icp_stat = (
+                    f', icp={rate:.0f}%'
+                    f'({pg.icp_success_count}/{pg.icp_attempt_count})'
+                    f' fb={pg.odom_fallback_count}'
+                )
             self.get_logger().info(
                 f'[stat] nodes={self._node_count}, '
                 f'scans={self._scan_recv_count}, '
                 f'odom_miss={self._odom_miss_count}'
+                + icp_stat
             )
             self._last_stat_time = now
 
