@@ -62,21 +62,20 @@ class ICPMatcher(ScanMatcherBase):
 
     def match(
         self,
-        src: ScanData,
+        src_pts: np.ndarray,
         dst: ScanData,
         initial_guess: OdomData,
     ) -> MatchResult:
-        """src を基準として dst をマッチングし、補正後の相対変換を返す。
+        """src_pts を基準として dst をマッチングし、補正後の相対変換を返す。
 
         Args:
-            src: 前フレームのスキャン（参照スキャン）
-            dst: 現フレームのスキャン（変換対象スキャン）
+            src_pts: 参照点群 (N, 2)。最後ノードのボディフレーム基準。
+            dst: 現フレームのスキャン（変換対象スキャン）。
             initial_guess: odom から得た相対デルタ。x/y/yaw が prev フレーム基準の相対移動量。
 
         Returns:
             MatchResult: 補正後の相対変換と収束状態、情報行列。
         """
-        src_pts = _scan_to_points(src)
         dst_pts = _scan_to_points(dst)
 
         if len(src_pts) < _N_MIN_CORRESPONDENCES or len(dst_pts) < _N_MIN_CORRESPONDENCES:

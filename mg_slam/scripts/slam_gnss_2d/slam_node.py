@@ -17,6 +17,7 @@ from rclpy.node import Node
 from tf2_ros import TransformBroadcaster
 
 from slam_gnss_2d.component_factory import build_pose_graph_builder
+from slam_gnss_2d.config import SlamConfig
 from slam_gnss_2d.data_types import ScanData
 from slam_gnss_2d.input.ros2.ros_adapter import ROS2OdomSource, ROS2ScanSource
 from slam_gnss_2d.map_manager.opencv_renderer import OpenCVRenderer
@@ -26,32 +27,14 @@ class SlamGnss2DNode(Node):
     def __init__(self) -> None:
         super().__init__('slam_gnss_2d_node')
         self._declare_params()
+        cfg = self._build_config()
 
-        scan_topic = self.get_parameter('scan_topic').value
-        odom_topic = self.get_parameter('odom_topic').value
-        resolution = self.get_parameter('map_resolution').value
-        expansion_margin = self.get_parameter('map_expansion_margin').value
-        min_trans = self.get_parameter('min_translation').value
-        min_rot = self.get_parameter('min_rotation').value
-        map_publish_hz = self.get_parameter('map_publish_hz').value
-        builder_type = self.get_parameter('pose_graph_builder').value
-        icp_max_iter = self.get_parameter('icp_max_iterations').value
-        icp_tol = self.get_parameter('icp_tolerance').value
-        icp_max_dist = self.get_parameter('icp_max_correspondence_dist').value
-
-        self._scan_source = ROS2ScanSource(self, scan_topic)
-        self._odom_source = ROS2OdomSource(self, odom_topic)
-        self._pose_graph = build_pose_graph_builder(
-            builder_type=builder_type,
-            min_translation=min_trans,
-            min_rotation=min_rot,
-            icp_max_iterations=icp_max_iter,
-            icp_tolerance=icp_tol,
-            icp_max_correspondence_dist=icp_max_dist,
-        )
+        self._scan_source = ROS2ScanSource(self, cfg.scan_topic)
+        self._odom_source = ROS2OdomSource(self, cfg.odom_topic)
+        self._pose_graph = build_pose_graph_builder(cfg)
         self._renderer = OpenCVRenderer(
-            resolution=resolution,
-            expansion_margin=expansion_margin,
+            resolution=cfg.map_resolution,
+            expansion_margin=cfg.map_expansion_margin,
         )
 
         self._map_pub = self.create_publisher(
@@ -70,7 +53,7 @@ class SlamGnss2DNode(Node):
         self._odom_source.start()
         self._scan_source.start()
 
-        self.create_timer(1.0 / map_publish_hz, self._publish_map_timer)
+        self.create_timer(1.0 / cfg.map_publish_hz, self._publish_map_timer)
         self.create_timer(0.1, self._publish_tf)
 
         self._scan_recv_count = 0
@@ -79,23 +62,72 @@ class SlamGnss2DNode(Node):
         self._last_stat_time = time.monotonic()
 
         self.get_logger().info(
-            f'slam_gnss_2d_node started (builder={builder_type})\n'
-            f'  scan: {scan_topic}, odom: {odom_topic}\n'
-            f'  map: dynamic @ {resolution}m/px, margin={expansion_margin}m'
+            f'slam_gnss_2d_node started (builder={cfg.pose_graph_builder}, '
+            f'matcher={cfg.scan_matcher_type}, ref={cfg.scan_reference})\n'
+            f'  scan: {cfg.scan_topic}, odom: {cfg.odom_topic}\n'
+            f'  map: dynamic @ {cfg.map_resolution}m/px, margin={cfg.map_expansion_margin}m'
         )
 
     def _declare_params(self) -> None:
+        # 購読トピック名
         self.declare_parameter('scan_topic', '/scan_top_lidar')
         self.declare_parameter('odom_topic', '/odom')
-        self.declare_parameter('map_resolution', 0.05)
-        self.declare_parameter('map_expansion_margin', 100.0)
-        self.declare_parameter('min_translation', 0.3)
-        self.declare_parameter('min_rotation', 0.1)
-        self.declare_parameter('map_publish_hz', 1.0)
+
+        # 占有格子マップ設定
+        self.declare_parameter('map_resolution', 0.05)         # [m/px]
+        self.declare_parameter('map_expansion_margin', 100.0)  # [m]
+
+        # キーフレーム採択閾値
+        self.declare_parameter('min_translation', 0.3)  # [m]
+        self.declare_parameter('min_rotation', 0.1)     # [rad] ≈ 5.7°
+
+        # 配信
+        self.declare_parameter('map_publish_hz', 1.0)  # [Hz]
+
+        # ポーズグラフ構築アルゴリズム
+        # "odom_only" | "scan_matching"
         self.declare_parameter('pose_graph_builder', 'scan_matching')
+        self.declare_parameter('scan_matcher_type',
+                               'icp')             # "icp" | "ndt"
+        # "scan_to_scan" | "scan_to_local_map"
+        self.declare_parameter('scan_reference', 'scan_to_scan')
+
+        # ICP パラメータ（scan_matcher_type == "icp" のとき使用）
         self.declare_parameter('icp_max_iterations', 30)
+        # 更新ノルムがこの値未満で収束 [m]
         self.declare_parameter('icp_tolerance', 1e-4)
-        self.declare_parameter('icp_max_correspondence_dist', 0.5)
+        self.declare_parameter(
+            'icp_max_correspondence_dist', 0.5)  # [m] 大きいと誤対応リスク増
+
+        # NDT パラメータ（scan_matcher_type == "ndt" のとき使用）
+        self.declare_parameter('ndt_cell_size', 1.0)  # [m] 大きいほど粗く高速
+
+        # ローカルマップパラメータ（scan_reference == "scan_to_local_map" のとき使用）
+        # スライディングウィンドウ幅 [ノード数]
+        self.declare_parameter('local_map_window', 20)
+        self.declare_parameter('local_map_radius', 15.0)  # 参照点群の抽出半径 [m]
+
+    def _build_config(self) -> SlamConfig:
+        return SlamConfig(
+            scan_topic=self.get_parameter('scan_topic').value,
+            odom_topic=self.get_parameter('odom_topic').value,
+            map_resolution=self.get_parameter('map_resolution').value,
+            map_expansion_margin=self.get_parameter(
+                'map_expansion_margin').value,
+            min_translation=self.get_parameter('min_translation').value,
+            min_rotation=self.get_parameter('min_rotation').value,
+            map_publish_hz=self.get_parameter('map_publish_hz').value,
+            pose_graph_builder=self.get_parameter('pose_graph_builder').value,
+            scan_matcher_type=self.get_parameter('scan_matcher_type').value,
+            scan_reference=self.get_parameter('scan_reference').value,
+            icp_max_iterations=self.get_parameter('icp_max_iterations').value,
+            icp_tolerance=self.get_parameter('icp_tolerance').value,
+            icp_max_correspondence_dist=self.get_parameter(
+                'icp_max_correspondence_dist').value,
+            ndt_cell_size=self.get_parameter('ndt_cell_size').value,
+            local_map_window=self.get_parameter('local_map_window').value,
+            local_map_radius=self.get_parameter('local_map_radius').value,
+        )
 
     def _on_scan(self, scan: ScanData) -> None:
         self._scan_recv_count += 1

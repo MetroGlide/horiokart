@@ -8,6 +8,7 @@ import numpy as np
 from .base import PoseGraphBuilderBase
 from ..data_types import OdomData, PoseEdge, PoseNode, ScanData
 from ..scan_matching.base import ScanMatcherBase
+from ..scan_matching.reference_provider.base import ReferenceProviderBase
 
 _ODOM_INFORMATION = np.diag([100.0, 100.0, 50.0])
 
@@ -32,10 +33,12 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
     def __init__(
         self,
         matcher: ScanMatcherBase,
+        provider: ReferenceProviderBase,
         min_translation: float = 0.3,
         min_rotation: float = 0.1,
     ) -> None:
         self._matcher = matcher
+        self._provider = provider
         self._min_translation = min_translation
         self._min_rotation = min_rotation
         self._nodes: list[PoseNode] = []
@@ -53,6 +56,7 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
                 scan=scan,
             )
             self._nodes.append(node)
+            self._provider.update(node)
             self._last_odom = odom
             return node
 
@@ -83,17 +87,18 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
             yaw=dyaw_delta,
         )
 
-        # スキャンマッチング（prev_node.scan が存在する場合のみ）
-        if prev_node.scan is not None:
+        # スキャンマッチング
+        src_pts = self._provider.get_reference_pts()
+        if src_pts is not None:
             result = self._matcher.match(
-                src=prev_node.scan,
+                src_pts=src_pts,
                 dst=scan,
                 initial_guess=initial_guess,
             )
             if not result.converged:
                 import logging
                 logging.getLogger(__name__).warning(
-                    f'ICPMatcher did not converge at node {len(self._nodes)}; '
+                    f'Matcher did not converge at node {len(self._nodes)}; '
                     'discarding scan'
                 )
                 return None
@@ -123,6 +128,7 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
             scan=scan,
         )
         self._nodes.append(node)
+        self._provider.update(node)
         self._edges.append(PoseEdge(
             from_index=prev_node.index,
             to_index=node.index,

@@ -2,12 +2,22 @@ slam_gnss_2d_node:
   ros__parameters:
     scan_topic: /scan_top_lidar
     odom_topic: /odom
+
     map_resolution: 0.05
     map_expansion_margin: 100.0
     min_translation: 0.3
     min_rotation: 0.1
     map_publish_hz: 1.0
+
     pose_graph_builder: scan_matching # "odom_only" | "scan_matching"
+    scan_matcher_type: ndt # "icp" | "ndt"
+    scan_reference: scan_to_local_map # "scan_to_scan" | "scan_to_local_map"
+
     icp_max_iterations: 30
     icp_tolerance: 0.0001
     icp_max_correspondence_dist: 1.0
+
+    ndt_cell_size: 1.0
+
+    local_map_window: 20
+    local_map_radius: 15.0
