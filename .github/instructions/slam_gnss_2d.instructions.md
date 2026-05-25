@@ -14,14 +14,14 @@ applyTo: "mg_slam/scripts/slam_gnss_2d/**"
 
 ---
 
-## 現在フェーズ: Phase 2（スキャンマッチング導入）
+## 現在フェーズ: Phase 3（ループクロージャ導入）
 
-Phase 2 の実装対象:
+Phase 3 の実装対象:
 
-- `scan_matching/base.py` / `scan_matching/icp_matcher.py`
-- `pose_graph/scan_matching_builder.py`
+- `optimizer/gtsam_optimizer.py`
+- `pose_graph/loop_closure_builder.py`
 
-Phase 1 完了済み（Odom SLAM 動作確認済み）。
+Phase 1・2 完了済み（Odom SLAM・スキャンマッチング動作確認済み）。
 
 ---
 
@@ -65,6 +65,38 @@ base_link フレームに正規化すること。センサーの取付け回転�
 実行時まで検出できない。
 コアロジック（`pose_graph/`, `map_manager/` 等）は `ScanData.angle_min` が
 base_link フレームであることを前提としてよい。
+
+### 6. ROS パラメータは 4 箇所を同期させる
+
+`slam_node.py` に新しいパラメータを追加するとき、以下を**全て**更新すること:
+
+1. `config.py` — `SlamConfig` フィールド（デフォルト値を設定する）
+2. `slam_node.py` — `_declare_params()` に `self.declare_parameter(...)` を追記
+3. `slam_node.py` — `_build_config()` に `self.get_parameter(...).value` を追記
+4. `params/slam_gnss_2d.yaml` — パラメータエントリを追記
+
+`declare_parameter` より前に `get_parameter` を呼ぶと `ParameterNotDeclaredException` が発生する。
+`_declare_params()` と `_build_config()` の更新は同一コミットで行うこと。
+
+### 7. 反復収束コンポーネントには streak fallback を設ける
+
+自身の出力を次回入力の起点とするコンポーネント（ICP 初期値・ループクロージャ候補スコアなど）は
+収束失敗が連鎖する **spiral of doom** のリスクがある。
+対策として `failure_streak` カウンタと上限到達時のフォールバック処理を設けること:
+
+```python
+if not result.converged:
+    self._failure_streak += 1
+    if self._failure_streak < self._max_failure_streak:
+        return None  # まだ様子見: 今フレームをスキップ
+    # 上限到達: 低信頼度エッジとして受け入れ、spiral を脱出
+    self._failure_streak = 0
+    ...  # odom フォールバック処理
+else:
+    self._failure_streak = 0  # 成功したらリセット
+```
+
+`ScanMatchingBuilder` の実装を参照すること。
 
 ---
 

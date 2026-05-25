@@ -193,8 +193,13 @@ def estimate_transform(
 ### GraphOptimizerBase
 
 ```python
-def optimize(self, nodes: list[PoseNode]) -> list[PoseNode]
+def optimize(
+    self,
+    nodes: list[PoseNode],
+    edges: list[PoseEdge],
+) -> list[PoseNode]
     # ノードの順序・インデックスを保持して更新後のリストを返す
+    # edges: 連続辺・ループ辺を含む全拘束（GTSAM BetweenFactor として使用する）
 ```
 
 ### MapRendererBase

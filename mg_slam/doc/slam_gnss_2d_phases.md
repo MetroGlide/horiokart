@@ -1,6 +1,6 @@
 # slam_gnss_2d 開発フェーズ定義
 
-**現在フェーズ: Phase 2**
+**現在フェーズ: Phase 3**
 
 ---
 
@@ -59,9 +59,17 @@
 
 ### 完了条件
 
-- [ ] ICPMatcher が前後フレームの相対変換 (dx, dy, dyaw) を正しく返す
-- [ ] ScanMatchingBuilder を slam_node.py に差し替えてマップ品質が向上する
-- [ ] OdomOnlyBuilder との差し替えがパラメータ1行で完結する
+- [x] ICPMatcher・NDTMatcher が前後フレームの相対変換 (dx, dy, dyaw) を正しく返す
+- [x] ScanMatchingBuilder を slam_node.py に差し替えてマップ品質が向上する
+- [x] OdomOnlyBuilder との差し替えがパラメータ1行で完結する
+- [x] 連続収束失敗時の spiral of doom 対策（streak fallback）が動作する
+
+### Phase 3 への引継ぎ条件
+
+- `PoseGraphBuilderBase.get_edges()` が各実装で正しく返される（`GTSAMOptimizer` の入力として使用する）
+- `GraphOptimizerBase.optimize(nodes, edges)` の新シグネチャが ABC・スタブで有効（Phase 2 末に修正済み）
+- `LoopClosureBuilder` と `ScanMatchingBuilder` の共通ロジック（ICP マッチング・streak fallback）の共有方針（継承 vs コンポジション）を Phase 3 開始前に設計決定すること
+- `optimize()` 呼び出しの主体（Builder 内部 vs `slam_node.py`）を Phase 3 開始前に決定すること
 
 ---
 
