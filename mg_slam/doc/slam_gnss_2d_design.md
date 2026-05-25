@@ -40,7 +40,11 @@ Step 4: 再最適化 → グローバル一貫性のあるマップ
 │    ├── ScanMatchingBuilder       (Phase 2)                       │
 │    └── LoopClosureBuilder        (Phase 3)                       │
 │          │ uses ScanMatcherBase                                  │
-│          │   └── ICPMatcher      (Phase 2)                       │
+│          │   ├── ICPMatcher      (Phase 2)                       │
+│          │   └── NDTMatcher      (Phase 2)                       │
+│          │ uses ReferenceProviderBase                            │
+│          │   ├── ScanToScanProvider   (Phase 2)                  │
+│          │   └── LocalMapProvider     (Phase 2)                  │
 │                                                                  │
 │  GnssAlignerBase                 (Phase 4)                       │
 │    └── KinematicHeadingAligner                                   │
@@ -153,11 +157,28 @@ def reset(self) -> None
 ```python
 def match(
     self,
-    src: ScanData,           # 前フレーム（基準）
-    dst: ScanData,           # 現フレーム（変換対象）
+    src_pts: np.ndarray,     # 参照点群 (N, 2)。前ノードのボディフレーム基準。
+                             # スキャン1枚分またはローカルマップ集約分のいずれかが渡る。
+    dst: ScanData,           # 現フレーム（変換対象スキャン）
     initial_guess: OdomData, # オドメトリ由来の初期推定値
-) -> tuple[float, float, float]  # (dx, dy, dyaw)
+) -> MatchResult
 ```
+
+**差し替えポイント**: ICPMatcher / NDTMatcher 等に差し替え可能。
+src_pts の生成元（1枚スキャン/ローカルマップ）は ReferenceProviderBase が担うため、
+マッチャーは参照の由来を意識しない。
+
+### ReferenceProviderBase
+
+```python
+def update(self, node: PoseNode) -> None
+    # 新しいノードが確定したときに呼ぶ
+def get_reference_pts(self) -> Optional[np.ndarray]
+    # 最後に確定したノードのボディフレームで参照点群 (N, 2) を返す
+    # 未準備時は None を返す
+```
+
+**差し替えポイント**: ScanToScanProvider（前スキャン1枚）/ LocalMapProvider（直近Nノード蓄積）
 
 ### GnssAlignerBase
 
