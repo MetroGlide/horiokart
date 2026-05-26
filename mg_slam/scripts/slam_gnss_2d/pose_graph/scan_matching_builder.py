@@ -177,3 +177,15 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
         self._edges.clear()
         self._last_odom = None
         self._failure_streak = 0
+
+    @property
+    def loop_just_closed(self) -> bool:
+        return False
+
+    def replace_nodes(self, nodes: list[PoseNode]) -> None:
+        """最適化後のノードリストで内部ノードリストを置き換える。
+
+        LoopClosureBuilder が GTSAMOptimizer.optimize() 呼び出し後に使用する。
+        ノードの index・timestamp・scan は保持されていること。
+        """
+        self._nodes = list(nodes)

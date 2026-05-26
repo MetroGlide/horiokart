@@ -110,6 +110,12 @@ class SlamGnss2DNode(Node):
         # 連続失敗上限（この回数連続失敗で odom フォールバック）
         self.declare_parameter('matcher_max_failure_streak', 5)
 
+        # ループクロージャパラメータ（pose_graph_builder == "loop_closure" のとき使用）
+        self.declare_parameter('loop_closure_search_radius', 2.0)   # [m]
+        self.declare_parameter('loop_closure_min_node_gap', 50)
+        self.declare_parameter('loop_closure_max_failure_streak', 3)
+        self.declare_parameter('optimize_every_n_loops', 1)
+
     def _build_config(self) -> SlamConfig:
         return SlamConfig(
             scan_topic=self.get_parameter('scan_topic').value,
@@ -132,6 +138,14 @@ class SlamGnss2DNode(Node):
             local_map_radius=self.get_parameter('local_map_radius').value,
             matcher_max_failure_streak=self.get_parameter(
                 'matcher_max_failure_streak').value,
+            loop_closure_search_radius=self.get_parameter(
+                'loop_closure_search_radius').value,
+            loop_closure_min_node_gap=self.get_parameter(
+                'loop_closure_min_node_gap').value,
+            loop_closure_max_failure_streak=self.get_parameter(
+                'loop_closure_max_failure_streak').value,
+            optimize_every_n_loops=self.get_parameter(
+                'optimize_every_n_loops').value,
         )
 
     def _on_scan(self, scan: ScanData) -> None:
@@ -160,10 +174,18 @@ class SlamGnss2DNode(Node):
                 f'yaw={math.degrees(node.yaw):.1f}deg'
             )
 
-        if not self._renderer.add_node(node):
-            self._renderer.rerender_all(self._pose_graph.get_nodes())
+        if self._pose_graph.loop_just_closed:
+            nodes = self._pose_graph.get_nodes()
+            self._renderer.rerender_all(nodes)
+            self._rebuild_path(nodes)
+            self.get_logger().info(
+                f'Loop closed at node #{node.index}: full rerender triggered'
+            )
+        else:
+            if not self._renderer.add_node(node):
+                self._renderer.rerender_all(self._pose_graph.get_nodes())
+            self._publish_path(node)
         self._map_dirty = True
-        self._publish_path(node)
 
     def _publish_map_timer(self) -> None:
         now = time.monotonic()
@@ -177,11 +199,18 @@ class SlamGnss2DNode(Node):
                     f'({pg.icp_success_count}/{pg.icp_attempt_count})'
                     f' fb={pg.odom_fallback_count}'
                 )
+            loop_stat = ''
+            if hasattr(pg, 'loop_attempt_count') and pg.loop_attempt_count > 0:
+                rate = pg.loop_success_count / pg.loop_attempt_count * 100
+                loop_stat = (
+                    f', loop={rate:.0f}%'
+                    f'({pg.loop_success_count}/{pg.loop_attempt_count})'
+                )
             self.get_logger().info(
                 f'[stat] nodes={self._node_count}, '
                 f'scans={self._scan_recv_count}, '
                 f'odom_miss={self._odom_miss_count}'
-                + icp_stat
+                + icp_stat + loop_stat
             )
             self._last_stat_time = now
 
@@ -242,6 +271,22 @@ class SlamGnss2DNode(Node):
         pose.pose.orientation.z = math.sin(node.yaw / 2.0)
         self._path_msg.header.stamp = pose.header.stamp
         self._path_msg.poses.append(pose)
+        self._path_pub.publish(self._path_msg)
+
+    def _rebuild_path(self, nodes: list) -> None:
+        """全ノードからパスを再構築する。ループ閉合最適化後に呼び出す。"""
+        now = self.get_clock().now().to_msg()
+        self._path_msg.header.stamp = now
+        self._path_msg.poses.clear()
+        for n in nodes:
+            pose = PoseStamped()
+            pose.header.stamp = now
+            pose.header.frame_id = 'map'
+            pose.pose.position.x = n.x
+            pose.pose.position.y = n.y
+            pose.pose.orientation.w = math.cos(n.yaw / 2.0)
+            pose.pose.orientation.z = math.sin(n.yaw / 2.0)
+            self._path_msg.poses.append(pose)
         self._path_pub.publish(self._path_msg)
 
     def destroy_node(self) -> None:

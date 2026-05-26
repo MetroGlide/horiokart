@@ -27,6 +27,26 @@ def build_pose_graph_builder(config: SlamConfig) -> PoseGraphBuilderBase:
             min_rotation=config.min_rotation,
             max_failure_streak=config.matcher_max_failure_streak,
         )
+    elif config.pose_graph_builder == 'loop_closure':
+        from .pose_graph.scan_matching_builder import ScanMatchingBuilder
+        from .pose_graph.loop_closure_builder import LoopClosureBuilder
+        from .optimizer.gtsam_optimizer import GTSAMOptimizer
+        inner = ScanMatchingBuilder(
+            matcher=_build_matcher(config),
+            provider=_build_reference_provider(config),
+            min_translation=config.min_translation,
+            min_rotation=config.min_rotation,
+            max_failure_streak=config.matcher_max_failure_streak,
+        )
+        return LoopClosureBuilder(
+            inner=inner,
+            loop_matcher=_build_matcher(config),
+            optimizer=GTSAMOptimizer(),
+            loop_closure_search_radius=config.loop_closure_search_radius,
+            loop_closure_min_node_gap=config.loop_closure_min_node_gap,
+            loop_closure_max_failure_streak=config.loop_closure_max_failure_streak,
+            optimize_every_n_loops=config.optimize_every_n_loops,
+        )
     elif config.pose_graph_builder == 'odom_only':
         from .pose_graph.odom_builder import OdomOnlyBuilder
         return OdomOnlyBuilder(
@@ -36,7 +56,7 @@ def build_pose_graph_builder(config: SlamConfig) -> PoseGraphBuilderBase:
     else:
         raise ValueError(
             f"Unknown pose_graph_builder: '{config.pose_graph_builder}'. "
-            "Valid options: 'odom_only', 'scan_matching'"
+            "Valid options: 'odom_only', 'scan_matching', 'loop_closure'"
         )
 
 

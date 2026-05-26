@@ -35,3 +35,13 @@ class PoseGraphBuilderBase(ABC):
     def reset(self) -> None:
         """グラフをリセットする。"""
         raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def loop_just_closed(self) -> bool:
+        """今フレームでループ閉合最適化が実行された場合 True を返し、次呼び出しで False にリセットされる。
+
+        slam_node.py がこのフラグを確認し、True のとき rerender_all() をトリガーする。
+        LoopClosureBuilder のみが True を返す。他の実装は常に False を返す。
+        """
+        raise NotImplementedError

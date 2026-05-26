@@ -9,7 +9,7 @@ slam_gnss_2d_node:
     min_rotation: 0.1
     map_publish_hz: 1.0
 
-    pose_graph_builder: scan_matching # "odom_only" | "scan_matching"
+    pose_graph_builder: loop_closure # "odom_only" | "scan_matching" | "loop_closure"
     scan_matcher_type: ndt # "icp" | "ndt"
     scan_reference: scan_to_local_map # "scan_to_scan" | "scan_to_local_map"
 
@@ -23,3 +23,9 @@ slam_gnss_2d_node:
     local_map_radius: 20.0
 
     matcher_max_failure_streak: 5 # この回数連続失敗で odom フォールバック
+
+    # ループクロージャ設定（pose_graph_builder: loop_closure のとき使用）
+    loop_closure_search_radius: 2.0 # ループ候補ノード間距面間値 [m]
+    loop_closure_min_node_gap: 50 # ループ候補の最小ノード間隔
+    loop_closure_max_failure_streak: 3 # ループ検証連続失敗上限
+    optimize_every_n_loops: 1 # N本ループ辺追加ごとに最適化

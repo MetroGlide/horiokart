@@ -46,3 +46,9 @@ class SlamConfig:
 
     # スキャンマッチング失敗対策
     matcher_max_failure_streak: int = 5  # 連続失敗がこの回数に達したら odom フォールバック
+
+    # ループクロージャパラメータ（pose_graph_builder == "loop_closure" のとき使用）
+    loop_closure_search_radius: float = 2.0   # ループ候補ノード間距面間値 [m]
+    loop_closure_min_node_gap: int = 50        # ループ候補の最小ノード間隔
+    loop_closure_max_failure_streak: int = 3   # ループ検証連続失敗上限
+    optimize_every_n_loops: int = 1            # N本ループ辺追加ごとに最適化

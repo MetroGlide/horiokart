@@ -93,3 +93,7 @@ class OdomOnlyBuilder(PoseGraphBuilderBase):
     def reset(self) -> None:
         self._nodes.clear()
         self._last_odom = None
+
+    @property
+    def loop_just_closed(self) -> bool:
+        return False
