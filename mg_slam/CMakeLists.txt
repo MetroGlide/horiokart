@@ -43,6 +43,7 @@ ament_python_install_package(slam_gnss_2d
 install(PROGRAMS
   scripts/actual_path_publisher.py
   scripts/slam_gnss_2d/slam_node.py
+  scripts/slam_gnss_2d/slam_offline_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

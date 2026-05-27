@@ -1,4 +1,4 @@
-slam_gnss_2d_node:
+/**:
   ros__parameters:
     scan_topic: /scan_top_lidar
     odom_topic: /odom
@@ -29,3 +29,8 @@ slam_gnss_2d_node:
     loop_closure_min_node_gap: 50 # ループ候補の最小ノード間隔
     loop_closure_max_failure_streak: 3 # ループ検証連続失敗上限
     optimize_every_n_loops: 1 # N本ループ辺追加ごとに最適化
+
+slam_gnss_2d_offline_node:
+  ros__parameters:
+    offline_step_hz: 30.0 # 可視化速度 [Hz]。0 以下で最大速度
+
