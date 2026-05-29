@@ -13,15 +13,14 @@
     scan_matcher_type: ndt # "icp" | "ndt"
     scan_reference: scan_to_local_map # "scan_to_scan" | "scan_to_local_map"
 
-    icp_max_iterations: 30
-    icp_tolerance: 0.0001
+    icp_max_iterations: 100
+    icp_tolerance: 0.00001
     icp_max_correspondence_dist: 1.0
 
-    # ndt_cell_size: 1.0
-    ndt_cell_size: 0.5
+    ndt_cell_size: 1.0
 
-    local_map_window: 20
-    local_map_radius: 20.0
+    local_map_window: 30
+    local_map_radius: 30.0
 
     matcher_max_failure_streak: 5 # この回数連続失敗で odom フォールバック
 
@@ -31,7 +30,8 @@
     loop_closure_max_failure_streak: 3 # ループ検証連続失敗上限
     optimize_every_n_loops: 3 # N本ループ辺追加ごとに最適化
     loop_closure_matcher_type: icp # "icp" | "ndt". NDTは180°対称false positiveリスクがあるためICP推奨
-    loop_closure_max_dyaw_deg: 90.0 # ループ辺のdyaw絶対値上限 [deg]
+    loop_closure_max_dyaw_deg: 145.0 # ループ辺のdyaw絶対値上限 [deg]. Uターンループ（最大~142°）を許容しつつ180°対称誤検出（~151°）を拒否
+    loop_closure_submap_radius: 5.0 # ループ検証時の候補サブマップ合成半径 [m]
 
 slam_gnss_2d_offline_node:
   ros__parameters:

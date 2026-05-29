@@ -50,6 +50,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         loop_closure_max_failure_streak: int = 3,
         optimize_every_n_loops: int = 1,
         max_loop_dyaw_deg: float = 90.0,
+        loop_closure_submap_radius: float = 5.0,
     ) -> None:
         self._inner = inner
         self._loop_matcher = loop_matcher
@@ -59,6 +60,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         self._max_failure_streak = loop_closure_max_failure_streak
         self._optimize_every_n_loops = optimize_every_n_loops
         self._max_loop_dyaw_rad = math.radians(max_loop_dyaw_deg)
+        self._submap_radius = loop_closure_submap_radius
         self._loop_edges: list[PoseEdge] = []
         self._loop_failure_streak: int = 0
         self._loop_just_closed_flag: bool = False
@@ -107,10 +109,46 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
 
         return [all_nodes[i] for i in np.where(combined)[0]]
 
+    def _build_candidate_submap(self, candidate: PoseNode) -> np.ndarray:
+        """候補ノード周辺の複数スキャンを合成した点群を候補のボディフレームで返す。
+
+        候補ノードから _submap_radius 以内の全ノードのスキャンをワールド座標で合成し、
+        候補ノードのボディフレームに変換して返す。_submap_radius が 0 以下の場合は
+        候補ノード1枚のスキャンのみを使用する。
+        """
+        if self._submap_radius <= 0.0:
+            return _scan_to_points(candidate.scan) if candidate.scan is not None else np.empty((0, 2))
+
+        world_pts_list: list[np.ndarray] = []
+        for node in self._all_nodes_cache:
+            if node.scan is None:
+                continue
+            if math.hypot(node.x - candidate.x, node.y - candidate.y) > self._submap_radius:
+                continue
+            pts = _scan_to_points(node.scan)
+            if len(pts) == 0:
+                continue
+            c = math.cos(node.yaw)
+            s = math.sin(node.yaw)
+            wx = c * pts[:, 0] - s * pts[:, 1] + node.x
+            wy = s * pts[:, 0] + c * pts[:, 1] + node.y
+            world_pts_list.append(np.column_stack((wx, wy)))
+
+        if not world_pts_list:
+            return _scan_to_points(candidate.scan) if candidate.scan is not None else np.empty((0, 2))
+
+        world_pts = np.concatenate(world_pts_list, axis=0)
+
+        # 候補ノードのボディフレームに変換
+        c = math.cos(candidate.yaw)
+        s = math.sin(candidate.yaw)
+        R_inv = np.array([[c, s], [-s, c]])
+        return (R_inv @ (world_pts - np.array([candidate.x, candidate.y])).T).T
+
     def _try_add_loop_edge(self, node: PoseNode, candidate: PoseNode) -> bool:
         """候補ノードとのループ辺を検証して追加する。
 
-        candidate のスキャン点群を src_pts として、node のスキャンに対してマッチングを実行する。
+        candidate 周辺の合成スキャン点群を src_pts として、node のスキャンに対してマッチングを実行する。
         初期値は pose graph 上の2ノード間の相対ポーズとする。
         streak fallback 設計（設計ルール7に準拠）。
 
@@ -118,7 +156,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
             True: ループ辺が追加された
             False: 未収束またはスキップ
         """
-        src_pts = _scan_to_points(candidate.scan)
+        src_pts = self._build_candidate_submap(candidate)
         if len(src_pts) == 0:
             return False
 

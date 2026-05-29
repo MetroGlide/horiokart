@@ -57,3 +57,6 @@ class SlamConfig:
     loop_closure_matcher_type: str = 'icp'    # "icp" | "ndt"
     # ループ辺のdyaw絶対値上限 [deg]。Uターンループを許容する値
     loop_closure_max_dyaw_deg: float = 90.0
+    # ループ検証時のサブマップ合成半径 [m]。候補ノードからこの範囲内のノードのスキャンを
+    # 合成して参照点群とする。0以下にすると候補ノード1枚のみ使用（無効化）。
+    loop_closure_submap_radius: float = 5.0

@@ -47,6 +47,7 @@ def build_pose_graph_builder(config: SlamConfig) -> PoseGraphBuilderBase:
             loop_closure_max_failure_streak=config.loop_closure_max_failure_streak,
             optimize_every_n_loops=config.optimize_every_n_loops,
             max_loop_dyaw_deg=config.loop_closure_max_dyaw_deg,
+            loop_closure_submap_radius=config.loop_closure_submap_radius,
         )
     elif config.pose_graph_builder == 'odom_only':
         from .pose_graph.odom_builder import OdomOnlyBuilder

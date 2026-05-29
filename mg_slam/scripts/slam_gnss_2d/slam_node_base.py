@@ -123,6 +123,7 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter(
             'loop_closure_matcher_type', 'icp')  # "icp" | "ndt"
         self.declare_parameter('loop_closure_max_dyaw_deg', 90.0)   # [deg]
+        self.declare_parameter('loop_closure_submap_radius', 5.0)   # [m]
 
     def _build_config(self) -> SlamConfig:
         return SlamConfig(
@@ -158,6 +159,8 @@ class SlamNodeBase(Node, ABC):
                 'loop_closure_matcher_type').value,
             loop_closure_max_dyaw_deg=self.get_parameter(
                 'loop_closure_max_dyaw_deg').value,
+            loop_closure_submap_radius=self.get_parameter(
+                'loop_closure_submap_radius').value,
         )
 
     def _on_scan(self, scan: ScanData) -> None:

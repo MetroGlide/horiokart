@@ -111,6 +111,8 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
                     f'streak={self._failure_streak}/{self._max_failure_streak})'
                 )
                 if self._failure_streak < self._max_failure_streak:
+                    # 次のリトライで初期値が累積拡大しないよう odom 基点を更新する
+                    self._last_odom = odom
                     return None
                 _logger.warning(
                     f'Failure streak limit reached at node {len(self._nodes)}; '
