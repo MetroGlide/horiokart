@@ -33,12 +33,12 @@ class LocalMapProvider(ReferenceProviderBase):
     def __init__(self, window: int, radius: float) -> None:
         self._window = window
         self._radius = radius
-        self._nodes: deque[PoseNode] = deque(maxlen=window)
+        self._nodes: deque[tuple[PoseNode, np.ndarray]] = deque(maxlen=window)
         self._last_node: Optional[PoseNode] = None
 
     def update(self, node: PoseNode) -> None:
         if node.scan is not None:
-            self._nodes.append(node)
+            self._nodes.append((node, _scan_to_points(node.scan)))
         self._last_node = node
 
     def get_reference_pts(self) -> Optional[np.ndarray]:
@@ -46,16 +46,19 @@ class LocalMapProvider(ReferenceProviderBase):
             return None
 
         last = self._last_node
+        entries = list(self._nodes)
 
-        # 各ノードのスキャンを世界フレームに変換して蓄積
+        yaws = np.array([n.yaw for n, _ in entries])
+        cos_yaws = np.cos(yaws)
+        sin_yaws = np.sin(yaws)
+
         world_pts_list = []
-        for n in self._nodes:
-            if n.scan is None:
-                continue
-            local_pts = _scan_to_points(n.scan)
-            c, s = math.cos(n.yaw), math.sin(n.yaw)
-            R = np.array([[c, -s], [s, c]])
-            world_pts_list.append((R @ local_pts.T).T + np.array([n.x, n.y]))
+        for i, (n, local_pts) in enumerate(entries):
+            c = float(cos_yaws[i])
+            s = float(sin_yaws[i])
+            wx = c * local_pts[:, 0] - s * local_pts[:, 1] + n.x
+            wy = s * local_pts[:, 0] + c * local_pts[:, 1] + n.y
+            world_pts_list.append(np.column_stack((wx, wy)))
 
         if not world_pts_list:
             return None

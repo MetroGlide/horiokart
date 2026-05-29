@@ -27,12 +27,7 @@ def _scan_to_points(scan: ScanData) -> np.ndarray:
 
 
 def _angle_diff(a: float, b: float) -> float:
-    diff = a - b
-    while diff > math.pi:
-        diff -= 2.0 * math.pi
-    while diff < -math.pi:
-        diff += 2.0 * math.pi
-    return diff
+    return math.atan2(math.sin(a - b), math.cos(a - b))
 
 
 class LoopClosureBuilder(PoseGraphBuilderBase):
@@ -67,12 +62,14 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         self._loop_just_closed_flag: bool = False
         self.loop_attempt_count: int = 0
         self.loop_success_count: int = 0
+        self._all_nodes_cache: list[PoseNode] = []
 
     def add_scan(self, scan: ScanData, odom: OdomData) -> Optional[PoseNode]:
         node = self._inner.add_scan(scan, odom)
         if node is None:
             return None
 
+        self._all_nodes_cache.append(node)
         self._loop_just_closed_flag = False
         candidates = self._find_loop_candidates(node)
         new_loops_added = 0
@@ -93,16 +90,20 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         距離が search_radius 以内かつインデックス差が min_node_gap 以上のノードを対象にする。
         scan データを持たないノードは除外する。
         """
-        candidates: list[PoseNode] = []
-        for candidate in self._inner.get_nodes():
-            if node.index - candidate.index < self._min_node_gap:
-                continue
-            if candidate.scan is None:
-                continue
-            dist = math.hypot(node.x - candidate.x, node.y - candidate.y)
-            if dist <= self._search_radius:
-                candidates.append(candidate)
-        return candidates
+        all_nodes = self._all_nodes_cache
+        if not all_nodes:
+            return []
+
+        indices = np.array([n.index for n in all_nodes], dtype=np.int64)
+        has_scan = np.array([n.scan is not None for n in all_nodes])
+        xs = np.array([n.x for n in all_nodes])
+        ys = np.array([n.y for n in all_nodes])
+
+        gap_mask = (node.index - indices) >= self._min_node_gap
+        dist_mask = np.hypot(node.x - xs, node.y - ys) <= self._search_radius
+        combined = gap_mask & has_scan & dist_mask
+
+        return [all_nodes[i] for i in np.where(combined)[0]]
 
     def _try_add_loop_edge(self, node: PoseNode, candidate: PoseNode) -> bool:
         """候補ノードとのループ辺を検証して追加する。
@@ -175,6 +176,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         all_edges = self._inner.get_edges() + self._loop_edges
         updated = self._optimizer.optimize(all_nodes, all_edges)
         self._inner.replace_nodes(updated)
+        self._all_nodes_cache = self._inner.get_nodes()
         self._loop_just_closed_flag = True
         _logger.info(
             f'Graph optimized: {len(all_nodes)} nodes, '
@@ -195,6 +197,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         self._loop_just_closed_flag = False
         self.loop_attempt_count = 0
         self.loop_success_count = 0
+        self._all_nodes_cache.clear()
 
     @property
     def loop_just_closed(self) -> bool:

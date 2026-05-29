@@ -12,13 +12,7 @@ _ODOM_INFORMATION = np.diag([100.0, 100.0, 50.0])
 
 
 def _angle_diff(a: float, b: float) -> float:
-    """2つの角度の差を [-pi, pi] に正規化して返す。"""
-    diff = a - b
-    while diff > math.pi:
-        diff -= 2.0 * math.pi
-    while diff < -math.pi:
-        diff += 2.0 * math.pi
-    return diff
+    return math.atan2(math.sin(a - b), math.cos(a - b))
 
 
 class OdomOnlyBuilder(PoseGraphBuilderBase):
@@ -42,6 +36,7 @@ class OdomOnlyBuilder(PoseGraphBuilderBase):
         self._min_translation = min_translation
         self._min_rotation = min_rotation
         self._nodes: list[PoseNode] = []
+        self._edges: list[PoseEdge] = []
         self._last_odom: Optional[OdomData] = None
 
     def add_scan(self, scan: ScanData, odom: OdomData) -> Optional[PoseNode]:
@@ -63,35 +58,33 @@ class OdomOnlyBuilder(PoseGraphBuilderBase):
         )
         self._nodes.append(node)
         self._last_odom = odom
+
+        if len(self._nodes) > 1:
+            prev = self._nodes[-2]
+            c = math.cos(-prev.yaw)
+            s = math.sin(-prev.yaw)
+            dx_w = node.x - prev.x
+            dy_w = node.y - prev.y
+            self._edges.append(PoseEdge(
+                from_index=prev.index,
+                to_index=node.index,
+                dx=c * dx_w - s * dy_w,
+                dy=s * dx_w + c * dy_w,
+                dyaw=_angle_diff(node.yaw, prev.yaw),
+                information=_ODOM_INFORMATION.copy(),
+            ))
+
         return node
 
     def get_nodes(self) -> list[PoseNode]:
         return list(self._nodes)
 
     def get_edges(self) -> list[PoseEdge]:
-        edges: list[PoseEdge] = []
-        for i in range(1, len(self._nodes)):
-            prev = self._nodes[i - 1]
-            curr = self._nodes[i]
-            c = math.cos(-prev.yaw)
-            s = math.sin(-prev.yaw)
-            dx_w = curr.x - prev.x
-            dy_w = curr.y - prev.y
-            dx_local = c * dx_w - s * dy_w
-            dy_local = s * dx_w + c * dy_w
-            dyaw = _angle_diff(curr.yaw, prev.yaw)
-            edges.append(PoseEdge(
-                from_index=prev.index,
-                to_index=curr.index,
-                dx=dx_local,
-                dy=dy_local,
-                dyaw=dyaw,
-                information=_ODOM_INFORMATION.copy(),
-            ))
-        return edges
+        return list(self._edges)
 
     def reset(self) -> None:
         self._nodes.clear()
+        self._edges.clear()
         self._last_odom = None
 
     @property

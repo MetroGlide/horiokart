@@ -38,13 +38,16 @@ def _estimate_normals(
 ) -> np.ndarray:
     """query_pts の各点について src_pts の隣接 k 点で PCA を行い法線ベクトルを返す。"""
     _, idx = tree.query(query_pts, k=k)
-    normals = np.zeros((len(query_pts), 2))
-    for i, neighbors in enumerate(idx):
-        neighbors_pts = src_pts[neighbors]  # src_pts のインデックスで参照
-        cov = np.cov(neighbors_pts.T)
-        _, vecs = np.linalg.eigh(cov)
-        normals[i] = vecs[:, 0]  # 最小固有値の固有ベクトル = 法線方向
-    return normals
+    # src_pts[idx]: (N, k, 2) — 全点の近傍点群を一括取得
+    neighbors_all = src_pts[idx]
+    centered = neighbors_all - \
+        neighbors_all.mean(axis=1, keepdims=True)  # (N, k, 2)
+    # バッチ 2×2 共分散行列: (N, 2, 2)
+    cov_batch = np.einsum('nki,nkj->nij', centered, centered) / max(k - 1, 1)
+    # np.linalg.eigh は (N, 2, 2) を一括処理できる
+    _, vecs = np.linalg.eigh(cov_batch)
+    # 最小固有値の固有ベクトル = vecs[:, :, 0]
+    return vecs[:, :, 0]
 
 
 class ICPMatcher(ScanMatcherBase):

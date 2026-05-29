@@ -19,12 +19,7 @@ _ODOM_FALLBACK_INFORMATION = np.diag([10.0, 10.0, 5.0])
 
 
 def _angle_diff(a: float, b: float) -> float:
-    diff = a - b
-    while diff > math.pi:
-        diff -= 2.0 * math.pi
-    while diff < -math.pi:
-        diff += 2.0 * math.pi
-    return diff
+    return math.atan2(math.sin(a - b), math.cos(a - b))
 
 
 class ScanMatchingBuilder(PoseGraphBuilderBase):

@@ -26,35 +26,61 @@ def _scan_to_points(scan: ScanData) -> np.ndarray:
 def _build_ndt_cells(
     src_pts: np.ndarray,
     cell_size: float,
-) -> dict[tuple[int, int], tuple[np.ndarray, np.ndarray]]:
-    """src_pts から NDT セル辞書を構築する。
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """src_pts から NDT セルを構築する。
 
     Returns:
-        {(cell_x, cell_y): (mean (2,), sigma_inv (2, 2))}
-        3点未満のセルは除外する。
+        cell_keys  : (C, 2) int32 — 有効セルのグリッドインデックス
+        means      : (C, 2) float64 — 各セルの重心
+        sigma_invs : (C, 2, 2) float64 — 各セルの精度行列
     """
-    cells_pts: dict[tuple[int, int], list] = {}
     inv = 1.0 / cell_size
-    for pt in src_pts:
-        key = (int(math.floor(pt[0] * inv)), int(math.floor(pt[1] * inv)))
-        if key not in cells_pts:
-            cells_pts[key] = []
-        cells_pts[key].append(pt)
+    cell_indices = np.floor(src_pts * inv).astype(np.int32)  # (N, 2)
 
-    cells = {}
-    for key, pts in cells_pts.items():
-        if len(pts) < 3:
-            continue
-        arr = np.array(pts)
-        mean = arr.mean(axis=0)
-        cov = np.cov(arr.T) + 1e-3 * np.eye(2)  # 退化防止の正則化
-        try:
-            sigma_inv = np.linalg.inv(cov)
-        except np.linalg.LinAlgError:
-            continue
-        cells[key] = (mean, sigma_inv)
+    unique_keys, inverse = np.unique(cell_indices, axis=0, return_inverse=True)
+    C = len(unique_keys)
 
-    return cells
+    counts = np.bincount(inverse, minlength=C)
+    valid_mask = counts >= 3
+    if not np.any(valid_mask):
+        return np.empty((0, 2), dtype=np.int32), np.empty((0, 2)), np.empty((0, 2, 2))
+
+    # 重心を一括計算
+    sums = np.zeros((C, 2), dtype=np.float64)
+    np.add.at(sums, inverse, src_pts)
+    means = sums / np.maximum(counts[:, None], 1)  # (C, 2)
+
+    # 共分散行列要素を一括蓄積
+    centered = src_pts - means[inverse]  # (N, 2)
+    cov_xx = np.zeros(C, dtype=np.float64)
+    cov_xy = np.zeros(C, dtype=np.float64)
+    cov_yy = np.zeros(C, dtype=np.float64)
+    np.add.at(cov_xx, inverse, centered[:, 0] ** 2)
+    np.add.at(cov_xy, inverse, centered[:, 0] * centered[:, 1])
+    np.add.at(cov_yy, inverse, centered[:, 1] ** 2)
+    denom = np.maximum(counts - 1, 1).astype(np.float64)
+    cov_xx /= denom
+    cov_xy /= denom
+    cov_yy /= denom
+
+    # (C, 2, 2) 共分散行列組み立て + 正則化
+    cov_batch = np.empty((C, 2, 2), dtype=np.float64)
+    cov_batch[:, 0, 0] = cov_xx + 1e-3
+    cov_batch[:, 0, 1] = cov_xy
+    cov_batch[:, 1, 0] = cov_xy
+    cov_batch[:, 1, 1] = cov_yy + 1e-3
+
+    valid_cov = cov_batch[valid_mask]
+    try:
+        sigma_invs = np.linalg.inv(valid_cov)
+    except np.linalg.LinAlgError:
+        return np.empty((0, 2), dtype=np.int32), np.empty((0, 2)), np.empty((0, 2, 2))
+
+    return (
+        unique_keys[valid_mask].astype(np.int32),
+        means[valid_mask],
+        sigma_invs,
+    )
 
 
 class NDTMatcher(ScanMatcherBase):
@@ -98,12 +124,19 @@ class NDTMatcher(ScanMatcherBase):
                 converged=False, information=np.zeros((3, 3)),
             )
 
-        cells = _build_ndt_cells(src_pts, self._cell_size)
-        if not cells:
+        cell_keys, means, sigma_invs = _build_ndt_cells(
+            src_pts, self._cell_size)
+        if len(cell_keys) == 0:
             return MatchResult(
                 dx=initial_guess.x, dy=initial_guess.y, dyaw=initial_guess.yaw,
                 converged=False, information=np.zeros((3, 3)),
             )
+
+        # セルキーを行優先でソートして searchsorted によるルックアップを可能にする
+        sort_order = np.lexsort((cell_keys[:, 1], cell_keys[:, 0]))
+        cell_keys_sorted = cell_keys[sort_order]          # (C, 2)
+        means_sorted = means[sort_order]                  # (C, 2)
+        sigma_invs_sorted = sigma_invs[sort_order]        # (C, 2, 2)
 
         inv_cell = 1.0 / self._cell_size
         tx, ty, theta = initial_guess.x, initial_guess.y, initial_guess.yaw
@@ -114,50 +147,74 @@ class NDTMatcher(ScanMatcherBase):
         for _ in range(self._max_iterations):
             c, s = math.cos(theta), math.sin(theta)
             R = np.array([[c, -s], [s, c]])
-            p_trans = (R @ dst_pts.T).T + np.array([tx, ty])
+            p_trans = (R @ dst_pts.T).T + np.array([tx, ty])  # (N, 2)
 
-            # g: -score の勾配 (3,)
-            # H: -score のヘッセ行列近似 (3, 3)
-            g = np.zeros(3)
-            H = np.zeros((3, 3))
-            n_valid = 0
+            # 全点のセルキーを一括計算
+            query_keys = np.floor(
+                p_trans * inv_cell).astype(np.int32)  # (N, 2)
 
-            for i in range(len(p_trans)):
-                cell_key = (
-                    int(math.floor(p_trans[i, 0] * inv_cell)),
-                    int(math.floor(p_trans[i, 1] * inv_cell)),
-                )
-                if cell_key not in cells:
-                    continue
-                mean, sigma_inv = cells[cell_key]
+            # lexsort 済み cell_keys_sorted に対して searchsorted でルックアップ
+            # 各点が cell_keys_sorted の何行目に対応するかを求める
+            encoded_query = query_keys[:, 0].astype(
+                np.int64) * (2 ** 32) + query_keys[:, 1]
+            encoded_cells = cell_keys_sorted[:, 0].astype(
+                np.int64) * (2 ** 32) + cell_keys_sorted[:, 1]
+            hit_pos = np.searchsorted(encoded_cells, encoded_query)
+            in_range = hit_pos < len(encoded_cells)
+            exact_match = np.zeros(len(p_trans), dtype=bool)
+            exact_match[in_range] = (
+                encoded_cells[hit_pos[in_range]] == encoded_query[in_range])
 
-                d = p_trans[i] - mean
-                exponent = -0.5 * float(d @ sigma_inv @ d)
-                if exponent < _EXPONENT_CUTOFF:
-                    continue
-
-                exp_val = math.exp(exponent)
-                n_valid += 1
-
-                # ヤコビアン J (2, 3): p_trans[i] の (tx, ty, θ) 微分
-                p_orig = dst_pts[i]
-                dp_dtheta = np.array([
-                    -s * p_orig[0] - c * p_orig[1],
-                    c * p_orig[0] - s * p_orig[1],
-                ])
-                J = np.array([[1.0, 0.0, dp_dtheta[0]],
-                              [0.0, 1.0, dp_dtheta[1]]])
-
-                # -score の勾配・ヘッセ行列に加算
-                sigma_d = sigma_inv @ d
-                g += exp_val * (J.T @ sigma_d)
-                H += exp_val * (J.T @ sigma_inv @ J)
-
-            if n_valid < _N_MIN_CORRESPONDENCES:
+            if exact_match.sum() < _N_MIN_CORRESPONDENCES:
                 return MatchResult(
                     dx=tx, dy=ty, dyaw=theta,
                     converged=False, information=np.zeros((3, 3)),
                 )
+
+            # ヒットした点のみ抽出
+            pt_idx = np.where(exact_match)[0]          # (M,)
+            cell_idx = hit_pos[pt_idx]                 # (M,) → cell 配列インデックス
+            p_hit = p_trans[pt_idx]                    # (M, 2)
+            d_hit = p_hit - means_sorted[cell_idx]     # (M, 2)
+            si_hit = sigma_invs_sorted[cell_idx]       # (M, 2, 2)
+
+            # exponent = -0.5 * d^T Σ^-1 d  (M,)
+            exponents = -0.5 * np.einsum('ni,nij,nj->n', d_hit, si_hit, d_hit)
+            exp_mask = exponents >= _EXPONENT_CUTOFF
+            if exp_mask.sum() < _N_MIN_CORRESPONDENCES:
+                return MatchResult(
+                    dx=tx, dy=ty, dyaw=theta,
+                    converged=False, information=np.zeros((3, 3)),
+                )
+
+            pt_idx_f = pt_idx[exp_mask]
+            cell_idx_f = cell_idx[exp_mask]
+            d_f = d_hit[exp_mask]                      # (M2, 2)
+            si_f = si_hit[exp_mask]                    # (M2, 2, 2)
+            exp_vals = np.exp(exponents[exp_mask])     # (M2,)
+            n_valid = len(exp_vals)
+
+            # ヤコビアン J: (M2, 2, 3)
+            p_orig_f = dst_pts[pt_idx_f]               # (M2, 2)
+            dp_dtheta = np.column_stack([
+                -s * p_orig_f[:, 0] - c * p_orig_f[:, 1],
+                c * p_orig_f[:, 0] - s * p_orig_f[:, 1],
+            ])  # (M2, 2)
+            # J[k] = [[1, 0, dp_dtheta[k,0]], [0, 1, dp_dtheta[k,1]]]
+            J = np.zeros((n_valid, 2, 3))
+            J[:, 0, 0] = 1.0
+            J[:, 1, 1] = 1.0
+            J[:, :, 2] = dp_dtheta  # (M2, 2)
+
+            # g = sum_k exp_k * J_k^T @ (Σ^-1 d)_k  → (3,)
+            sigma_d = np.einsum('nij,nj->ni', si_f, d_f)   # (M2, 2)
+            # exp_vals[:,None] * J^T (3,2) @ sigma_d (2,) → weighted sum
+            g = np.einsum('n,nki,ni->k', exp_vals,
+                          J.transpose(0, 2, 1), sigma_d)
+
+            # H = sum_k exp_k * J_k^T @ Σ^-1 @ J_k  → (3, 3)
+            H = np.einsum('n,nki,nij,nlj->kl', exp_vals,
+                          J.transpose(0, 2, 1), si_f, J.transpose(0, 2, 1))
 
             H_final = H
             n_valid_final = n_valid

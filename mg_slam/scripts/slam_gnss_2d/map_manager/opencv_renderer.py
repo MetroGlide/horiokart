@@ -54,12 +54,14 @@ class OpenCVRenderer(MapRendererBase):
     def rerender_all(self, nodes: list[PoseNode]) -> None:
         if not nodes:
             return
-        all_x = [n.x for n in nodes]
-        all_y = [n.y for n in nodes]
-        new_origin_x = min(all_x) - self._expansion_margin
-        new_origin_y = min(all_y) - self._expansion_margin
-        new_max_x = max(all_x) + self._expansion_margin
-        new_max_y = max(all_y) + self._expansion_margin
+        xs = np.fromiter((n.x for n in nodes),
+                         dtype=np.float64, count=len(nodes))
+        ys = np.fromiter((n.y for n in nodes),
+                         dtype=np.float64, count=len(nodes))
+        new_origin_x = float(xs.min()) - self._expansion_margin
+        new_origin_y = float(ys.min()) - self._expansion_margin
+        new_max_x = float(xs.max()) + self._expansion_margin
+        new_max_y = float(ys.max()) + self._expansion_margin
         new_size = max(
             math.ceil((new_max_x - new_origin_x) / self._resolution),
             math.ceil((new_max_y - new_origin_y) / self._resolution),
@@ -97,8 +99,8 @@ class OpenCVRenderer(MapRendererBase):
         scan = node.scan
         angles = scan.angle_min + \
             np.arange(len(scan.ranges)) * scan.angle_increment
-        valid_mask = (scan.ranges > scan.range_min) & (
-            scan.ranges < scan.range_max)
+        ranges = np.asarray(scan.ranges, dtype=np.float64)
+        valid_mask = (ranges > scan.range_min) & (ranges < scan.range_max)
 
         cos_yaw = np.cos(node.yaw)
         sin_yaw = np.sin(node.yaw)
@@ -108,34 +110,49 @@ class OpenCVRenderer(MapRendererBase):
             return
 
         self._render_count += 1
-        valid_indices = np.where(valid_mask)[0]
-        hit_count = 0
-        oob_hits = 0
-        for i in valid_indices:
-            r = float(scan.ranges[i])
-            a = float(angles[i])
-            lx = r * np.cos(a)
-            ly = r * np.sin(a)
-            wx = node.x + cos_yaw * lx - sin_yaw * ly
-            wy = node.y + sin_yaw * lx + cos_yaw * ly
 
-            hit_px, hit_py = self._world_to_pixel(wx, wy)
-            if not self._in_bounds(hit_px, hit_py):
-                oob_hits += 1
-                continue
+        # 有効点の座標変換を一括計算
+        r_v = ranges[valid_mask]
+        a_v = angles[valid_mask]
+        lx = r_v * np.cos(a_v)
+        ly = r_v * np.sin(a_v)
+        wx = node.x + cos_yaw * lx - sin_yaw * ly
+        wy = node.y + sin_yaw * lx + cos_yaw * ly
 
-            hit_count += 1
-            cv2.line(self._map, (robot_px, robot_py), (hit_px, hit_py), 255, 1)
-            self._map[hit_py, hit_px] = 0
+        hit_px = ((wx - self._origin_x) / self._resolution).astype(np.int32)
+        hit_py = ((wy - self._origin_y) / self._resolution).astype(np.int32)
+        in_bounds = (
+            (hit_px >= 0) & (hit_px < self._map_size) &
+            (hit_py >= 0) & (hit_py < self._map_size)
+        )
+        hit_px_valid = hit_px[in_bounds]
+        hit_py_valid = hit_py[in_bounds]
+
+        hit_px_valid = hit_px[in_bounds]
+        hit_py_valid = hit_py[in_bounds]
+        n_hits = len(hit_px_valid)
+
+        if n_hits > 0:
+            # free ライン描画: N 本の 2 点ラインを cv2.polylines で C++ 側に一括委譲
+            # shape (N, 2, 1, 2): pts[i] は (start, end) の 2 点ポリライン
+            pts = np.empty((n_hits, 2, 1, 2), dtype=np.int32)
+            pts[:, 0, 0, 0] = robot_px
+            pts[:, 0, 0, 1] = robot_py
+            pts[:, 1, 0, 0] = hit_px_valid
+            pts[:, 1, 0, 1] = hit_py_valid
+            cv2.polylines(self._map, pts, False, 255, 1)
+
+            # occupied 点を一括で書き込む
+            self._map[hit_py_valid, hit_px_valid] = 0
 
         if self._render_count == 1:
             _logger.info(
                 f'First render: robot=({node.x:.2f}, {node.y:.2f}), '
-                f'hits={hit_count}, oob_hits={oob_hits}'
+                f'hits={n_hits}, oob_hits={int((~in_bounds).sum())}'
             )
         elif self._render_count % 10 == 0:
             _logger.info(
                 f'Render #{self._render_count}: '
                 f'robot=({node.x:.2f}, {node.y:.2f}), '
-                f'hits={hit_count}, oob_hits={oob_hits}'
+                f'hits={n_hits}, oob_hits={int((~in_bounds).sum())}'
             )

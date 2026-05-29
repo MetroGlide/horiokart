@@ -232,7 +232,7 @@ class SlamNodeBase(Node, ABC):
         msg.info.height = int(data.shape[0])
         msg.info.origin.position.x = origin_x
         msg.info.origin.position.y = origin_y
-        msg.data = array.array('b', data.flatten())
+        msg.data = array.array('b', data.ravel().tobytes())
         self._map_pub.publish(msg)
         self.get_logger().debug(
             f'Map published: occupied={int((data == 100).sum())}, '
