@@ -51,11 +51,16 @@
 
 ### 実装スコープ
 
-| ファイル                              | 内容                                            |
-| ------------------------------------- | ----------------------------------------------- |
-| `scan_matching/base.py`               | ScanMatcherBase (ABC) — Phase 1 で既に作成済み  |
-| `scan_matching/icp_matcher.py`        | NumPy/SciPy による Point-to-Line ICP            |
-| `pose_graph/scan_matching_builder.py` | オドメトリを初期値として ICP で補正するビルダー |
+| ファイル                              | 内容                                                                   |
+| ------------------------------------- | ---------------------------------------------------------------------- |
+| `scan_matching/base.py`               | ScanMatcherBase (ABC) — Phase 1 で既に作成済み                         |
+| `scan_matching/icp_matcher.py`        | NumPy/SciPy による Point-to-Line ICP                                   |
+| `scan_matching/ndt_matcher.py`        | NDTマッチャ（グリッド分割による澣度分布 + ベイズ最適化）               |
+| `scan_matching/reference_provider/`   | ReferenceProviderBase / ScanToScanProvider / LocalMapProvider          |
+| `pose_graph/scan_matching_builder.py` | オドメトリを初期値として ICP で補正するビルダー                        |
+| `slam_node_base.py`                   | ROS2共通基底クラス（`_declare_params` / `_build_config` / `_on_scan`） |
+| `slam_offline_node.py`                | rosbag2オフラインノード（`BagScanSource` + `BagOdomSource`使用）       |
+| `component_factory.py`                | `build_pose_graph_builder(config)` ファクトリ関数                      |
 
 ### 完了条件
 
@@ -63,8 +68,6 @@
 - [x] ScanMatchingBuilder を slam_node.py に差し替えてマップ品質が向上する
 - [x] OdomOnlyBuilder との差し替えがパラメータ1行で完結する
 - [x] 連続収束失敗時の spiral of doom 対策（streak fallback）が動作する
-
-### Phase 3 への引継ぎ条件
 
 - `PoseGraphBuilderBase.get_edges()` が各実装で正しく返される（`GTSAMOptimizer` の入力として使用する）
 - `GraphOptimizerBase.optimize(nodes, edges)` の新シグネチャが ABC・スタブで有効（Phase 2 末に修正済み）
@@ -85,8 +88,8 @@
 
 ### 完了条件
 
-- [ ] ループを含む経路でグラフ最適化後にマップが閉合する
-- [ ] 最適化後に `rerender_all()` でマップを再描画できる
+- [x] ループを含む経路でグラフ最適化後にマップが閉合する
+- [x] 最適化後に `rerender_all()` でマップを再描画できる
 
 ---
 
@@ -94,12 +97,12 @@
 
 ### 実装スコープ
 
-| ファイル                      | 内容                                           |
-| ----------------------------- | ---------------------------------------------- |
-| `gnss/aligner_base.py`        | GnssAlignerBase (ABC) — Phase 1 で既に作成済み |
-| `gnss/kinematic_aligner.py`   | 運動ベクトルから初期方位を推定する整合実装     |
-| `gnss/constraint_inserter.py` | 変換済みGNSS座標を GTSAM GPSFactor として挿入  |
-| `input/ros2/bag_reader.py`    | rosbag2 から全センサデータを一括展開           |
+| ファイル                      | 内容                                                             |
+| ----------------------------- | ---------------------------------------------------------------- |
+| `gnss/aligner_base.py`        | GnssAlignerBase (ABC) — Phase 1 で既に作成済み                   |
+| `gnss/kinematic_aligner.py`   | 運動ベクトルから初期方位を推定する整合実装                       |
+| `gnss/constraint_inserter.py` | 変換済みGNSS座標を GTSAM GPSFactor として挿入                    |
+| `input/ros2/bag_reader.py`    | `BagGnssSource` の実装（BagScanSource/BagOdomSource は実装済み） |
 
 ### 完了条件
 
@@ -107,6 +110,13 @@
 - [ ] GNSS拘束挿入後のマップが地球座標系（UTM）と整合する
 - [ ] 同一rosbagで Phase 3（GNSS無し）と Phase 4（GNSS有り）のマップを比較できる
 - [ ] 手動での原点設定・回転入力が不要
+
+### Phase 3 → Phase 4 引継ぎ条件
+
+- `GraphOptimizerBase.optimize()` の GNSS絶対位置指定（PriorFactor）対応シグネチャを設計し、ABC・スタブ・`GTSAMOptimizer` を更新すること
+- GNSS絶対位置拘束を表す `GnssPrior`（または同等の）型を `data_types.py` に新設すること
+- `slam_offline_node.py` での GNSSオーケストレーションフロー（Aligner → Inserter → 再最適化）を設計したうえで実装すること
+- `BagGnssSource` での UTM変換責務（`BagGnssSource` 内部 vs 別コンポーネント）を決定すること
 
 ---
 

@@ -14,14 +14,18 @@ applyTo: "mg_slam/scripts/slam_gnss_2d/**"
 
 ---
 
-## 現在フェーズ: Phase 3（ループクロージャ導入）
+## 現在フェーズ: Phase 4（GNSS拘束挿入）
 
-Phase 3 の実装対象:
+Phase 4 の実装対象:
 
-- `optimizer/gtsam_optimizer.py`
-- `pose_graph/loop_closure_builder.py`
+- `gnss/kinematic_aligner.py`
+- `gnss/constraint_inserter.py`
+- `input/ros2/bag_reader.py`（`BagGnssSource` の実装）
+- `slam_offline_node.py` での GNSS オーケストレーションフロー（Aligner → Inserter → 再最適化）
+- `data_types.py` への `GnssPrior` 型追加
+- `optimizer/base.py` および `optimizer/gtsam_optimizer.py` の GNSS拘束対応シグネチャ更新
 
-Phase 1・2 完了済み（Odom SLAM・スキャンマッチング動作確認済み）。
+Phase 1〜3 完了済み（Odom SLAM・スキャンマッチング・ループクロージャ動作確認済み）。
 
 ---
 

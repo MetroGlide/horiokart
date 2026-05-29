@@ -28,7 +28,9 @@ Step 4: 再最適化 → グローバル一貫性のあるマップ
 │  ScanSourceBase ──── ROS2ScanSource  (/scan)                     │
 │  OdomSourceBase ──── ROS2OdomSource  (/odom または /odom/gnss)    │
 │  GnssSourceBase ──── ROS2GnssSource  (/gps/fix)       [Phase 4] │
-│                  └── BagXxxSource    (rosbag2)         [Phase 4] │
+│                  ├── BagScanSource   (rosbag2 Scan)    [実装済み] │
+│                  ├── BagOdomSource   (rosbag2 Odom)    [実装済み] │
+│                  └── BagGnssSource   (rosbag2 GNSS)    [Phase 4] │
 └──────────────────────────────────────────────────────────────────┘
                               │ dataclass (ScanData / OdomData / GnssData)
                               ▼
@@ -106,6 +108,25 @@ class PoseNode:
     y: float
     yaw: float
     scan: Optional[ScanData] = None
+
+@dataclass
+class MatchResult:
+    converged: bool
+    dx: float                   # 相対移動 x [m]
+    dy: float                   # 相対移動 y [m]
+    dyaw: float                 # 相対回転 [rad]
+    score: float                # マッチングスコア（小さいほど良い）
+    information: np.ndarray     # 情報行列 shape (3, 3) — GTSAM BetweenFactor に使用
+
+@dataclass
+class PoseEdge:
+    i: int                      # エッジ始点ノードインデックス
+    j: int                      # エッジ終点ノードインデックス
+    dx: float
+    dy: float
+    dyaw: float
+    information: np.ndarray     # shape (3, 3)
+    is_loop: bool = False       # ループ辺かどうか
 ```
 
 ---
@@ -147,6 +168,12 @@ def add_scan(self, scan: ScanData, odom: OdomData) -> Optional[PoseNode]
     # 移動量が閾値未満 → None（ノードをスキップ）
     # 新ノード追加 → PoseNode を返す
 def get_nodes(self) -> list[PoseNode]
+def get_edges(self) -> list[PoseEdge]
+    # 連続辺・ループ辺を含む全拘束を返す（GTSAMOptimizer の入力として使用）
+@property
+def loop_just_closed(self) -> bool
+    # 直前の add_scan() でループが閉合した場合に True を返す
+    # 読み取り後に自動リセットされる（slam_node_base.py が rerender_all() の契機に使用）
 def reset(self) -> None
 ```
 
@@ -176,6 +203,9 @@ def update(self, node: PoseNode) -> None
 def get_reference_pts(self) -> Optional[np.ndarray]
     # 最後に確定したノードのボディフレームで参照点群 (N, 2) を返す
     # 未準備時は None を返す
+def invalidate_cache(self) -> None
+    # グラフ最適化後にキャッシュを無効化する（デフォルト実装: pass）
+    # LocalMapProvider はワールド座標キャッシュを持つため override が必要
 ```
 
 **差し替えポイント**: ScanToScanProvider（前スキャン1枚）/ LocalMapProvider（直近Nノード蓄積）
@@ -224,24 +254,37 @@ def to_occupancy_array(self) -> tuple[np.ndarray, float, float, float]
 ```
 mg_slam/scripts/slam_gnss_2d/
 ├── __init__.py
-├── data_types.py
-├── slam_node.py                     # ROS2エントリポイント・依存組み合わせ設定
+├── data_types.py                    # ScanData / OdomData / GnssData / PoseNode / MatchResult / PoseEdge
+├── config.py                        # SlamConfig frozen dataclass（全パラメータのデフォルト値）
+├── component_factory.py             # build_pose_graph_builder(config) ファクトリ関数
+├── slam_node.py                     # ROS2オンラインノード（SlamNodeBase を継承、IO組み合わせ設定）
+├── slam_node_base.py                # ROS2共通基底クラス（Node + ABC）。_declare_params / _build_config
+│                                    #   / _on_scan コールバックを実装。オンライン/オフラインで共有
+├── slam_offline_node.py             # rosbag2オフラインノード（SlamNodeBase を継承、BagXxxSource を使用）
 ├── input/
 │   ├── __init__.py
 │   ├── base.py                      # ScanSourceBase / OdomSourceBase / GnssSourceBase
 │   └── ros2/
 │       ├── __init__.py
 │       ├── ros_adapter.py           # ROS2ScanSource / ROS2OdomSource / ROS2GnssSource
-│       └── bag_reader.py            # BagScanSource / BagOdomSource / BagGnssSource [Phase 4]
+│       └── bag_reader.py            # BagScanSource / BagOdomSource（実装済み）
+│                                    #   BagGnssSource（Phase 4 スタブ）
 ├── pose_graph/
 │   ├── __init__.py
 │   ├── base.py                      # PoseGraphBuilderBase
 │   ├── odom_builder.py              # OdomOnlyBuilder [Phase 1]
-│   └── scan_matching_builder.py     # ScanMatchingBuilder [Phase 2]
+│   ├── scan_matching_builder.py     # ScanMatchingBuilder [Phase 2]
+│   └── loop_closure_builder.py      # LoopClosureBuilder [Phase 3]
 ├── scan_matching/
 │   ├── __init__.py
 │   ├── base.py                      # ScanMatcherBase
-│   └── icp_matcher.py               # ICPMatcher [Phase 2]
+│   ├── icp_matcher.py               # ICPMatcher [Phase 2]
+│   ├── ndt_matcher.py               # NDTMatcher [Phase 2]
+│   └── reference_provider/
+│       ├── __init__.py
+│       ├── base.py                  # ReferenceProviderBase
+│       ├── scan_to_scan.py          # ScanToScanProvider [Phase 2]
+│       └── local_map.py             # LocalMapProvider [Phase 2]
 ├── gnss/
 │   ├── __init__.py
 │   ├── aligner_base.py              # GnssAlignerBase
@@ -259,20 +302,25 @@ mg_slam/scripts/slam_gnss_2d/
 
 ---
 
-## slam_node.py の役割
+## slam_node.py / slam_node_base.py の役割
 
-`slam_node.py` は「どの実装を組み合わせるか」を決定する唯一の場所。
-コアロジックはここで生成し、コールバックで繋ぎ合わせる。
+Phase 2 以降でオンライン/オフライン共通のコアロジックが増加したため、
+共通部分を `slam_node_base.py`（`SlamNodeBase(Node, ABC)`）に抽出した。
+
+| ファイル               | 役割                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `slam_node_base.py`    | ROSパラメータ宣言・`SlamConfig` 生成・`_on_scan()` コールバック・マップ/TF配信・統計ログを実装                      |
+| `slam_node.py`         | `SlamNodeBase` を継承し、`_setup_io()` で `ROS2ScanSource` + `ROS2OdomSource` を生成するだけ                        |
+| `slam_offline_node.py` | `SlamNodeBase` を継承し、`_setup_io()` で `BagScanSource` + `BagOdomSource` を生成。ステップタイマーで bag を進める |
+
+`component_factory.py` の `build_pose_graph_builder(config)` が、`config.pose_graph_builder` の文字列値に応じて適切なビルダーを組み立てて返す。これにより `slam_node_base.py` がビルダーの具体型に依存しない。
 
 ```python
-# Phase 1 の組み合わせ
-scan_source  = ROS2ScanSource(node, topic='/scan_top_lidar')
-odom_source  = ROS2OdomSource(node, topic='/odom')
-pose_builder = OdomOnlyBuilder(min_translation=0.3, min_rotation=0.1)
-renderer     = OpenCVRenderer(resolution=0.05, map_size=2000)
-
-# コールバックのみがROSとコアをつなぐ
-scan_source.set_scan_callback(lambda scan: _on_scan(scan, odom_source, pose_builder, renderer))
+# slam_node.py（オンライン）の実装例
+class SlamNode(SlamNodeBase):
+    def _setup_io(self) -> None:
+        self._scan_source = ROS2ScanSource(self, topic=self._config.scan_topic)
+        self._odom_source = ROS2OdomSource(self, topic=self._config.odom_topic)
 ```
 
 ---
