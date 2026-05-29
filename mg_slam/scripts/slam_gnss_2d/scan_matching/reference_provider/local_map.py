@@ -41,6 +41,14 @@ class LocalMapProvider(ReferenceProviderBase):
             self._nodes.append((node, _scan_to_points(node.scan)))
         self._last_node = node
 
+    def invalidate_cache(self) -> None:
+        """グラフ最適化後に呼び、古いノード位置に基づくローカルマップキャッシュを無効化する。
+
+        replace_nodes() でノード位置が更新された後、次フレームのスキャンマッチングで
+        無効なローカルマップが参照されることを防ぐ。
+        """
+        self._nodes.clear()
+
     def get_reference_pts(self) -> Optional[np.ndarray]:
         if not self._nodes or self._last_node is None:
             return None

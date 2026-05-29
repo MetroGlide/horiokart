@@ -120,6 +120,9 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('loop_closure_min_node_gap', 50)
         self.declare_parameter('loop_closure_max_failure_streak', 3)
         self.declare_parameter('optimize_every_n_loops', 1)
+        self.declare_parameter(
+            'loop_closure_matcher_type', 'icp')  # "icp" | "ndt"
+        self.declare_parameter('loop_closure_max_dyaw_deg', 90.0)   # [deg]
 
     def _build_config(self) -> SlamConfig:
         return SlamConfig(
@@ -151,6 +154,10 @@ class SlamNodeBase(Node, ABC):
                 'loop_closure_max_failure_streak').value,
             optimize_every_n_loops=self.get_parameter(
                 'optimize_every_n_loops').value,
+            loop_closure_matcher_type=self.get_parameter(
+                'loop_closure_matcher_type').value,
+            loop_closure_max_dyaw_deg=self.get_parameter(
+                'loop_closure_max_dyaw_deg').value,
         )
 
     def _on_scan(self, scan: ScanData) -> None:

@@ -49,6 +49,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         loop_closure_min_node_gap: int = 50,
         loop_closure_max_failure_streak: int = 3,
         optimize_every_n_loops: int = 1,
+        max_loop_dyaw_deg: float = 90.0,
     ) -> None:
         self._inner = inner
         self._loop_matcher = loop_matcher
@@ -57,6 +58,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         self._min_node_gap = loop_closure_min_node_gap
         self._max_failure_streak = loop_closure_max_failure_streak
         self._optimize_every_n_loops = optimize_every_n_loops
+        self._max_loop_dyaw_rad = math.radians(max_loop_dyaw_deg)
         self._loop_edges: list[PoseEdge] = []
         self._loop_failure_streak: int = 0
         self._loop_just_closed_flag: bool = False
@@ -151,6 +153,14 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
                     f'Loop failure streak limit reached at node {node.index}; resetting streak'
                 )
                 self._loop_failure_streak = 0
+            return False
+
+        # dyaw バリデーション: ICP/NDT の局所解（特に180°回転対称）による false positive を排除する
+        if abs(result.dyaw) > self._max_loop_dyaw_rad:
+            _logger.warning(
+                f'Loop edge dyaw sanity check failed: node {node.index} <- candidate {candidate.index} '
+                f'(dyaw={math.degrees(result.dyaw):.1f}deg, limit={math.degrees(self._max_loop_dyaw_rad):.1f}deg)'
+            )
             return False
 
         self._loop_failure_streak = 0

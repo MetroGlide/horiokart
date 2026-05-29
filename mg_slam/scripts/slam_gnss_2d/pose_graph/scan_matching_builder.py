@@ -184,3 +184,4 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
         ノードの index・timestamp・scan は保持されていること。
         """
         self._nodes = list(nodes)
+        self._provider.invalidate_cache()

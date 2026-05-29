@@ -52,3 +52,8 @@ class SlamConfig:
     loop_closure_min_node_gap: int = 50        # ループ候補の最小ノード間隔
     loop_closure_max_failure_streak: int = 3   # ループ検証連続失敗上限
     optimize_every_n_loops: int = 1            # N本ループ辺追加ごとに最適化
+    # ループ検証専用マッチャー。NDTはセル対称性によるfalse positiveリスクがあるため
+    # 連続マッチング（scan_matcher_type）とは独立して設定できる。
+    loop_closure_matcher_type: str = 'icp'    # "icp" | "ndt"
+    # ループ辺のdyaw絶対値上限 [deg]。Uターンループを許容する値
+    loop_closure_max_dyaw_deg: float = 90.0

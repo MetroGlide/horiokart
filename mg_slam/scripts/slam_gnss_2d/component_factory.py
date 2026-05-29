@@ -40,12 +40,13 @@ def build_pose_graph_builder(config: SlamConfig) -> PoseGraphBuilderBase:
         )
         return LoopClosureBuilder(
             inner=inner,
-            loop_matcher=_build_matcher(config),
+            loop_matcher=_build_loop_matcher(config),
             optimizer=GTSAMOptimizer(),
             loop_closure_search_radius=config.loop_closure_search_radius,
             loop_closure_min_node_gap=config.loop_closure_min_node_gap,
             loop_closure_max_failure_streak=config.loop_closure_max_failure_streak,
             optimize_every_n_loops=config.optimize_every_n_loops,
+            max_loop_dyaw_deg=config.loop_closure_max_dyaw_deg,
         )
     elif config.pose_graph_builder == 'odom_only':
         from .pose_graph.odom_builder import OdomOnlyBuilder
@@ -78,6 +79,34 @@ def _build_matcher(config: SlamConfig) -> ScanMatcherBase:
     else:
         raise ValueError(
             f"Unknown scan_matcher_type: '{config.scan_matcher_type}'. "
+            "Valid options: 'icp', 'ndt'"
+        )
+
+
+def _build_loop_matcher(config: SlamConfig) -> ScanMatcherBase:
+    """ループクロージャ検証専用のスキャンマッチャーを構築する。
+
+    NDT はセル分割の回転対称性により false positive を生じやすいため、
+    ループクロージャには ICP を使用することを推奨する。
+    loop_closure_matcher_type パラメータで設定を上書きできる。
+    """
+    if config.loop_closure_matcher_type == 'icp':
+        from .scan_matching.icp_matcher import ICPMatcher
+        return ICPMatcher(
+            max_iterations=config.icp_max_iterations,
+            tolerance=config.icp_tolerance,
+            max_correspondence_dist=config.icp_max_correspondence_dist,
+        )
+    elif config.loop_closure_matcher_type == 'ndt':
+        from .scan_matching.ndt_matcher import NDTMatcher
+        return NDTMatcher(
+            max_iterations=config.icp_max_iterations,
+            tolerance=config.icp_tolerance,
+            cell_size=config.ndt_cell_size,
+        )
+    else:
+        raise ValueError(
+            f"Unknown loop_closure_matcher_type: '{config.loop_closure_matcher_type}'. "
             "Valid options: 'icp', 'ndt'"
         )
 
