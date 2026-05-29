@@ -6,6 +6,7 @@ IO ソースの構築のみ派生クラスに委譲する。
 """
 from __future__ import annotations
 
+import array
 import math
 import time
 from abc import ABC, abstractmethod
@@ -231,7 +232,7 @@ class SlamNodeBase(Node, ABC):
         msg.info.height = int(data.shape[0])
         msg.info.origin.position.x = origin_x
         msg.info.origin.position.y = origin_y
-        msg.data = data.flatten().tolist()
+        msg.data = array.array('b', data.flatten())
         self._map_pub.publish(msg)
         self.get_logger().debug(
             f'Map published: occupied={int((data == 100).sum())}, '
