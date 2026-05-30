@@ -140,5 +140,6 @@ class ICPMatcher(ScanMatcherBase):
                 break
 
         n_valid = len(p_trans_v)
-        information = H / n_valid if n_valid > 0 else np.zeros((3, 3))
+        information = H / n_valid + 1e-6 * \
+            np.eye(3) if n_valid > 0 else np.zeros((3, 3))
         return MatchResult(dx=tx, dy=ty, dyaw=theta, converged=converged, information=information)

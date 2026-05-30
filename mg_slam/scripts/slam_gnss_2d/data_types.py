@@ -78,3 +78,17 @@ class PoseEdge:
     dy: float
     dyaw: float
     information: np.ndarray  # shape (3, 3)
+
+
+@dataclass
+class GnssPrior:
+    """GNSS絶対位置拘束。GraphOptimizerBase.optimize() の入力として使用する。
+
+    GnssConstraintInserter.build_priors() が生成し、GTSAMOptimizer が
+    PriorFactorPose2（yaw自由度を緩く固定）として投入する。
+    """
+
+    node_index: int
+    x: float             # SLAM座標系でのGNSS x座標 [m]
+    y: float             # SLAM座標系でのGNSS y座標 [m]
+    information: np.ndarray  # shape (2, 2) — xy平面の情報行列

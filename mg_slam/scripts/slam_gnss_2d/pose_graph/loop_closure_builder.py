@@ -10,7 +10,7 @@ from .base import PoseGraphBuilderBase
 from .scan_matching_builder import ScanMatchingBuilder
 from ..data_types import OdomData, PoseEdge, PoseNode, ScanData
 from ..scan_matching.base import ScanMatcherBase
-from ..optimizer.gtsam_optimizer import GTSAMOptimizer
+from ..optimizer.base import GraphOptimizerBase
 
 _logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         self,
         inner: ScanMatchingBuilder,
         loop_matcher: ScanMatcherBase,
-        optimizer: GTSAMOptimizer,
+        optimizer: GraphOptimizerBase,
         loop_closure_search_radius: float = 2.0,
         loop_closure_min_node_gap: int = 50,
         loop_closure_max_failure_streak: int = 3,

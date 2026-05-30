@@ -60,3 +60,12 @@ class SlamConfig:
     # ループ検証時のサブマップ合成半径 [m]。候補ノードからこの範囲内のノードのスキャンを
     # 合成して参照点群とする。0以下にすると候補ノード1枚のみ使用（無効化）。
     loop_closure_submap_radius: float = 5.0
+
+    # GNSS 拘束（use_gnss == True のとき slam_offline_node.py が使用する）
+    use_gnss: bool = False
+    gnss_topic: str = '/gps/fix'
+    # GNSS 位置ノイズ [m]。position_covariance が不定の場合のフォールバック値
+    gnss_noise_xy_m: float = 3.0
+    # KinematicHeadingAligner が有効とみなす最小移動速度 [m/s]。
+    # この速度未満の区間は座標系回転の推定に使わない。
+    kinematic_min_speed_ms: float = 0.5

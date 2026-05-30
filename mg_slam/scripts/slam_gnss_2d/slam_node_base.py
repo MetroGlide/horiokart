@@ -125,6 +125,12 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('loop_closure_max_dyaw_deg', 90.0)   # [deg]
         self.declare_parameter('loop_closure_submap_radius', 5.0)   # [m]
 
+        # GNSS 拘束（use_gnss == True のとき slam_offline_node.py が使用する）
+        self.declare_parameter('use_gnss', False)
+        self.declare_parameter('gnss_topic', '/gps/fix')
+        self.declare_parameter('gnss_noise_xy_m', 3.0)        # [m]
+        self.declare_parameter('kinematic_min_speed_ms', 0.5)  # [m/s]
+
     def _build_config(self) -> SlamConfig:
         return SlamConfig(
             scan_topic=self.get_parameter('scan_topic').value,
@@ -161,6 +167,11 @@ class SlamNodeBase(Node, ABC):
                 'loop_closure_max_dyaw_deg').value,
             loop_closure_submap_radius=self.get_parameter(
                 'loop_closure_submap_radius').value,
+            use_gnss=self.get_parameter('use_gnss').value,
+            gnss_topic=self.get_parameter('gnss_topic').value,
+            gnss_noise_xy_m=self.get_parameter('gnss_noise_xy_m').value,
+            kinematic_min_speed_ms=self.get_parameter(
+                'kinematic_min_speed_ms').value,
         )
 
     def _on_scan(self, scan: ScanData) -> None:

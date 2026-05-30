@@ -183,16 +183,86 @@ class BagOdomSource(OdomSourceBase):
 
 
 class BagGnssSource(GnssSourceBase):
-    """rosbag2 から GnssData を提供するソース。Phase 4 で使用する。"""
+    """rosbag2 から全 GnssData を事前ロードして提供するソース。
 
-    def get_gnss_at(self, timestamp: float) -> Optional[GnssData]:
-        raise NotImplementedError("BagGnssSource は Phase 4 で実装予定です")
+    start() 呼び出し時に NavSatFix メッセージを全件読み込み、
+    pyproj で UTM 平面直角座標に変換して内部バッファに格納する。
+    UTM zone は最初の有効な fix から自動決定する。
+    """
 
-    def get_all_gnss(self) -> list[GnssData]:
-        raise NotImplementedError("BagGnssSource は Phase 4 で実装予定です")
+    def __init__(self, bag_path: str, gnss_topic: str) -> None:
+        self._bag_path = bag_path
+        self._gnss_topic = gnss_topic
+        self._gnss_list: list[GnssData] = []
+        self._timestamps: list[float] = []
 
     def start(self) -> None:
-        raise NotImplementedError("BagGnssSource は Phase 4 で実装予定です")
+        from pyproj import CRS, Transformer
+        from sensor_msgs.msg import NavSatFix
+
+        reader = _open_reader(self._bag_path, [self._gnss_topic])
+        raw_fixes: list = []
+        while reader.has_next():
+            (_, data, _) = reader.read_next()
+            msg = deserialize_message(data, NavSatFix)
+            # STATUS_NO_FIX = -1 を除外する
+            if msg.status.status < 0:
+                continue
+            raw_fixes.append(msg)
+
+        if not raw_fixes:
+            return
+
+        # 最初の fix から UTM zone を自動決定して変換器を構築する
+        first = raw_fixes[0]
+        zone = int((first.longitude + 180.0) / 6.0) + 1
+        south = first.latitude < 0.0
+        crs_utm = CRS.from_dict({'proj': 'utm', 'zone': zone, 'south': south})
+        transformer = Transformer.from_crs(
+            'EPSG:4326', crs_utm, always_xy=True)
+
+        for msg in raw_fixes:
+            stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+            x, y = transformer.transform(msg.longitude, msg.latitude)
+
+            # NavSatFix.position_covariance は ENU 9 要素配列。East/North の 2x2 を取り出す
+            cov = msg.position_covariance
+            cov_2x2 = np.array([[cov[0], cov[1]], [cov[3], cov[4]]])
+
+            self._gnss_list.append(GnssData(
+                timestamp=stamp,
+                x=x,
+                y=y,
+                covariance=cov_2x2,
+            ))
+
+        self._gnss_list.sort(key=lambda g: g.timestamp)
+        self._timestamps = [g.timestamp for g in self._gnss_list]
 
     def stop(self) -> None:
-        raise NotImplementedError("BagGnssSource は Phase 4 で実装予定です")
+        pass
+
+    def get_gnss_at(self, timestamp: float) -> Optional[GnssData]:
+        if not self._gnss_list:
+            return None
+        idx = bisect.bisect_left(self._timestamps, timestamp)
+        if idx == 0:
+            return self._gnss_list[0]
+        if idx >= len(self._gnss_list):
+            return self._gnss_list[-1]
+        prev = self._gnss_list[idx - 1]
+        next_ = self._gnss_list[idx]
+        t_span = next_.timestamp - prev.timestamp
+        if t_span < 1e-9:
+            return prev
+        alpha = (timestamp - prev.timestamp) / t_span
+        return GnssData(
+            timestamp=timestamp,
+            x=prev.x + alpha * (next_.x - prev.x),
+            y=prev.y + alpha * (next_.y - prev.y),
+            covariance=prev.covariance + alpha *
+            (next_.covariance - prev.covariance),
+        )
+
+    def get_all_gnss(self) -> list[GnssData]:
+        return list(self._gnss_list)

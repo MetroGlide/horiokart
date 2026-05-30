@@ -37,3 +37,9 @@ slam_gnss_2d_offline_node:
   ros__parameters:
     offline_step_hz: 0.0 # 可視化速度 [Hz]。0 以下で最大速度
 
+    # GNSS 拘束設定（use_gnss: true のときに有効）
+    use_gnss: true
+    gnss_topic: /gps/fix
+    gnss_noise_xy_m: 3.0 # GNSS 位置ノイズ [m]。position_covariance が不定の場合のフォールバック値
+    kinematic_min_speed_ms: 0.5 # KinematicHeadingAligner が有効とみなす最小移動速度 [m/s]
+

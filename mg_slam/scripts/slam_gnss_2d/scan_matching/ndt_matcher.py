@@ -236,6 +236,6 @@ class NDTMatcher(ScanMatcherBase):
                 converged = True
                 break
 
-        information = H_final / \
-            n_valid_final if n_valid_final > 0 else np.zeros((3, 3))
+        information = H_final / n_valid_final + 1e-6 * \
+            np.eye(3) if n_valid_final > 0 else np.zeros((3, 3))
         return MatchResult(dx=tx, dy=ty, dyaw=theta, converged=converged, information=information)

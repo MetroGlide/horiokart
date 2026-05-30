@@ -3,6 +3,10 @@
 
 rosbag2 をリアルタイム再生せず、add_scan() 完了後に次スキャンを読み込む
 ステップ駆動方式で SLAM を実行する。RViz2 可視化はオンラインと同一トピックを利用する。
+
+bag 読み込み完了後、use_gnss=True の場合は GNSS 2 パス処理を実行する:
+  Step 1: bag 再生でポーズグラフを構築（Phase 1〜3 相当）
+  Step 2: GNSS 拘束を挿入して再最適化し、マップを地球座標系に整合させる
 """
 from __future__ import annotations
 
@@ -14,8 +18,11 @@ from nav_msgs.msg import Odometry
 
 from slam_gnss_2d.config import SlamConfig
 from slam_gnss_2d.data_types import ScanData
+from slam_gnss_2d.gnss.constraint_inserter import GnssConstraintInserter
+from slam_gnss_2d.gnss.kinematic_aligner import KinematicHeadingAligner
 from slam_gnss_2d.input.base import OdomSourceBase, ScanSourceBase
-from slam_gnss_2d.input.ros2.bag_reader import BagOdomSource, BagScanSource
+from slam_gnss_2d.input.ros2.bag_reader import BagGnssSource, BagOdomSource, BagScanSource
+from slam_gnss_2d.optimizer.gtsam_optimizer import GTSAMOptimizer
 from slam_gnss_2d.slam_node_base import SlamNodeBase
 
 
@@ -38,6 +45,20 @@ class SlamOfflineNode(SlamNodeBase):
         scan_source = BagScanSource(bag_path, cfg.scan_topic)
         odom_source = BagOdomSource(bag_path, cfg.odom_topic)
         self._bag_scan_source = scan_source
+        self._use_gnss = cfg.use_gnss
+
+        if cfg.use_gnss:
+            gnss_source = BagGnssSource(bag_path, cfg.gnss_topic)
+            gnss_source.start()
+            self._gnss_source = gnss_source
+            self._gnss_aligner = KinematicHeadingAligner(
+                min_speed_ms=cfg.kinematic_min_speed_ms,
+            )
+            self._gnss_inserter = GnssConstraintInserter(
+                default_noise_xy_m=cfg.gnss_noise_xy_m,
+            )
+            self._gnss_optimizer = GTSAMOptimizer()
+
         return scan_source, odom_source
 
     def _on_scan(self, scan: ScanData) -> None:
@@ -58,7 +79,40 @@ class SlamOfflineNode(SlamNodeBase):
     def _process_step(self) -> None:
         if not self._bag_scan_source.step():
             self._step_timer.cancel()
+            if self._use_gnss:
+                self._run_gnss_phase()
             self.get_logger().info('Bag processing complete')
+
+    def _run_gnss_phase(self) -> None:
+        """GNSS 2 パス処理: Aligner → Inserter → 再最適化 → rerender。"""
+        gnss_list = self._gnss_source.get_all_gnss()
+        if not gnss_list:
+            self.get_logger().warn('GNSS phase skipped: no valid GNSS fixes in bag')
+            return
+
+        nodes = self._pose_graph.get_nodes()
+        edges = self._pose_graph.get_edges()
+        if not nodes:
+            self.get_logger().warn('GNSS phase skipped: pose graph is empty')
+            return
+
+        transform = self._gnss_aligner.estimate_transform(nodes, gnss_list)
+        tx, ty, rot = transform
+        self.get_logger().info(
+            f'GNSS align: tx={tx:.2f}m ty={ty:.2f}m rot={math.degrees(rot):.2f}deg'
+            f' ({len(gnss_list)} GNSS fixes, {len(nodes)} nodes)'
+        )
+
+        priors = self._gnss_inserter.build_priors(nodes, gnss_list, transform)
+        self.get_logger().info(
+            f'GNSS inserting {len(priors)} prior constraints')
+
+        updated = self._gnss_optimizer.optimize(
+            nodes, edges, gnss_priors=priors)
+        self._renderer.rerender_all(updated)
+        self._rebuild_path(updated)
+        self._map_dirty = True
+        self.get_logger().info('GNSS phase complete: map re-rendered with GNSS constraints')
 
 
 def main(args=None):
