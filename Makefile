@@ -16,6 +16,7 @@ _up_flags = $(if $(DETACH),-d,)
 
 .PHONY: slam navigation rosbag-replay gazebo-simulation develop \
         scenario-test scenario-test-full \
+        slam-gnss-2d offline-slam-gnss-2d \
         shell shell-develop logs ps restart \
         build build-all build-no-cache \
         _collect-deps \
@@ -33,6 +34,12 @@ navigation:
 
 rosbag-replay:
 	$(COMPOSE) run --rm -it rosbag-replay
+
+slam-gnss-2d:
+	$(COMPOSE) up $(_up_flags) slam-gnss-2d
+
+offline-slam-gnss-2d:
+	$(COMPOSE) up $(_up_flags) offline-slam-gnss-2d
 
 gazebo-simulation:
 	$(COMPOSE) up $(_up_flags) gazebo-simulation

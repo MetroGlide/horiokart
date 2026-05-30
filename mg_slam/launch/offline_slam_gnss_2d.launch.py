@@ -21,7 +21,8 @@ def generate_launch_description():
 
     bag_path_arg = launch_argument_creator.create(
         'bag_path', default=EnvironmentVariable('ROSBAG_FILE'))
-    launch_rviz_arg = launch_argument_creator.create('rviz', default='false')
+    launch_rviz_arg = launch_argument_creator.create(
+        'rviz', default=EnvironmentVariable('USE_RVIZ'))
     rviz_param_arg = launch_argument_creator.create(
         'rviz_param', default='slam_gnss_2d.rviz')
     params_file_arg = launch_argument_creator.create(

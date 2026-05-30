@@ -82,6 +82,34 @@ services:
         ros2 launch mg_bringup bringup_slam_toolbox.launch.py
       "
 
+  slam-gnss-2d:
+    <<: *runtime-base
+    environment:
+      - DISPLAY=${DISPLAY}
+      - PYTHONUNBUFFERED=1
+      - SIMULATION=${SIMULATION:-false}
+      - USE_RVIZ=${USE_RVIZ:-false}
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        ros2 launch mg_slam bringup_slam_gnss_2d.launch.py
+      "
+
+  offline-slam-gnss-2d:
+    <<: *runtime-base
+    environment:
+      - DISPLAY=${DISPLAY}
+      - PYTHONUNBUFFERED=1
+      - ROSBAG_FILE=${ROSBAG_FILE}
+      - USE_RVIZ=${USE_RVIZ:-false}
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        ros2 launch mg_slam offline_slam_gnss_2d.launch.py
+      "
+
   navigation:
     <<: *runtime-base
     environment:
@@ -163,6 +191,15 @@ services:
         source /opt/ros/humble/setup.bash &&
         source /root/ros2_ws/install/setup.bash &&
         rviz2 --display-config /app/mg_slam/rviz/rviz.rviz
+      "
+
+  rviz2-slam-gnss-2d:
+    <<: *develop-base
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        rviz2 --display-config /app/mg_slam/rviz/slam_gnss_2d.rviz
       "
 
   rviz2-navigation:

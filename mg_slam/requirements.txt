@@ -1,1 +1,5 @@
 gtsam
+numpy
+scipy
+opencv-python
+pyproj
