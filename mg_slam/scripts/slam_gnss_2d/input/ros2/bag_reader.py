@@ -195,6 +195,8 @@ class BagGnssSource(GnssSourceBase):
         self._gnss_topic = gnss_topic
         self._gnss_list: list[GnssData] = []
         self._timestamps: list[float] = []
+        self._raw_list: list[tuple] = []
+        self._raw_timestamps: list[float] = []
 
     def start(self) -> None:
         from pyproj import CRS, Transformer
@@ -240,9 +242,19 @@ class BagGnssSource(GnssSourceBase):
                 y=y,
                 covariance=cov_2x2,
             ))
+            self._raw_list.append((
+                stamp,
+                msg.latitude,
+                msg.longitude,
+                int(msg.status.status),
+                list(msg.position_covariance),
+                int(msg.position_covariance_type),
+            ))
 
         self._gnss_list.sort(key=lambda g: g.timestamp)
         self._timestamps = [g.timestamp for g in self._gnss_list]
+        self._raw_list.sort(key=lambda r: r[0])
+        self._raw_timestamps = [r[0] for r in self._raw_list]
 
     def stop(self) -> None:
         pass
@@ -271,3 +283,23 @@ class BagGnssSource(GnssSourceBase):
 
     def get_all_gnss(self) -> list[GnssData]:
         return list(self._gnss_list)
+
+    def get_raw_fix_at(self, timestamp: float) -> Optional[tuple]:
+        """指定タイムスタンプに最も近い生 fix を返す。
+
+        Returns:
+            (timestamp, latitude, longitude, status, position_covariance,
+             position_covariance_type) のタプル、またはバッファが空なら None。
+        """
+        if not self._raw_list:
+            return None
+        idx = bisect.bisect_left(self._raw_timestamps, timestamp)
+        if idx == 0:
+            return self._raw_list[0]
+        if idx >= len(self._raw_list):
+            return self._raw_list[-1]
+        prev = self._raw_list[idx - 1]
+        next_ = self._raw_list[idx]
+        if abs(timestamp - prev[0]) <= abs(timestamp - next_[0]):
+            return prev
+        return next_

@@ -47,8 +47,14 @@ function buildMapTexture(grid: OccupancyGrid): THREE.CanvasTexture {
   return tex;
 }
 
-export default function MapLayer({ client }: { client: FoxgloveClientHandle }) {
-  const grid = useOccupancyGrid(client);
+export default function MapLayer({
+  client,
+  topic,
+}: {
+  client: FoxgloveClientHandle;
+  topic?: string;
+}) {
+  const grid = useOccupancyGrid(client, topic);
   const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null);
 
   useEffect(() => {

@@ -11,10 +11,12 @@ import math
 import time
 from abc import ABC, abstractmethod
 
-from geometry_msgs.msg import PoseStamped, TransformStamped
+from geometry_msgs.msg import Point as RosPoint, PoseStamped, TransformStamped
 from nav_msgs.msg import OccupancyGrid, Path
 from rclpy.node import Node
+from std_msgs.msg import ColorRGBA
 from tf2_ros import TransformBroadcaster
+from visualization_msgs.msg import Marker, MarkerArray
 
 from slam_gnss_2d.component_factory import build_pose_graph_builder
 from slam_gnss_2d.config import SlamConfig
@@ -40,6 +42,10 @@ class SlamNodeBase(Node, ABC):
         self._map_pub = self.create_publisher(
             OccupancyGrid, 'slam_gnss_2d/map', 1)
         self._path_pub = self.create_publisher(Path, 'slam_gnss_2d/path', 1)
+        self._pg_marker_pub = self.create_publisher(
+            MarkerArray, 'slam_gnss_2d/pose_graph', 1)
+        self._path_before_pub = self.create_publisher(
+            Path, 'slam_gnss_2d/path_before_optimize', 1)
         self._tf_broadcaster = TransformBroadcaster(self)
 
         self._path_msg = Path()
@@ -203,7 +209,9 @@ class SlamNodeBase(Node, ABC):
                 f'yaw={math.degrees(node.yaw):.1f}deg'
             )
 
-        if self._pose_graph.loop_just_closed:
+        loop_closed = self._pose_graph.loop_just_closed
+        if loop_closed:
+            self._path_before_pub.publish(self._path_msg)
             nodes = self._pose_graph.get_nodes()
             self._renderer.rerender_all(nodes)
             self._rebuild_path(nodes)
@@ -214,6 +222,7 @@ class SlamNodeBase(Node, ABC):
             if not self._renderer.add_node(node):
                 self._renderer.rerender_all(self._pose_graph.get_nodes())
             self._publish_path(node)
+        self._publish_pose_graph_markers()
         self._map_dirty = True
 
     def _publish_map_timer(self) -> None:
@@ -317,6 +326,83 @@ class SlamNodeBase(Node, ABC):
             pose.pose.orientation.z = math.sin(n.yaw / 2.0)
             self._path_msg.poses.append(pose)
         self._path_pub.publish(self._path_msg)
+
+    def _publish_pose_graph_markers(self) -> None:
+        """ポーズグラフノード・エッジを MarkerArray として配信する。"""
+        nodes = self._pose_graph.get_nodes()
+        if not nodes:
+            return
+        all_edges = self._pose_graph.get_edges()
+        loop_edge_set: set[tuple[int, int]] = set()
+        if hasattr(self._pose_graph, 'get_loop_edges'):
+            loop_edge_set = {
+                (e.from_index, e.to_index)
+                for e in self._pose_graph.get_loop_edges()
+            }
+        node_by_idx = {n.index: n for n in nodes}
+        now = self.get_clock().now().to_msg()
+        array = MarkerArray()
+
+        node_m = Marker()
+        node_m.header.stamp = now
+        node_m.header.frame_id = 'map'
+        node_m.ns = 'nodes'
+        node_m.id = 0
+        node_m.type = Marker.SPHERE_LIST
+        node_m.action = Marker.ADD
+        node_m.scale.x = node_m.scale.y = node_m.scale.z = 0.2
+        node_m.color.r = node_m.color.g = node_m.color.b = node_m.color.a = 1.0
+        latest_idx = nodes[-1].index
+        for n in nodes:
+            pt = RosPoint()
+            pt.x, pt.y, pt.z = n.x, n.y, 0.0
+            node_m.points.append(pt)
+            c = ColorRGBA()
+            if n.index == latest_idx:
+                c.r, c.g, c.b, c.a = 0.0, 1.0, 1.0, 1.0
+            else:
+                c.r, c.g, c.b, c.a = 1.0, 1.0, 1.0, 0.8
+            node_m.colors.append(c)
+        array.markers.append(node_m)
+
+        seq_m = Marker()
+        seq_m.header.stamp = now
+        seq_m.header.frame_id = 'map'
+        seq_m.ns = 'seq_edges'
+        seq_m.id = 1
+        seq_m.type = Marker.LINE_LIST
+        seq_m.action = Marker.ADD
+        seq_m.scale.x = 0.05
+        seq_m.color.r, seq_m.color.g = 0.2, 0.5
+        seq_m.color.b, seq_m.color.a = 1.0, 0.9
+
+        loop_m = Marker()
+        loop_m.header.stamp = now
+        loop_m.header.frame_id = 'map'
+        loop_m.ns = 'loop_edges'
+        loop_m.id = 2
+        loop_m.type = Marker.LINE_LIST
+        loop_m.action = Marker.ADD
+        loop_m.scale.x = 0.08
+        loop_m.color.r, loop_m.color.g = 0.0, 1.0
+        loop_m.color.b, loop_m.color.a = 0.4, 1.0
+
+        for edge in all_edges:
+            p0 = node_by_idx.get(edge.from_index)
+            p1 = node_by_idx.get(edge.to_index)
+            if p0 is None or p1 is None:
+                continue
+            is_loop = (edge.from_index, edge.to_index) in loop_edge_set
+            target = loop_m if is_loop else seq_m
+            pt_a = RosPoint()
+            pt_a.x, pt_a.y, pt_a.z = p0.x, p0.y, 0.0
+            pt_b = RosPoint()
+            pt_b.x, pt_b.y, pt_b.z = p1.x, p1.y, 0.0
+            target.points.append(pt_a)
+            target.points.append(pt_b)
+        array.markers.append(seq_m)
+        array.markers.append(loop_m)
+        self._pg_marker_pub.publish(array)
 
     def destroy_node(self) -> None:
         self._scan_source.stop()

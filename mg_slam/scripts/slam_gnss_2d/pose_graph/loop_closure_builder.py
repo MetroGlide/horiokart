@@ -247,6 +247,9 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         self.loop_success_count = 0
         self._all_nodes_cache.clear()
 
+    def get_loop_edges(self) -> list[PoseEdge]:
+        return list(self._loop_edges)
+
     @property
     def loop_just_closed(self) -> bool:
         result = self._loop_just_closed_flag
