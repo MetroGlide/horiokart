@@ -43,8 +43,7 @@ mg_slam/
 ├── scripts/
 │   └── slam_gnss_2d/                    # slam_gnss_2d エンジン本体
 └── doc/
-    ├── slam_gnss_2d_design.md           # アーキテクチャ設計
-    ├── slam_gnss_2d_phases.md           # フェーズ定義
+    ├── slam_gnss_2d_design.md           # アーキテクチャ設計・設計決定事項
     └── slam_gnss_2d_gnss_algorithm.md   # GNSSアルゴリズム詳細
 ```
 
@@ -497,8 +496,7 @@ scripts/slam_gnss_2d/
 
 ## 詳細ドキュメント
 
-| ドキュメント                                                             | 内容                                      |
-| ------------------------------------------------------------------------ | ----------------------------------------- |
-| [doc/slam_gnss_2d_design.md](doc/slam_gnss_2d_design.md)                 | 全体アーキテクチャ・ABC定義・データフロー |
-| [doc/slam_gnss_2d_phases.md](doc/slam_gnss_2d_phases.md)                 | 開発フェーズ定義・完了条件・引継ぎ条件    |
-| [doc/slam_gnss_2d_gnss_algorithm.md](doc/slam_gnss_2d_gnss_algorithm.md) | GNSS拘束の各ステップ詳細アルゴリズム      |
+| ドキュメント                                                             | 内容                                                    |
+| ------------------------------------------------------------------------ | ------------------------------------------------------- |
+| [doc/slam_gnss_2d_design.md](doc/slam_gnss_2d_design.md)                 | 全体アーキテクチャ・ABC定義・データフロー・設計決定事項 |
+| [doc/slam_gnss_2d_gnss_algorithm.md](doc/slam_gnss_2d_gnss_algorithm.md) | GNSS拘束の各ステップ詳細アルゴリズム                    |

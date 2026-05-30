@@ -120,13 +120,19 @@ class MatchResult:
 
 @dataclass
 class PoseEdge:
-    i: int                      # エッジ始点ノードインデックス
-    j: int                      # エッジ終点ノードインデックス
+    from_index: int             # エッジ始点ノードインデックス
+    to_index: int               # エッジ終点ノードインデックス
     dx: float
     dy: float
     dyaw: float
-    information: np.ndarray     # shape (3, 3)
-    is_loop: bool = False       # ループ辺かどうか
+    information: np.ndarray     # 情報行列 shape (3, 3) — GTSAM BetweenFactor に使用
+
+@dataclass
+class GnssPrior:
+    node_index: int             # 対応する PoseNode のインデックス
+    x: float                    # SLAM 座標系での GNSS x 座標 [m]
+    y: float                    # SLAM 座標系での GNSS y 座標 [m]
+    information: np.ndarray     # 情報行列 shape (2, 2) — GTSAM PriorFactorPose2 に使用
 ```
 
 ---
@@ -227,9 +233,11 @@ def optimize(
     self,
     nodes: list[PoseNode],
     edges: list[PoseEdge],
+    gnss_priors: Sequence[GnssPrior] = (),
 ) -> list[PoseNode]
     # ノードの順序・インデックスを保持して更新後のリストを返す
     # edges: 連続辺・ループ辺を含む全拘束（GTSAM BetweenFactor として使用する）
+    # gnss_priors: GNSS絶対位置拘束（GTSAM PriorFactorPose2 として使用する。省略可能）
 ```
 
 ### MapRendererBase
@@ -267,8 +275,7 @@ mg_slam/scripts/slam_gnss_2d/
 │   └── ros2/
 │       ├── __init__.py
 │       ├── ros_adapter.py           # ROS2ScanSource / ROS2OdomSource / ROS2GnssSource
-│       └── bag_reader.py            # BagScanSource / BagOdomSource（実装済み）
-│                                    #   BagGnssSource（Phase 4 スタブ）
+│   └── bag_reader.py            # BagScanSource / BagOdomSource / BagGnssSource
 ├── pose_graph/
 │   ├── __init__.py
 │   ├── base.py                      # PoseGraphBuilderBase
@@ -288,8 +295,8 @@ mg_slam/scripts/slam_gnss_2d/
 ├── gnss/
 │   ├── __init__.py
 │   ├── aligner_base.py              # GnssAlignerBase
-│   ├── kinematic_aligner.py         # KinematicHeadingAligner [Phase 4]
-│   └── constraint_inserter.py       # GnssConstraintInserter [Phase 4]
+│   ├── kinematic_aligner.py         # KinematicHeadingAligner
+│   └── constraint_inserter.py       # GnssConstraintInserter
 ├── optimizer/
 │   ├── __init__.py
 │   ├── base.py                      # GraphOptimizerBase
@@ -297,7 +304,59 @@ mg_slam/scripts/slam_gnss_2d/
 └── map_manager/
     ├── __init__.py
     ├── base.py                      # MapRendererBase
-    └── opencv_renderer.py           # OpenCVRenderer [Phase 1]
+    └── opencv_renderer.py           # OpenCVRenderer
+```
+
+---
+
+## 設計上の決定事項
+
+開発フェーズ間で確定した主要な設計決定と背景をまとめる。
+
+### ScanData.angle_min の不変条件
+
+`ScanData.angle_min` は `base_link` フレーム基準。
+`ROS2ScanSource` がアダプター層として保証する不変条件であり、
+コアロジック（`pose_graph/` / `scan_matching/`）はこれを将来にわたって前提としてよい。
+
+### LiDAR 位置オフセット
+
+LiDAR の取付位置オフセット（0.23 m）は意図的に未補正。
+レイキャスティングの原点はロボット中心としている。
+
+### LoopClosureBuilder と ScanMatchingBuilder の共通ロジック共有方針
+
+ICP マッチング・streak fallback の共通ロジックは**コンポジション**で共有する（継承ではない）。
+`LoopClosureBuilder` は内部に `ScanMatcherBase` インスタンスを持つ設計。
+
+### optimize() の呼び出し主体
+
+`GTSAMOptimizer.optimize()` を呼び出す責務は `LoopClosureBuilder` が持つ。
+`slam_node_base.py` 側はループが閉合したことを `loop_just_closed` フラグで検知して
+`rerender_all()` のみを行う。
+
+### PoseGraphBuilderBase.get_edges() の責務
+
+`get_edges()` は連続辺・ループ辺を含む全拘束を返す。
+`GTSAMOptimizer` はこれを `BetweenFactorPose2` ファクターとして使用する。
+
+### BagGnssSource での UTM 変換責務
+
+lat/lon → UTM 変換は `BagGnssSource.start()` 内部で行う。
+`pyproj.Transformer` を使い、最初の fix から UTM zone を自動検出する。
+コアロジック（`gnss/` 以下）は変換済みのデカルト座標のみを受け取る。
+
+### GNSS 2パス処理フロー
+
+bag 全体の読み込みが完了した後に `slam_offline_node.py` が一括実行する:
+
+1. `KinematicHeadingAligner.estimate_transform()` → (tx, ty, rotation_rad)
+2. `GnssConstraintInserter.build_priors()` → list[GnssPrior]
+3. `GTSAMOptimizer.optimize(gnss_priors=priors)` → 再最適化済み list[PoseNode]
+4. `renderer.rerender_all()` → マップ再描画
+
+オンライン走行中はローカル SLAM として動作し、収録した rosbag をオフライン処理で
+GNSS 拘束付き再最適化する運用を想定している。
 ```
 
 ---
