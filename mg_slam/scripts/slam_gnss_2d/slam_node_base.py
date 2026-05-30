@@ -130,6 +130,7 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('gnss_topic', '/gps/fix')
         self.declare_parameter('gnss_noise_xy_m', 3.0)        # [m]
         self.declare_parameter('kinematic_min_speed_ms', 0.5)  # [m/s]
+        self.declare_parameter('gnss_max_time_delta_s', 5.0)   # [s]
 
     def _build_config(self) -> SlamConfig:
         return SlamConfig(
@@ -172,6 +173,8 @@ class SlamNodeBase(Node, ABC):
             gnss_noise_xy_m=self.get_parameter('gnss_noise_xy_m').value,
             kinematic_min_speed_ms=self.get_parameter(
                 'kinematic_min_speed_ms').value,
+            gnss_max_time_delta_s=self.get_parameter(
+                'gnss_max_time_delta_s').value,
         )
 
     def _on_scan(self, scan: ScanData) -> None:

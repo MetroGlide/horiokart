@@ -69,3 +69,6 @@ class SlamConfig:
     # KinematicHeadingAligner が有効とみなす最小移動速度 [m/s]。
     # この速度未満の区間は座標系回転の推定に使わない。
     kinematic_min_speed_ms: float = 0.5
+    # GNSS 測位とポーズノードのタイムスタンプ差の上限 [s]。
+    # この時間差を超えた GNSS 測位は拘束として使用しない。
+    gnss_max_time_delta_s: float = 5.0

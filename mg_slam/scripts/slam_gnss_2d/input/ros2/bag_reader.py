@@ -226,8 +226,13 @@ class BagGnssSource(GnssSourceBase):
             x, y = transformer.transform(msg.longitude, msg.latitude)
 
             # NavSatFix.position_covariance は ENU 9 要素配列。East/North の 2x2 を取り出す
+            # COVARIANCE_TYPE_UNKNOWN (0) の場合は共分散が信頼できないためゼロ行列にする
+            # constraint_inserter の det チェックで default_info にフォールバックさせる
             cov = msg.position_covariance
-            cov_2x2 = np.array([[cov[0], cov[1]], [cov[3], cov[4]]])
+            if msg.position_covariance_type == 0:
+                cov_2x2 = np.zeros((2, 2))
+            else:
+                cov_2x2 = np.array([[cov[0], cov[1]], [cov[3], cov[4]]])
 
             self._gnss_list.append(GnssData(
                 timestamp=stamp,

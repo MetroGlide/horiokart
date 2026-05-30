@@ -33,13 +33,14 @@
     loop_closure_max_dyaw_deg: 145.0 # ループ辺のdyaw絶対値上限 [deg]. Uターンループ（最大~142°）を許容しつつ180°対称誤検出（~151°）を拒否
     loop_closure_submap_radius: 5.0 # ループ検証時の候補サブマップ合成半径 [m]
 
-slam_gnss_2d_offline_node:
-  ros__parameters:
-    offline_step_hz: 0.0 # 可視化速度 [Hz]。0 以下で最大速度
-
-    # GNSS 拘束設定（use_gnss: true のときに有効）
+    # GNSS 拘束設定（use_gnss: true のとき slam_offline_node.py が使用する）
     use_gnss: true
     gnss_topic: /gps/fix
     gnss_noise_xy_m: 3.0 # GNSS 位置ノイズ [m]。position_covariance が不定の場合のフォールバック値
     kinematic_min_speed_ms: 0.5 # KinematicHeadingAligner が有効とみなす最小移動速度 [m/s]
+    gnss_max_time_delta_s: 5.0 # GNSS 測位とノードのタイムスタンプ差上限 [s]。超えた測位は拘束として使用しない
+
+slam_gnss_2d_offline_node:
+  ros__parameters:
+    offline_step_hz: 0.0 # 可視化速度 [Hz]。0 以下で最大速度
 

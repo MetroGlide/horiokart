@@ -37,7 +37,9 @@ class GTSAMOptimizer(GraphOptimizerBase):
         edges: list[PoseEdge],
         gnss_priors: Sequence[GnssPrior] = (),
     ) -> list[PoseNode]:
-        if len(nodes) < 2 or not edges:
+        if len(nodes) < 2:
+            return list(nodes)
+        if not edges and not gnss_priors:
             return list(nodes)
 
         graph = NonlinearFactorGraph()
@@ -67,11 +69,17 @@ class GTSAMOptimizer(GraphOptimizerBase):
         # GNSS絶対位置拘束を PriorFactorPose2 として投入する
         # yaw 分散を大きく設定し、x/y のみをグローバル座標で拘束する
         for gnss_prior in gnss_priors:
+            try:
+                node_initial = initial.atPose2(gnss_prior.node_index)
+            except (KeyError, RuntimeError) as e:
+                _logger.warning(
+                    f'GNSS prior skipped: node_index={gnss_prior.node_index} not in graph: {e}'
+                )
+                continue
             info_3x3 = np.zeros((3, 3))
             info_3x3[:2, :2] = gnss_prior.information
             info_3x3[2, 2] = 1.0 / _GNSS_YAW_VARIANCE
             gnss_noise = noiseModel.Gaussian.Information(info_3x3)
-            node_initial = initial.atPose2(gnss_prior.node_index)
             graph.add(PriorFactorPose2(
                 gnss_prior.node_index,
                 Pose2(gnss_prior.x, gnss_prior.y, node_initial.theta()),

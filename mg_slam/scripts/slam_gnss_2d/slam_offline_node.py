@@ -56,6 +56,7 @@ class SlamOfflineNode(SlamNodeBase):
             )
             self._gnss_inserter = GnssConstraintInserter(
                 default_noise_xy_m=cfg.gnss_noise_xy_m,
+                max_time_delta_s=cfg.gnss_max_time_delta_s,
             )
             self._gnss_optimizer = GTSAMOptimizer()
 

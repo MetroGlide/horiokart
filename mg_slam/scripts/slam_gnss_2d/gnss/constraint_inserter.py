@@ -13,16 +13,22 @@ def _nearest_node(
     nodes: list[PoseNode],
     timestamps: list[float],
     query_ts: float,
+    max_time_delta_s: float = float('inf'),
 ) -> Optional[PoseNode]:
     if not nodes:
         return None
     idx = bisect.bisect_left(timestamps, query_ts)
     if idx == 0:
-        return nodes[0]
-    if idx >= len(nodes):
-        return nodes[-1]
-    prev, next_ = nodes[idx - 1], nodes[idx]
-    return prev if abs(prev.timestamp - query_ts) <= abs(next_.timestamp - query_ts) else next_
+        nearest = nodes[0]
+    elif idx >= len(nodes):
+        nearest = nodes[-1]
+    else:
+        prev, next_ = nodes[idx - 1], nodes[idx]
+        nearest = prev if abs(
+            prev.timestamp - query_ts) <= abs(next_.timestamp - query_ts) else next_
+    if abs(nearest.timestamp - query_ts) > max_time_delta_s:
+        return None
+    return nearest
 
 
 class GnssConstraintInserter:
@@ -33,8 +39,13 @@ class GnssConstraintInserter:
     GTSAM への依存は持たない。optimizer 層が GnssPrior を PriorFactorPose2 に変換する。
     """
 
-    def __init__(self, default_noise_xy_m: float = 3.0) -> None:
+    def __init__(
+        self,
+        default_noise_xy_m: float = 3.0,
+        max_time_delta_s: float = 5.0,
+    ) -> None:
         self._default_noise_xy_m = default_noise_xy_m
+        self._max_time_delta_s = max_time_delta_s
 
     def build_priors(
         self,
@@ -72,10 +83,16 @@ class GnssConstraintInserter:
             cov_slam = R @ gnss.covariance @ R.T
             det = cov_slam[0, 0] * cov_slam[1, 1] - \
                 cov_slam[0, 1] * cov_slam[1, 0]
-            information = default_info if det < 1e-9 else np.linalg.inv(
-                cov_slam)
+            if det < 1e-9:
+                information = default_info
+            else:
+                try:
+                    information = np.linalg.inv(cov_slam)
+                except np.linalg.LinAlgError:
+                    information = default_info
 
-            node = _nearest_node(nodes, node_timestamps, gnss.timestamp)
+            node = _nearest_node(
+                nodes, node_timestamps, gnss.timestamp, self._max_time_delta_s)
             if node is None:
                 continue
 

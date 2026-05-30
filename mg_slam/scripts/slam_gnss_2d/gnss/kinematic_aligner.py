@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import bisect
+import logging
 import math
 from typing import Optional
 
 from .aligner_base import GnssAlignerBase
 from ..data_types import GnssData, PoseNode
+
+_logger = logging.getLogger(__name__)
+
+_MIN_RELIABLE_SAMPLES = 5
 
 
 def _nearest_node(
@@ -59,6 +64,7 @@ class KinematicHeadingAligner(GnssAlignerBase):
         # 連続する GNSS ペアから回転サンプルを収集する
         sin_sum = 0.0
         cos_sum = 0.0
+        sample_count = 0
         for i in range(len(gnss_list) - 1):
             g0, g1 = gnss_list[i], gnss_list[i + 1]
             dt = g1.timestamp - g0.timestamp
@@ -86,9 +92,21 @@ class KinematicHeadingAligner(GnssAlignerBase):
             rot = heading_slam - heading_gnss
             sin_sum += math.sin(rot)
             cos_sum += math.cos(rot)
+            sample_count += 1
 
         if sin_sum == 0.0 and cos_sum == 0.0:
+            _logger.warning(
+                'KinematicHeadingAligner: no valid samples for rotation estimation '
+                f'(min_speed_ms={self._min_speed_ms}). Returning identity transform.'
+            )
             return 0.0, 0.0, 0.0
+
+        if sample_count < _MIN_RELIABLE_SAMPLES:
+            _logger.warning(
+                f'KinematicHeadingAligner: only {sample_count} valid samples '
+                f'(< {_MIN_RELIABLE_SAMPLES}) for rotation estimation. '
+                'Result may be noisy.'
+            )
 
         rotation_rad = math.atan2(sin_sum, cos_sum)
         cos_r = math.cos(rotation_rad)
