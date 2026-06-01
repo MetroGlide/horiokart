@@ -66,6 +66,10 @@ class MatchResult:
     converged: bool
     # shape (3, 3) — 拘束の情報行列。Phase 3 の GTSAMOptimizer が使用。
     information: np.ndarray
+    # マッチング品質スコア（小さいほど良い）。
+    # ICPでは有効対応点の平均点対線残差 [m]、NDTでは平均負対数尤度。
+    # 0.0 はスコア未計算または未収束を示す。
+    score: float = 0.0
 
 
 @dataclass

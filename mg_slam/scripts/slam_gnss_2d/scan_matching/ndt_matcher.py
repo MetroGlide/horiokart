@@ -144,6 +144,10 @@ class NDTMatcher(ScanMatcherBase):
         n_valid_final = 0
         converged = False
 
+        # セルキーのエンコードはループ内で毎回同じ値になるのでループ前に計算する
+        encoded_cells = (cell_keys_sorted[:, 0].astype(np.int64) * (2 ** 32)
+                         + cell_keys_sorted[:, 1])
+
         for _ in range(self._max_iterations):
             c, s = math.cos(theta), math.sin(theta)
             R = np.array([[c, -s], [s, c]])
@@ -157,8 +161,6 @@ class NDTMatcher(ScanMatcherBase):
             # 各点が cell_keys_sorted の何行目に対応するかを求める
             encoded_query = query_keys[:, 0].astype(
                 np.int64) * (2 ** 32) + query_keys[:, 1]
-            encoded_cells = cell_keys_sorted[:, 0].astype(
-                np.int64) * (2 ** 32) + cell_keys_sorted[:, 1]
             hit_pos = np.searchsorted(encoded_cells, encoded_query)
             in_range = hit_pos < len(encoded_cells)
             exact_match = np.zeros(len(p_trans), dtype=bool)
@@ -238,4 +240,34 @@ class NDTMatcher(ScanMatcherBase):
 
         information = H_final / n_valid_final + 1e-6 * \
             np.eye(3) if n_valid_final > 0 else np.zeros((3, 3))
-        return MatchResult(dx=tx, dy=ty, dyaw=theta, converged=converged, information=information)
+
+        # 収束後の最終変換 (tx, ty, theta) でスコアを再計算する。
+        # ループ内の exponents は収束直前イテレーションのため、
+        # GNSS 最適化済みの高精度初期値では exponent ≈ 0 になる問題を回避する。
+        if converged:
+            c_f, s_f = math.cos(theta), math.sin(theta)
+            p_final = (np.array([[c_f, -s_f], [s_f, c_f]]) @ dst_pts.T).T + np.array([tx, ty])
+            query_keys_f = np.floor(p_final * inv_cell).astype(np.int32)
+            encoded_query_f = (query_keys_f[:, 0].astype(np.int64) * (2 ** 32)
+                               + query_keys_f[:, 1])
+            hit_pos_f = np.searchsorted(encoded_cells, encoded_query_f)
+            in_range_f = hit_pos_f < len(encoded_cells)
+            exact_match_f = np.zeros(len(p_final), dtype=bool)
+            exact_match_f[in_range_f] = (
+                encoded_cells[hit_pos_f[in_range_f]] == encoded_query_f[in_range_f])
+            pt_idx_f2 = np.where(exact_match_f)[0]
+            if len(pt_idx_f2) >= _N_MIN_CORRESPONDENCES:
+                cell_idx_f2 = hit_pos_f[pt_idx_f2]
+                d_f2 = p_final[pt_idx_f2] - means_sorted[cell_idx_f2]
+                si_f2 = sigma_invs_sorted[cell_idx_f2]
+                exp_f2 = -0.5 * np.einsum('ni,nij,nj->n', d_f2, si_f2, d_f2)
+                mask_f2 = exp_f2 >= _EXPONENT_CUTOFF
+                if mask_f2.sum() >= _N_MIN_CORRESPONDENCES:
+                    score = float(np.mean(-exp_f2[mask_f2]))
+                else:
+                    score = 0.0
+            else:
+                score = 0.0
+        else:
+            score = 0.0
+        return MatchResult(dx=tx, dy=ty, dyaw=theta, converged=converged, information=information, score=score)

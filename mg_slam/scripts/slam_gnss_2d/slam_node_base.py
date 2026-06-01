@@ -129,14 +129,24 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter(
             'loop_closure_matcher_type', 'icp')  # "icp" | "ndt"
         self.declare_parameter('loop_closure_max_dyaw_deg', 90.0)   # [deg]
+        # パス交差 false positive 排除: |dyaw| が [crossing_reject, 180-crossing_reject] 帯域なら拒否
+        self.declare_parameter('loop_closure_crossing_reject_deg', 0.0)  # [deg], 0.0で無効
         self.declare_parameter('loop_closure_submap_radius', 5.0)   # [m]
+        # ループ辺スコア上限。ICP:平均点対線残差[m] / NDT:平均負対数尤度。0.0で無効
+        self.declare_parameter('loop_closure_max_score', 0.0)
 
         # GNSS 拘束（use_gnss == True のとき slam_offline_node.py が使用する）
         self.declare_parameter('use_gnss', False)
         self.declare_parameter('gnss_topic', '/gps/fix')
         self.declare_parameter('gnss_noise_xy_m', 3.0)        # [m]
+        # "kinematic_heading" | "precision_weighted"
+        self.declare_parameter('gnss_aligner', 'kinematic_heading')
         self.declare_parameter('kinematic_min_speed_ms', 0.5)  # [m/s]
         self.declare_parameter('gnss_max_time_delta_s', 5.0)   # [s]
+        # "navsat_fix" | "navpvt"
+        self.declare_parameter('gnss_source_type', 'navsat_fix')
+        self.declare_parameter('gnss_navpvt_topic', '/ublox/navpvt')
+        self.declare_parameter('navpvt_hacc_scale', 1.0)
 
     def _build_config(self) -> SlamConfig:
         return SlamConfig(
@@ -172,15 +182,23 @@ class SlamNodeBase(Node, ABC):
                 'loop_closure_matcher_type').value,
             loop_closure_max_dyaw_deg=self.get_parameter(
                 'loop_closure_max_dyaw_deg').value,
+            loop_closure_crossing_reject_deg=self.get_parameter(
+                'loop_closure_crossing_reject_deg').value,
             loop_closure_submap_radius=self.get_parameter(
                 'loop_closure_submap_radius').value,
+            loop_closure_max_score=self.get_parameter(
+                'loop_closure_max_score').value,
             use_gnss=self.get_parameter('use_gnss').value,
             gnss_topic=self.get_parameter('gnss_topic').value,
             gnss_noise_xy_m=self.get_parameter('gnss_noise_xy_m').value,
+            gnss_aligner=self.get_parameter('gnss_aligner').value,
             kinematic_min_speed_ms=self.get_parameter(
                 'kinematic_min_speed_ms').value,
             gnss_max_time_delta_s=self.get_parameter(
                 'gnss_max_time_delta_s').value,
+            gnss_source_type=self.get_parameter('gnss_source_type').value,
+            gnss_navpvt_topic=self.get_parameter('gnss_navpvt_topic').value,
+            navpvt_hacc_scale=self.get_parameter('navpvt_hacc_scale').value,
         )
 
     def _on_scan(self, scan: ScanData) -> None:

@@ -142,4 +142,22 @@ class ICPMatcher(ScanMatcherBase):
         n_valid = len(p_trans_v)
         information = H / n_valid + 1e-6 * \
             np.eye(3) if n_valid > 0 else np.zeros((3, 3))
-        return MatchResult(dx=tx, dy=ty, dyaw=theta, converged=converged, information=information)
+
+        # 収束後の最終変換 (tx, ty, theta) でスコアを再計算する。
+        # ループ内の r は収束直前イテレーションの残差（最終更新前）のため、
+        # GNSS 最適化済みの高精度初期値では r ≈ 0 になる問題を回避する。
+        if converged:
+            p_final = _apply_transform(dst_pts, tx, ty, theta)
+            dists_f, nn_f = src_tree.query(p_final)
+            valid_f = dists_f < self._max_correspondence_dist
+            p_f = p_final[valid_f]
+            q_f = src_pts[nn_f[valid_f]]
+            if len(p_f) >= _N_MIN_CORRESPONDENCES:
+                normals_f = _estimate_normals(q_f, src_pts, src_tree)
+                r_f = np.sum(normals_f * (p_f - q_f), axis=1)
+                score = float(np.mean(np.abs(r_f)))
+            else:
+                score = 0.0
+        else:
+            score = 0.0
+        return MatchResult(dx=tx, dy=ty, dyaw=theta, converged=converged, information=information, score=score)

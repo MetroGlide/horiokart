@@ -50,7 +50,9 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         loop_closure_max_failure_streak: int = 3,
         optimize_every_n_loops: int = 1,
         max_loop_dyaw_deg: float = 90.0,
+        loop_closure_crossing_reject_deg: float = 0.0,
         loop_closure_submap_radius: float = 5.0,
+        loop_closure_max_score: float = 0.0,
     ) -> None:
         self._inner = inner
         self._loop_matcher = loop_matcher
@@ -60,7 +62,11 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         self._max_failure_streak = loop_closure_max_failure_streak
         self._optimize_every_n_loops = optimize_every_n_loops
         self._max_loop_dyaw_rad = math.radians(max_loop_dyaw_deg)
+        # パス交差排除: 0.0 のとき無効。有効時は [reject_rad, π - reject_rad] 帯域を拒否する。
+        self._crossing_reject_rad = math.radians(
+            loop_closure_crossing_reject_deg) if loop_closure_crossing_reject_deg > 0.0 else 0.0
         self._submap_radius = loop_closure_submap_radius
+        self._max_score = loop_closure_max_score
         self._loop_edges: list[PoseEdge] = []
         self._loop_failure_streak: int = 0
         self._loop_just_closed_flag: bool = False
@@ -193,11 +199,32 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
                 self._loop_failure_streak = 0
             return False
 
-        # dyaw バリデーション: ICP/NDT の局所解（特に180°回転対称）による false positive を排除する
-        if abs(result.dyaw) > self._max_loop_dyaw_rad:
+        # dyaw バリデーション: ICP/NDT の局所解による false positive を排除する
+        abs_dyaw = abs(result.dyaw)
+        if abs_dyaw > self._max_loop_dyaw_rad:
             _logger.warning(
-                f'Loop edge dyaw sanity check failed: node {node.index} <- candidate {candidate.index} '
+                f'Loop edge dyaw check failed (over limit): node {node.index} <- candidate {candidate.index} '
                 f'(dyaw={math.degrees(result.dyaw):.1f}deg, limit={math.degrees(self._max_loop_dyaw_rad):.1f}deg)'
+            )
+            return False
+        # パス交差帯域フィルタ: |dyaw| が [crossing_reject, π - crossing_reject] の範囲を拒否する。
+        # 同方向ループ（≤reject）と Uターンループ（≥π-reject）のみ許容する。
+        if (self._crossing_reject_rad > 0.0
+                and self._crossing_reject_rad <= abs_dyaw
+                <= math.pi - self._crossing_reject_rad):
+            _logger.warning(
+                f'Loop edge dyaw check failed (crossing band): node {node.index} <- candidate {candidate.index} '
+                f'(dyaw={math.degrees(result.dyaw):.1f}deg, '
+                f'forbidden=[{math.degrees(self._crossing_reject_rad):.0f}deg, '
+                f'{180.0 - math.degrees(self._crossing_reject_rad):.0f}deg])'
+            )
+            return False
+
+        # score バリデーション: マッチング局所解（路径交差点等での誤対応）による false positive を排除する
+        if self._max_score > 0.0 and result.score > self._max_score:
+            _logger.warning(
+                f'Loop edge score check failed: node {node.index} <- candidate {candidate.index} '
+                f'(score={result.score:.6f}, limit={self._max_score:.6f})'
             )
             return False
 
@@ -214,7 +241,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         _logger.info(
             f'Loop edge added: {candidate.index} -> {node.index} '
             f'(dx={result.dx:.3f} dy={result.dy:.3f} '
-            f'dyaw={math.degrees(result.dyaw):.1f}deg)'
+            f'dyaw={math.degrees(result.dyaw):.1f}deg score={result.score:.6f})'
         )
         return True
 

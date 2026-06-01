@@ -303,3 +303,155 @@ class BagGnssSource(GnssSourceBase):
         if abs(timestamp - prev[0]) <= abs(timestamp - next_[0]):
             return prev
         return next_
+
+
+class BagNavPVTSource(GnssSourceBase):
+    """rosbag2 から ublox NavPVT メッセージを読み取り GnssData を提供するソース。
+
+    `h_acc`（水平精度、mm単位）から共分散を算出するため、
+    NavSatFix より精度の高い共分散が得られる。
+    UTM 変換は BagGnssSource と同方式。
+    `gnss_source_type: navpvt` のとき使用する。
+
+    有効なfixの条件:
+        NavPVT.flags の bit0 (gnssFixOk) が立っていること。
+        かつ fixType >= 2 (2D/3D fix 以上) であること。
+    """
+
+    _FLAGS_GNSS_FIX_OK = 0x01
+    _FIX_TYPE_2D = 2
+
+    def __init__(
+        self,
+        bag_path: str,
+        navpvt_topic: str,
+        hacc_scale: float = 1.0,
+    ) -> None:
+        self._bag_path = bag_path
+        self._navpvt_topic = navpvt_topic
+        self._hacc_scale = hacc_scale
+        self._gnss_list: list[GnssData] = []
+        self._timestamps: list[float] = []
+        # get_raw_fix_at 用: (timestamp, lat, lon, status, cov_flat9, cov_type) のリスト
+        self._raw_list: list[tuple] = []
+        self._raw_timestamps: list[float] = []
+
+    def start(self) -> None:
+        from pyproj import CRS, Transformer
+        from ublox_msgs.msg import NavPVT
+
+        reader = _open_reader(self._bag_path, [self._navpvt_topic])
+        raw_msgs: list = []
+        while reader.has_next():
+            (_, data, _) = reader.read_next()
+            msg = deserialize_message(data, NavPVT)
+            # gnssFixOk フラグ未セットまたは 2D fix 未満は除外
+            if not (msg.flags & self._FLAGS_GNSS_FIX_OK):
+                continue
+            if msg.fix_type < self._FIX_TYPE_2D:
+                continue
+            raw_msgs.append(msg)
+
+        if not raw_msgs:
+            return
+
+        # 最初のメッセージから UTM zone を自動決定して変換器を構築する
+        first = raw_msgs[0]
+        first_lon = first.lon * 1e-7
+        first_lat = first.lat * 1e-7
+        zone = int((first_lon + 180.0) / 6.0) + 1
+        south = first_lat < 0.0
+        crs_utm = CRS.from_dict({'proj': 'utm', 'zone': zone, 'south': south})
+        transformer = Transformer.from_crs(
+            'EPSG:4326', crs_utm, always_xy=True)
+
+        for msg in raw_msgs:
+            stamp = msg.i_tow * 1e-3  # iTOW は ms 単位
+            # ヘッダータイムスタンプがあればそちらを優先する
+            if hasattr(msg, 'header') and msg.header.stamp.sec != 0:
+                stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+
+            lon = msg.lon * 1e-7
+            lat = msg.lat * 1e-7
+            x, y = transformer.transform(lon, lat)
+
+            # h_acc (mm) → 水平 1σ [m] → 等方性 2×2 共分散行列
+            # h_acc == 0 はゼロ行列にして constraint_inserter のフォールバックに任せる
+            if msg.h_acc > 0:
+                pos_std = (msg.h_acc / 1000.0) * self._hacc_scale
+                pos_var = pos_std * pos_std
+                cov_2x2 = np.array([[pos_var, 0.0], [0.0, pos_var]])
+            else:
+                cov_2x2 = np.zeros((2, 2))
+
+            self._gnss_list.append(GnssData(
+                timestamp=stamp,
+                x=x,
+                y=y,
+                covariance=cov_2x2,
+            ))
+
+            # get_raw_fix_at 用: NavSatFix 互換タプルを保存する
+            # position_covariance は NavSatFix と同じ 9 要素フラット配列形式
+            if msg.h_acc > 0:
+                from sensor_msgs.msg import NavSatFix as _NavSatFix
+                cov9 = [pos_var, 0.0, 0.0, 0.0, pos_var, 0.0, 0.0, 0.0, 0.0]
+                cov_type = _NavSatFix.COVARIANCE_TYPE_DIAGONAL_KNOWN
+            else:
+                from sensor_msgs.msg import NavSatFix as _NavSatFix
+                cov9 = [0.0] * 9
+                cov_type = _NavSatFix.COVARIANCE_TYPE_UNKNOWN
+            self._raw_list.append((stamp, lat, lon, 0, cov9, cov_type))
+
+        self._gnss_list.sort(key=lambda g: g.timestamp)
+        self._timestamps = [g.timestamp for g in self._gnss_list]
+        self._raw_timestamps = [r[0] for r in self._raw_list]
+
+    def stop(self) -> None:
+        pass
+
+    def get_gnss_at(self, timestamp: float) -> Optional[GnssData]:
+        if not self._gnss_list:
+            return None
+        idx = bisect.bisect_left(self._timestamps, timestamp)
+        if idx == 0:
+            return self._gnss_list[0]
+        if idx >= len(self._gnss_list):
+            return self._gnss_list[-1]
+        prev = self._gnss_list[idx - 1]
+        next_ = self._gnss_list[idx]
+        t_span = next_.timestamp - prev.timestamp
+        if t_span < 1e-9:
+            return prev
+        alpha = (timestamp - prev.timestamp) / t_span
+        return GnssData(
+            timestamp=timestamp,
+            x=prev.x + alpha * (next_.x - prev.x),
+            y=prev.y + alpha * (next_.y - prev.y),
+            covariance=prev.covariance + alpha *
+            (next_.covariance - prev.covariance),
+        )
+
+    def get_all_gnss(self) -> list[GnssData]:
+        return list(self._gnss_list)
+
+    def get_raw_fix_at(self, timestamp: float) -> Optional[tuple]:
+        """指定タイムスタンプに最も近い NavSatFix 互換タプルを返す。
+
+        Returns:
+            (timestamp, latitude, longitude, status, position_covariance_flat9,
+             position_covariance_type) のタプル、またはバッファが空なら None。
+            BagGnssSource.get_raw_fix_at と同じ形式。
+        """
+        if not self._raw_list:
+            return None
+        idx = bisect.bisect_left(self._raw_timestamps, timestamp)
+        if idx == 0:
+            return self._raw_list[0]
+        if idx >= len(self._raw_list):
+            return self._raw_list[-1]
+        prev = self._raw_list[idx - 1]
+        next_ = self._raw_list[idx]
+        if abs(timestamp - prev[0]) <= abs(timestamp - next_[0]):
+            return prev
+        return next_

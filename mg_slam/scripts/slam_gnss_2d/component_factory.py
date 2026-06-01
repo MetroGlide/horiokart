@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .config import SlamConfig
+from .gnss.aligner_base import GnssAlignerBase
 from .pose_graph.base import PoseGraphBuilderBase
 from .scan_matching.base import ScanMatcherBase
 from .scan_matching.reference_provider.base import ReferenceProviderBase
@@ -47,7 +48,9 @@ def build_pose_graph_builder(config: SlamConfig) -> PoseGraphBuilderBase:
             loop_closure_max_failure_streak=config.loop_closure_max_failure_streak,
             optimize_every_n_loops=config.optimize_every_n_loops,
             max_loop_dyaw_deg=config.loop_closure_max_dyaw_deg,
+            loop_closure_crossing_reject_deg=config.loop_closure_crossing_reject_deg,
             loop_closure_submap_radius=config.loop_closure_submap_radius,
+            loop_closure_max_score=config.loop_closure_max_score,
         )
     elif config.pose_graph_builder == 'odom_only':
         from .pose_graph.odom_builder import OdomOnlyBuilder
@@ -126,4 +129,68 @@ def _build_reference_provider(config: SlamConfig) -> ReferenceProviderBase:
         raise ValueError(
             f"Unknown scan_reference: '{config.scan_reference}'. "
             "Valid options: 'scan_to_scan', 'scan_to_local_map'"
+        )
+
+
+def build_gnss_aligner(config: SlamConfig) -> GnssAlignerBase:
+    """設定オブジェクトから GNSS アライナーを構築して返す。ROS 非依存。
+
+    Args:
+        config: slam_gnss_2d の全パラメータ集約オブジェクト。
+
+    Returns:
+        GnssAlignerBase の具体実装インスタンス。
+
+    Raises:
+        ValueError: 未知のアライナー種別が指定された場合。
+    """
+    if config.gnss_aligner == 'kinematic_heading':
+        from .gnss.kinematic_aligner import KinematicHeadingAligner
+        return KinematicHeadingAligner(
+            min_speed_ms=config.kinematic_min_speed_ms,
+        )
+    elif config.gnss_aligner == 'precision_weighted':
+        from .gnss.precision_weighted_aligner import PrecisionWeightedAligner
+        return PrecisionWeightedAligner(
+            min_speed_ms=config.kinematic_min_speed_ms,
+            default_noise_xy_m=config.gnss_noise_xy_m,
+            max_time_delta_s=config.gnss_max_time_delta_s,
+        )
+    else:
+        raise ValueError(
+            f"Unknown gnss_aligner: '{config.gnss_aligner}'. "
+            "Valid options: 'kinematic_heading', 'precision_weighted'"
+        )
+
+
+def build_gnss_source(config: SlamConfig, bag_path: str):
+    """rosbag2 から GNSS データを読み取るソースを構築して返す。
+
+    gnss_source_type の値に応じて BagGnssSource または
+    BagNavPVTSource を選択する。
+
+    Args:
+        config: slam_gnss_2d の全パラメータ集約オブジェクト。
+        bag_path: 読み取る rosbag2 ディレクトリ・ファイルパス。
+
+    Returns:
+        GnssSourceBase の具体実装インスタンス。
+
+    Raises:
+        ValueError: 未知の gnss_source_type が指定された場合。
+    """
+    if config.gnss_source_type == 'navsat_fix':
+        from .input.ros2.bag_reader import BagGnssSource
+        return BagGnssSource(bag_path, config.gnss_topic)
+    elif config.gnss_source_type == 'navpvt':
+        from .input.ros2.bag_reader import BagNavPVTSource
+        return BagNavPVTSource(
+            bag_path=bag_path,
+            navpvt_topic=config.gnss_navpvt_topic,
+            hacc_scale=config.navpvt_hacc_scale,
+        )
+    else:
+        raise ValueError(
+            f"Unknown gnss_source_type: '{config.gnss_source_type}'. "
+            "Valid options: 'navsat_fix', 'navpvt'"
         )

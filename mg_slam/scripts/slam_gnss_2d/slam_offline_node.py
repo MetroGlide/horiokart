@@ -21,11 +21,11 @@ from std_msgs.msg import ColorRGBA
 from visualization_msgs.msg import Marker, MarkerArray
 
 from slam_gnss_2d.config import SlamConfig
+from slam_gnss_2d.component_factory import build_gnss_aligner, build_gnss_source
 from slam_gnss_2d.data_types import ScanData
 from slam_gnss_2d.gnss.constraint_inserter import GnssConstraintInserter
-from slam_gnss_2d.gnss.kinematic_aligner import KinematicHeadingAligner
 from slam_gnss_2d.input.base import OdomSourceBase, ScanSourceBase
-from slam_gnss_2d.input.ros2.bag_reader import BagGnssSource, BagOdomSource, BagScanSource
+from slam_gnss_2d.input.ros2.bag_reader import BagOdomSource, BagScanSource
 from slam_gnss_2d.optimizer.gtsam_optimizer import GTSAMOptimizer
 from slam_gnss_2d.slam_node_base import SlamNodeBase
 
@@ -58,12 +58,10 @@ class SlamOfflineNode(SlamNodeBase):
         self._use_gnss = cfg.use_gnss
 
         if cfg.use_gnss:
-            gnss_source = BagGnssSource(bag_path, cfg.gnss_topic)
+            gnss_source = build_gnss_source(cfg, bag_path)
             gnss_source.start()
             self._gnss_source = gnss_source
-            self._gnss_aligner = KinematicHeadingAligner(
-                min_speed_ms=cfg.kinematic_min_speed_ms,
-            )
+            self._gnss_aligner = build_gnss_aligner(cfg)
             self._gnss_inserter = GnssConstraintInserter(
                 default_noise_xy_m=cfg.gnss_noise_xy_m,
                 max_time_delta_s=cfg.gnss_max_time_delta_s,

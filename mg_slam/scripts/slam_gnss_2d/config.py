@@ -57,18 +57,34 @@ class SlamConfig:
     loop_closure_matcher_type: str = 'icp'    # "icp" | "ndt"
     # ループ辺のdyaw絶対値上限 [deg]。Uターンループを許容する値
     loop_closure_max_dyaw_deg: float = 90.0
+    # パス交差による false positive を拒否する dyaw 境界 [deg]。
+    # |dyaw| がこの値より大きく (180 - この値) より小さい場合（交差帯域）はループ辺を拒否する。
+    # 0.0 のとき無効（全 dyaw を許容）。
+    # 例: 45.0 → [45°, 135°] 帯域を拒否、≤45° の同方向と ≥135° の Uターンのみ許容。
+    loop_closure_crossing_reject_deg: float = 0.0
     # ループ検証時のサブマップ合成半径 [m]。候補ノードからこの範囲内のノードのスキャンを
     # 合成して参照点群とする。0以下にすると候補ノード1枚のみ使用（無効化）。
     loop_closure_submap_radius: float = 5.0
+    # ループ辺のマッチングスコア上限。ICP では平均点対線残差 [m]、NDT では平均負対数尤度。
+    # 0.0 のとき無効（スコアによる排除なし）。
+    loop_closure_max_score: float = 0.0
 
     # GNSS 拘束（use_gnss == True のとき slam_offline_node.py が使用する）
     use_gnss: bool = False
     gnss_topic: str = '/gps/fix'
     # GNSS 位置ノイズ [m]。position_covariance が不定の場合のフォールバック値
     gnss_noise_xy_m: float = 3.0
-    # KinematicHeadingAligner が有効とみなす最小移動速度 [m/s]。
+    # GNSS アライナー種別。"kinematic_heading" | "precision_weighted"
+    gnss_aligner: str = 'kinematic_heading'
+    # KinematicHeadingAligner / PrecisionWeightedAligner が有効とみなす最小移動速度 [m/s]。
     # この速度未満の区間は座標系回転の推定に使わない。
     kinematic_min_speed_ms: float = 0.5
     # GNSS 測位とポーズノードのタイムスタンプ差の上限 [s]。
     # この時間差を超えた GNSS 測位は拘束として使用しない。
     gnss_max_time_delta_s: float = 5.0
+    # GNSS ソース種別。"navsat_fix" | "navpvt"
+    gnss_source_type: str = 'navsat_fix'
+    # NavPVT トピック名（gnss_source_type == "navpvt" のとき使用）
+    gnss_navpvt_topic: str = '/ublox/navpvt'
+    # NavPVT h_acc → pos_std 変換スケール。実機キャリブレーション用。
+    navpvt_hacc_scale: float = 1.0

@@ -115,7 +115,7 @@ class MatchResult:
     dx: float                   # 相対移動 x [m]
     dy: float                   # 相対移動 y [m]
     dyaw: float                 # 相対回転 [rad]
-    score: float                # マッチングスコア（小さいほど良い）
+    score: float                # マッチングスコア（小さいほど良い）。ICP: 平均点対線残差 [m]、NDT: 平均負対数尤度。収束失敗時は 0.0。
     information: np.ndarray     # 情報行列 shape (3, 3) — GTSAM BetweenFactor に使用
 
 @dataclass
@@ -225,6 +225,23 @@ def estimate_transform(
     gnss_list: list[GnssData],
 ) -> tuple[float, float, float]  # (tx, ty, rotation_rad)
 ```
+
+**差し替えポイント**: `gnss_aligner` パラメータで `kinematic_heading` / `precision_weighted` を選択可能。
+`build_gnss_aligner(config)` ファクトリ関数で生成する。
+
+**GNSS ソース選択**: `gnss_source_type` パラメータで `navsat_fix` / `navpvt` を選択可能。
+`build_gnss_source(config, bag_path)` ファクトリ関数で生成する。
+
+### LoopClosureBuilder のスコアフィルタ
+
+ループクロージャの false positive を抑制するため、`MatchResult.score` に上限値を設けることができる。
+
+```
+ICP score  = mean(|r|)           [m]    小さいほど一致精度が高い
+NDT score  = mean(-exponent)     [-]    小さいほど一致精度が高い
+```
+
+`loop_closure_max_score: 0.0` で無効（全ループ辺を採用）。正値を設定するとスコアが上限を超えたループ辺は警告ログを出して棄却される。ICPを使う場合は `0.05`〜`0.10` m 程度が目安。
 
 ### GraphOptimizerBase
 
@@ -350,7 +367,7 @@ lat/lon → UTM 変換は `BagGnssSource.start()` 内部で行う。
 
 bag 全体の読み込みが完了した後に `slam_offline_node.py` が一括実行する:
 
-1. `KinematicHeadingAligner.estimate_transform()` → (tx, ty, rotation_rad)
+1. `build_gnss_aligner(config).estimate_transform()` → (tx, ty, rotation_rad)
 2. `GnssConstraintInserter.build_priors()` → list[GnssPrior]
 3. `GTSAMOptimizer.optimize(gnss_priors=priors)` → 再最適化済み list[PoseNode]
 4. `renderer.rerender_all()` → マップ再描画
@@ -373,6 +390,22 @@ Phase 2 以降でオンライン/オフライン共通のコアロジックが�
 | `slam_offline_node.py` | `SlamNodeBase` を継承し、`_setup_io()` で `BagScanSource` + `BagOdomSource` を生成。ステップタイマーで bag を進める |
 
 `component_factory.py` の `build_pose_graph_builder(config)` が、`config.pose_graph_builder` の文字列値に応じて適切なビルダーを組み立てて返す。これにより `slam_node_base.py` がビルダーの具体型に依存しない。
+
+同様に `build_gnss_aligner(config)` が `config.gnss_aligner` の値に応じて `GnssAlignerBase` の実装を返す。`slam_offline_node.py` はアライナーの具体型に依存しない。
+
+| `gnss_aligner` 値        | 実装クラス                  | 概要                                                                                                  |
+| ------------------------ | --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `kinematic_heading`      | `KinematicHeadingAligner`   | 連続 GNSS 変位ベクトルの単純加重平均で回転推定。平行移動は算術平均。                                   |
+| `precision_weighted`     | `PrecisionWeightedAligner`  | 回転推定の重み = 変位量/ノイズ、平行移動推定の重み = 情報行列トレース。GNSS を正とした加重 LS 推定。 |
+
+`build_gnss_source(config, bag_path)` が `config.gnss_source_type` に応じて GNSS データソースを選択する。
+
+| `gnss_source_type` 値 | 実装クラス          | 共分散の出所                                                                                              |
+| --------------------- | ------------------- | --------------------------------------------------------------------------------------------------------- |
+| `navsat_fix`          | `BagGnssSource`     | `NavSatFix.position_covariance[0,1,3,4]`。`COVARIANCE_TYPE_UNKNOWN` の場合は `gnss_noise_xy_m` に従う。 |
+| `navpvt`              | `BagNavPVTSource`   | `NavPVT.h_acc` (mm) × `navpvt_hacc_scale` → 等方性 2×2 共分散行列。                                   |
+
+`BagNavPVTSource` は `gnssFixOk` フラグ（`flags & 0x01`）および `fixType >= 2` を条件に有効なfixのみ取得する。`h_acc == 0` の場合は零行列として `constraint_inserter` のフォールバックに任せる。
 
 ```python
 # slam_node.py（オンライン）の実装例
