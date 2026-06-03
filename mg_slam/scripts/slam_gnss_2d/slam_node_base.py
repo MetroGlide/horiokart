@@ -18,11 +18,13 @@ from std_msgs.msg import ColorRGBA
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
 
-from slam_gnss_2d.component_factory import build_pose_graph_builder
+from slam_gnss_2d.component_factory import build_gnss_aligner, build_pose_graph_builder
 from slam_gnss_2d.config import SlamConfig
-from slam_gnss_2d.data_types import ScanData
-from slam_gnss_2d.input.base import OdomSourceBase, ScanSourceBase
+from slam_gnss_2d.data_types import PoseEdge, PoseNode, ScanData
+from slam_gnss_2d.gnss.constraint_inserter import GnssConstraintInserter
+from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from slam_gnss_2d.map_manager.opencv_renderer import OpenCVRenderer
+from slam_gnss_2d.optimizer.gtsam_optimizer import GTSAMOptimizer
 
 
 class SlamNodeBase(Node, ABC):
@@ -47,6 +49,8 @@ class SlamNodeBase(Node, ABC):
         self._path_before_pub = self.create_publisher(
             Path, 'slam_gnss_2d/path_before_optimize', 1)
         self._tf_broadcaster = TransformBroadcaster(self)
+        self._gnss_raw_pub = None
+        self._gnss_prior_pub = None
 
         self._path_msg = Path()
         self._path_msg.header.frame_id = 'map'
@@ -58,6 +62,43 @@ class SlamNodeBase(Node, ABC):
         self._scan_source.set_scan_callback(self._on_scan)
         self._odom_source.start()
         self._scan_source.start()
+
+        self._use_gnss = cfg.use_gnss
+        self._gnss_mode = cfg.gnss_mode
+        self._gnss_runner = None
+        if self._use_gnss:
+            self._gnss_source = self._setup_gnss_source(cfg)
+            self._gnss_source.start()
+            self._gnss_aligner = build_gnss_aligner(cfg)
+            self._gnss_inserter = GnssConstraintInserter(
+                default_noise_xy_m=cfg.gnss_noise_xy_m,
+                max_time_delta_s=cfg.gnss_max_time_delta_s,
+            )
+            self._gnss_optimizer = GTSAMOptimizer()
+            self._gnss_raw_pub = self.create_publisher(
+                MarkerArray, 'slam_gnss_2d/gnss_raw_markers', 1)
+            self._gnss_prior_pub = self.create_publisher(
+                MarkerArray, 'slam_gnss_2d/gnss_prior_markers', 1)
+            if self._gnss_mode == 'gnss_anchored':
+                from slam_gnss_2d.gnss.gnss_anchored_runner import GnssAnchoredParams, GnssAnchoredRunner
+                from slam_gnss_2d.optimizer.isam2_optimizer import ISAM2Optimizer
+
+                params = GnssAnchoredParams(
+                    init_distance_m=cfg.gnss_init_distance_m,
+                    anchor_min_fix_status=cfg.gnss_anchor_min_fix_status,
+                    anchor_sigma_m=cfg.gnss_anchor_sigma_m,
+                    init_yaw_sigma_rad=cfg.gnss_init_yaw_sigma_rad,
+                    gnss_fix_sigma_m=cfg.gnss_fix_sigma_m,
+                    gnss_float_sigma_m=cfg.gnss_float_sigma_m,
+                    gnss_factor_yaw_variance=cfg.gnss_factor_yaw_variance,
+                    gnss_max_sigma_m=cfg.gnss_max_sigma_m,
+                )
+                self._gnss_runner = GnssAnchoredRunner(
+                    params=params,
+                    optimizer=ISAM2Optimizer(
+                        relinearize_threshold=cfg.isam2_relinearize_threshold,
+                    ),
+                )
 
         self.create_timer(1.0 / cfg.map_publish_hz, self._publish_map_timer)
         self.create_timer(0.1, self._publish_tf)
@@ -77,6 +118,10 @@ class SlamNodeBase(Node, ABC):
     @abstractmethod
     def _setup_io(self, cfg: SlamConfig) -> tuple[ScanSourceBase, OdomSourceBase]:
         """IO ソース（スキャン・オドメトリ）を構築して返す。start() は呼ばない。"""
+        raise NotImplementedError
+
+    def _setup_gnss_source(self, cfg: SlamConfig) -> GnssSourceBase:
+        """GNSS ソースを構築して返す。use_gnss=True の場合のみ呼び出される。"""
         raise NotImplementedError
 
     def _declare_params(self) -> None:
@@ -130,13 +175,16 @@ class SlamNodeBase(Node, ABC):
             'loop_closure_matcher_type', 'icp')  # "icp" | "ndt"
         self.declare_parameter('loop_closure_max_dyaw_deg', 90.0)   # [deg]
         # パス交差 false positive 排除: |dyaw| が [crossing_reject, 180-crossing_reject] 帯域なら拒否
-        self.declare_parameter('loop_closure_crossing_reject_deg', 0.0)  # [deg], 0.0で無効
+        self.declare_parameter(
+            'loop_closure_crossing_reject_deg', 0.0)  # [deg], 0.0で無効
         self.declare_parameter('loop_closure_submap_radius', 5.0)   # [m]
         # ループ辺スコア上限。ICP:平均点対線残差[m] / NDT:平均負対数尤度。0.0で無効
         self.declare_parameter('loop_closure_max_score', 0.0)
 
         # GNSS 拘束（use_gnss == True のとき slam_offline_node.py が使用する）
         self.declare_parameter('use_gnss', False)
+        # "batch" | "gnss_anchored"
+        self.declare_parameter('gnss_mode', 'batch')
         self.declare_parameter('gnss_topic', '/gps/fix')
         self.declare_parameter('gnss_noise_xy_m', 3.0)        # [m]
         # "kinematic_heading" | "precision_weighted"
@@ -147,6 +195,15 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('gnss_source_type', 'navsat_fix')
         self.declare_parameter('gnss_navpvt_topic', '/ublox/navpvt')
         self.declare_parameter('navpvt_hacc_scale', 1.0)
+        self.declare_parameter('gnss_init_distance_m', 2.0)
+        self.declare_parameter('gnss_anchor_min_fix_status', 1)
+        self.declare_parameter('gnss_anchor_sigma_m', 0.05)
+        self.declare_parameter('gnss_init_yaw_sigma_rad', 10.0)
+        self.declare_parameter('gnss_fix_sigma_m', 0.02)
+        self.declare_parameter('gnss_float_sigma_m', 0.5)
+        self.declare_parameter('gnss_factor_yaw_variance', 1e8)
+        self.declare_parameter('isam2_relinearize_threshold', 0.1)
+        self.declare_parameter('gnss_max_sigma_m', 2.0)  # [m]
 
     def _build_config(self) -> SlamConfig:
         return SlamConfig(
@@ -189,6 +246,7 @@ class SlamNodeBase(Node, ABC):
             loop_closure_max_score=self.get_parameter(
                 'loop_closure_max_score').value,
             use_gnss=self.get_parameter('use_gnss').value,
+            gnss_mode=self.get_parameter('gnss_mode').value,
             gnss_topic=self.get_parameter('gnss_topic').value,
             gnss_noise_xy_m=self.get_parameter('gnss_noise_xy_m').value,
             gnss_aligner=self.get_parameter('gnss_aligner').value,
@@ -199,6 +257,21 @@ class SlamNodeBase(Node, ABC):
             gnss_source_type=self.get_parameter('gnss_source_type').value,
             gnss_navpvt_topic=self.get_parameter('gnss_navpvt_topic').value,
             navpvt_hacc_scale=self.get_parameter('navpvt_hacc_scale').value,
+            gnss_init_distance_m=self.get_parameter(
+                'gnss_init_distance_m').value,
+            gnss_anchor_min_fix_status=self.get_parameter(
+                'gnss_anchor_min_fix_status').value,
+            gnss_anchor_sigma_m=self.get_parameter(
+                'gnss_anchor_sigma_m').value,
+            gnss_init_yaw_sigma_rad=self.get_parameter(
+                'gnss_init_yaw_sigma_rad').value,
+            gnss_fix_sigma_m=self.get_parameter('gnss_fix_sigma_m').value,
+            gnss_float_sigma_m=self.get_parameter('gnss_float_sigma_m').value,
+            gnss_factor_yaw_variance=self.get_parameter(
+                'gnss_factor_yaw_variance').value,
+            isam2_relinearize_threshold=self.get_parameter(
+                'isam2_relinearize_threshold').value,
+            gnss_max_sigma_m=self.get_parameter('gnss_max_sigma_m').value,
         )
 
     def _on_scan(self, scan: ScanData) -> None:
@@ -218,6 +291,16 @@ class SlamNodeBase(Node, ABC):
                 f'below threshold at ({odom.x:.2f}, {odom.y:.2f})'
             )
             return
+
+        latest_edge: PoseEdge | None = None
+        edges = self._pose_graph.get_edges()
+        if edges:
+            candidate = edges[-1]
+            if candidate.to_index == node.index:
+                latest_edge = candidate
+
+        if self._use_gnss and self._gnss_mode == 'gnss_anchored':
+            self._apply_gnss_incremental(scan, node, latest_edge)
 
         self._update_map_to_odom(node, odom)
         self._node_count += 1
@@ -242,6 +325,136 @@ class SlamNodeBase(Node, ABC):
             self._publish_path(node)
         self._publish_pose_graph_markers()
         self._map_dirty = True
+
+    def _apply_gnss_incremental(
+        self,
+        scan: ScanData,
+        latest_node: PoseNode,
+        latest_edge: PoseEdge | None,
+    ) -> None:
+        """gnss_anchored モードのリアルタイム GNSS 統合を適用する。"""
+        if self._gnss_runner is None:
+            return
+
+        gnss = self._gnss_source.get_gnss_at(scan.timestamp)
+        anchored_now = self._gnss_runner.on_gnss(gnss)
+        if anchored_now:
+            anchor = self._gnss_runner.anchor
+            if anchor is not None:
+                self.get_logger().info(
+                    f'GNSS anchor set: E={anchor[0]:.3f}, N={anchor[1]:.3f}'
+                )
+
+        nodes = self._pose_graph.get_nodes()
+        edges = self._pose_graph.get_edges()
+        updates, rerender_required = self._gnss_runner.process(
+            nodes=nodes,
+            edges=edges,
+            latest_node=latest_node,
+            latest_edge=latest_edge,
+        )
+        if not updates:
+            return
+
+        for n in nodes:
+            pose = updates.get(n.index)
+            if pose is None:
+                continue
+            n.x, n.y, n.yaw = pose
+
+        if rerender_required:
+            self._renderer.rerender_all(nodes)
+            self._rebuild_path(nodes)
+            self.get_logger().info('GNSS anchored mode entered RUNNING state')
+
+    def _run_gnss_phase(self) -> None:
+        """GNSS バッチ処理: Aligner → Inserter → 再最適化 → rerender。"""
+        gnss_list = self._gnss_source.get_all_gnss()
+        if not gnss_list:
+            self.get_logger().warn('GNSS phase skipped: no valid GNSS fixes')
+            return
+
+        nodes = self._pose_graph.get_nodes()
+        edges = self._pose_graph.get_edges()
+        if not nodes:
+            self.get_logger().warn('GNSS phase skipped: pose graph is empty')
+            return
+
+        transform = self._gnss_aligner.estimate_transform(nodes, gnss_list)
+        tx, ty, rot = transform
+        self.get_logger().info(
+            f'GNSS align: tx={tx:.2f}m ty={ty:.2f}m rot={math.degrees(rot):.2f}deg'
+            f' ({len(gnss_list)} GNSS fixes, {len(nodes)} nodes)'
+        )
+        self._publish_gnss_raw_markers(gnss_list, transform)
+
+        priors = self._gnss_inserter.build_priors(nodes, gnss_list, transform)
+        self.get_logger().info(
+            f'GNSS inserting {len(priors)} prior constraints')
+        self._path_before_pub.publish(self._path_msg)
+
+        updated = self._gnss_optimizer.optimize(
+            nodes, edges, gnss_priors=priors)
+        self._renderer.rerender_all(updated)
+        self._rebuild_path(updated)
+        self._map_dirty = True
+        self._publish_gnss_prior_markers(updated, priors)
+        self.get_logger().info('GNSS phase complete: map re-rendered with GNSS constraints')
+
+    def _publish_gnss_raw_markers(self, gnss_list, transform) -> None:
+        """GNSS点群を SLAM 座標系に変換してマゼンタ色の SPHERE_LIST で配信する。"""
+        if self._gnss_raw_pub is None:
+            return
+        tx, ty, rot = transform
+        cos_r = math.cos(rot)
+        sin_r = math.sin(rot)
+        array = MarkerArray()
+        m = Marker()
+        m.header.stamp = self.get_clock().now().to_msg()
+        m.header.frame_id = 'map'
+        m.ns = 'gnss_raw'
+        m.id = 0
+        m.type = Marker.SPHERE_LIST
+        m.action = Marker.ADD
+        m.scale.x = m.scale.y = m.scale.z = 0.5
+        m.color.r, m.color.g, m.color.b, m.color.a = 1.0, 0.0, 1.0, 0.9
+        for gnss in gnss_list:
+            x_slam = cos_r * gnss.x - sin_r * gnss.y + tx
+            y_slam = sin_r * gnss.x + cos_r * gnss.y + ty
+            pt = RosPoint()
+            pt.x, pt.y, pt.z = x_slam, y_slam, 0.0
+            m.points.append(pt)
+        array.markers.append(m)
+        self._gnss_raw_pub.publish(array)
+
+    def _publish_gnss_prior_markers(self, updated_nodes, priors) -> None:
+        """最適化後ノード位置と GNSS 拘束座標を線分で接続して配信する。"""
+        if self._gnss_prior_pub is None:
+            return
+        node_by_idx = {n.index: n for n in updated_nodes}
+        array = MarkerArray()
+        line_m = Marker()
+        line_m.header.stamp = self.get_clock().now().to_msg()
+        line_m.header.frame_id = 'map'
+        line_m.ns = 'gnss_connections'
+        line_m.id = 0
+        line_m.type = Marker.LINE_LIST
+        line_m.action = Marker.ADD
+        line_m.scale.x = 0.05
+        line_m.color.r, line_m.color.g = 0.8, 0.0
+        line_m.color.b, line_m.color.a = 0.8, 0.8
+        for prior in priors:
+            node = node_by_idx.get(prior.node_index)
+            if node is None:
+                continue
+            pt_node = RosPoint()
+            pt_node.x, pt_node.y, pt_node.z = node.x, node.y, 0.0
+            pt_gnss = RosPoint()
+            pt_gnss.x, pt_gnss.y, pt_gnss.z = prior.x, prior.y, 0.0
+            line_m.points.append(pt_node)
+            line_m.points.append(pt_gnss)
+        array.markers.append(line_m)
+        self._gnss_prior_pub.publish(array)
 
     def _publish_map_timer(self) -> None:
         now = time.monotonic()
@@ -423,6 +636,8 @@ class SlamNodeBase(Node, ABC):
         self._pg_marker_pub.publish(array)
 
     def destroy_node(self) -> None:
+        if self._use_gnss:
+            self._gnss_source.stop()
         self._scan_source.stop()
         self._odom_source.stop()
         super().destroy_node()

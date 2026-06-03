@@ -14,19 +14,14 @@ import logging
 import math
 
 import rclpy
-from geometry_msgs.msg import Point as RosPoint
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import NavSatFix as NavSatFixMsg, NavSatStatus
-from std_msgs.msg import ColorRGBA
-from visualization_msgs.msg import Marker, MarkerArray
 
 from slam_gnss_2d.config import SlamConfig
-from slam_gnss_2d.component_factory import build_gnss_aligner, build_gnss_source
+from slam_gnss_2d.component_factory import build_gnss_source
 from slam_gnss_2d.data_types import ScanData
-from slam_gnss_2d.gnss.constraint_inserter import GnssConstraintInserter
-from slam_gnss_2d.input.base import OdomSourceBase, ScanSourceBase
+from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from slam_gnss_2d.input.ros2.bag_reader import BagOdomSource, BagScanSource
-from slam_gnss_2d.optimizer.gtsam_optimizer import GTSAMOptimizer
 from slam_gnss_2d.slam_node_base import SlamNodeBase
 
 
@@ -37,10 +32,6 @@ class SlamOfflineNode(SlamNodeBase):
         period = 0.001 if step_hz <= 0.0 else 1.0 / step_hz
         self._step_timer = self.create_timer(period, self._process_step)
         self._odom_pub = self.create_publisher(Odometry, 'odom', 10)
-        self._gnss_raw_pub = self.create_publisher(
-            MarkerArray, 'slam_gnss_2d/gnss_raw_markers', 1)
-        self._gnss_prior_pub = self.create_publisher(
-            MarkerArray, 'slam_gnss_2d/gnss_prior_markers', 1)
         self._gps_fix_pub = self.create_publisher(NavSatFixMsg, '/gps/fix', 10)
         self._last_gps_ts: float = -1.0
 
@@ -55,20 +46,11 @@ class SlamOfflineNode(SlamNodeBase):
         scan_source = BagScanSource(bag_path, cfg.scan_topic)
         odom_source = BagOdomSource(bag_path, cfg.odom_topic)
         self._bag_scan_source = scan_source
-        self._use_gnss = cfg.use_gnss
-
-        if cfg.use_gnss:
-            gnss_source = build_gnss_source(cfg, bag_path)
-            gnss_source.start()
-            self._gnss_source = gnss_source
-            self._gnss_aligner = build_gnss_aligner(cfg)
-            self._gnss_inserter = GnssConstraintInserter(
-                default_noise_xy_m=cfg.gnss_noise_xy_m,
-                max_time_delta_s=cfg.gnss_max_time_delta_s,
-            )
-            self._gnss_optimizer = GTSAMOptimizer()
-
         return scan_source, odom_source
+
+    def _setup_gnss_source(self, cfg: SlamConfig) -> GnssSourceBase:
+        bag_path: str = self.get_parameter('bag_path').value
+        return build_gnss_source(cfg, bag_path)
 
     def _on_scan(self, scan: ScanData) -> None:
         super()._on_scan(scan)
@@ -91,47 +73,16 @@ class SlamOfflineNode(SlamNodeBase):
     def _process_step(self) -> None:
         if not self._bag_scan_source.step():
             self._step_timer.cancel()
-            if self._use_gnss:
+            if self._use_gnss and self._gnss_mode == 'batch':
                 self._run_gnss_phase()
             self.get_logger().info('Bag processing complete')
 
-    def _run_gnss_phase(self) -> None:
-        """GNSS 2 パス処理: Aligner → Inserter → 再最適化 → rerender。"""
-        gnss_list = self._gnss_source.get_all_gnss()
-        if not gnss_list:
-            self.get_logger().warn('GNSS phase skipped: no valid GNSS fixes in bag')
-            return
-
-        nodes = self._pose_graph.get_nodes()
-        edges = self._pose_graph.get_edges()
-        if not nodes:
-            self.get_logger().warn('GNSS phase skipped: pose graph is empty')
-            return
-
-        transform = self._gnss_aligner.estimate_transform(nodes, gnss_list)
-        tx, ty, rot = transform
-        self.get_logger().info(
-            f'GNSS align: tx={tx:.2f}m ty={ty:.2f}m rot={math.degrees(rot):.2f}deg'
-            f' ({len(gnss_list)} GNSS fixes, {len(nodes)} nodes)'
-        )
-        self._publish_gnss_raw_markers(gnss_list, transform)
-
-        priors = self._gnss_inserter.build_priors(nodes, gnss_list, transform)
-        self.get_logger().info(
-            f'GNSS inserting {len(priors)} prior constraints')
-        self._path_before_pub.publish(self._path_msg)
-
-        updated = self._gnss_optimizer.optimize(
-            nodes, edges, gnss_priors=priors)
-        self._renderer.rerender_all(updated)
-        self._rebuild_path(updated)
-        self._map_dirty = True
-        self._publish_gnss_prior_markers(updated, priors)
-        self.get_logger().info('GNSS phase complete: map re-rendered with GNSS constraints')
-
     def _republish_gps_fix(self, timestamp: float) -> None:
         """bag 内の GPS fix をスキャン処理に同期して /gps/fix に再配信する。"""
-        raw = self._gnss_source.get_raw_fix_at(timestamp)
+        raw_get_fix = getattr(self._gnss_source, 'get_raw_fix_at', None)
+        if raw_get_fix is None:
+            return
+        raw = raw_get_fix(timestamp)
         if raw is None:
             return
         ts, lat, lon, status, cov, cov_type = raw
@@ -149,57 +100,6 @@ class SlamOfflineNode(SlamNodeBase):
         fix_msg.position_covariance = cov
         fix_msg.position_covariance_type = cov_type
         self._gps_fix_pub.publish(fix_msg)
-
-    def _publish_gnss_raw_markers(self, gnss_list, transform) -> None:
-        """GNSS点群を SLAM 座標系に変換してマゼンタ色の SPHERE_LIST で配信する。"""
-        tx, ty, rot = transform
-        cos_r = math.cos(rot)
-        sin_r = math.sin(rot)
-        array = MarkerArray()
-        m = Marker()
-        m.header.stamp = self.get_clock().now().to_msg()
-        m.header.frame_id = 'map'
-        m.ns = 'gnss_raw'
-        m.id = 0
-        m.type = Marker.SPHERE_LIST
-        m.action = Marker.ADD
-        m.scale.x = m.scale.y = m.scale.z = 0.5
-        m.color.r, m.color.g, m.color.b, m.color.a = 1.0, 0.0, 1.0, 0.9
-        for gnss in gnss_list:
-            x_slam = cos_r * gnss.x - sin_r * gnss.y + tx
-            y_slam = sin_r * gnss.x + cos_r * gnss.y + ty
-            pt = RosPoint()
-            pt.x, pt.y, pt.z = x_slam, y_slam, 0.0
-            m.points.append(pt)
-        array.markers.append(m)
-        self._gnss_raw_pub.publish(array)
-
-    def _publish_gnss_prior_markers(self, updated_nodes, priors) -> None:
-        """最適化後ノード位置と GNSS 拘束座標を線分で接続して配信する。"""
-        node_by_idx = {n.index: n for n in updated_nodes}
-        array = MarkerArray()
-        line_m = Marker()
-        line_m.header.stamp = self.get_clock().now().to_msg()
-        line_m.header.frame_id = 'map'
-        line_m.ns = 'gnss_connections'
-        line_m.id = 0
-        line_m.type = Marker.LINE_LIST
-        line_m.action = Marker.ADD
-        line_m.scale.x = 0.05
-        line_m.color.r, line_m.color.g = 0.8, 0.0
-        line_m.color.b, line_m.color.a = 0.8, 0.8
-        for prior in priors:
-            node = node_by_idx.get(prior.node_index)
-            if node is None:
-                continue
-            pt_node = RosPoint()
-            pt_node.x, pt_node.y, pt_node.z = node.x, node.y, 0.0
-            pt_gnss = RosPoint()
-            pt_gnss.x, pt_gnss.y, pt_gnss.z = prior.x, prior.y, 0.0
-            line_m.points.append(pt_node)
-            line_m.points.append(pt_gnss)
-        array.markers.append(line_m)
-        self._gnss_prior_pub.publish(array)
 
 
 def main(args=None):

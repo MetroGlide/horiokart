@@ -71,6 +71,8 @@ class SlamConfig:
 
     # GNSS 拘束（use_gnss == True のとき slam_offline_node.py が使用する）
     use_gnss: bool = False
+    # GNSS 統合モード。"batch" | "gnss_anchored"
+    gnss_mode: str = 'batch'
     gnss_topic: str = '/gps/fix'
     # GNSS 位置ノイズ [m]。position_covariance が不定の場合のフォールバック値
     gnss_noise_xy_m: float = 3.0
@@ -88,3 +90,15 @@ class SlamConfig:
     gnss_navpvt_topic: str = '/ublox/navpvt'
     # NavPVT h_acc → pos_std 変換スケール。実機キャリブレーション用。
     navpvt_hacc_scale: float = 1.0
+
+    # 1-phase GNSS anchored モード設定（gnss_mode == "gnss_anchored"）
+    gnss_init_distance_m: float = 2.0
+    gnss_anchor_min_fix_status: int = 1
+    gnss_anchor_sigma_m: float = 0.05
+    gnss_init_yaw_sigma_rad: float = 10.0
+    gnss_fix_sigma_m: float = 0.02
+    gnss_float_sigma_m: float = 0.5
+    gnss_factor_yaw_variance: float = 1e8
+    isam2_relinearize_threshold: float = 0.1
+    # h_acc 導出のσ 上限 [m]。これを超える測位は拘束をスキップ。
+    gnss_max_sigma_m: float = 2.0

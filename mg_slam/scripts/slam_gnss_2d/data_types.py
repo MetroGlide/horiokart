@@ -42,6 +42,8 @@ class GnssData:
     x: float
     y: float
     covariance: np.ndarray
+    # 測位品質ステータス。NavSatFix.status.status 互換（未設定時は -1）。
+    fix_status: int = -1
 
 
 @dataclass

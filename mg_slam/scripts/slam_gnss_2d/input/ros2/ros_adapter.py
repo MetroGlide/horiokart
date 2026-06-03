@@ -206,11 +206,84 @@ class ROS2GnssSource(GnssSourceBase):
 
     def _on_msg(self, msg: NavSatFix) -> None:
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        cov = np.array(
-            msg.position_covariance[:4], dtype=np.float64).reshape(2, 2)
+        cov = msg.position_covariance
+        cov_2x2 = np.array(
+            [[cov[0], cov[1]], [cov[3], cov[4]]], dtype=np.float64)
         self._buffer.append(GnssData(
             timestamp=stamp,
             x=msg.longitude,
             y=msg.latitude,
-            covariance=cov,
+            covariance=cov_2x2,
+            fix_status=int(msg.status.status),
+        ))
+
+
+class ROS2GnssUtmSource(GnssSourceBase):
+    """ROS2 NavSatFix を UTM に変換して GnssData を供給するアダプター。"""
+
+    def __init__(self, node: Node, topic: str = '/gps/fix') -> None:
+        self._node = node
+        self._topic = topic
+        self._buffer: deque[GnssData] = deque(maxlen=_GNSS_BUFFER_SIZE)
+        self._sub = None
+        self._transformer = None
+        self._recv_count = 0
+
+    def start(self) -> None:
+        self._sub = self._node.create_subscription(
+            NavSatFix, self._topic, self._on_msg, 10
+        )
+
+    def stop(self) -> None:
+        if self._sub is not None:
+            self._node.destroy_subscription(self._sub)
+            self._sub = None
+
+    def get_gnss_at(self, timestamp: float) -> Optional[GnssData]:
+        if not self._buffer:
+            return None
+        return min(self._buffer, key=lambda g: abs(g.timestamp - timestamp))
+
+    def get_all_gnss(self) -> list[GnssData]:
+        return list(self._buffer)
+
+    def _on_msg(self, msg: NavSatFix) -> None:
+        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        if msg.status.status < 0:
+            return
+
+        if self._transformer is None:
+            from pyproj import CRS, Transformer
+
+            zone = int((msg.longitude + 180.0) / 6.0) + 1
+            south = msg.latitude < 0.0
+            crs_utm = CRS.from_dict(
+                {'proj': 'utm', 'zone': zone, 'south': south})
+            self._transformer = Transformer.from_crs(
+                'EPSG:4326', crs_utm, always_xy=True)
+            self._node.get_logger().info(
+                f'GNSS UTM transformer initialized: zone={zone} south={south}'
+            )
+
+        x, y = self._transformer.transform(msg.longitude, msg.latitude)
+        cov = msg.position_covariance
+        if msg.position_covariance_type == NavSatFix.COVARIANCE_TYPE_UNKNOWN:
+            cov_2x2 = np.zeros((2, 2), dtype=np.float64)
+        else:
+            cov_2x2 = np.array(
+                [[cov[0], cov[1]], [cov[3], cov[4]]], dtype=np.float64)
+
+        self._recv_count += 1
+        if self._recv_count == 1 or self._recv_count % 100 == 0:
+            self._node.get_logger().info(
+                f'GnssUtmSource [{self._topic}]: #{self._recv_count}, '
+                f'x={x:.2f} y={y:.2f} status={int(msg.status.status)}'
+            )
+
+        self._buffer.append(GnssData(
+            timestamp=stamp,
+            x=x,
+            y=y,
+            covariance=cov_2x2,
+            fix_status=int(msg.status.status),
         ))

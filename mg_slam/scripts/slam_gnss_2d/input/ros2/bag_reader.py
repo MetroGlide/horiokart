@@ -241,6 +241,7 @@ class BagGnssSource(GnssSourceBase):
                 x=x,
                 y=y,
                 covariance=cov_2x2,
+                fix_status=int(msg.status.status),
             ))
             self._raw_list.append((
                 stamp,
@@ -279,6 +280,7 @@ class BagGnssSource(GnssSourceBase):
             y=prev.y + alpha * (next_.y - prev.y),
             covariance=prev.covariance + alpha *
             (next_.covariance - prev.covariance),
+            fix_status=prev.fix_status,
         )
 
     def get_all_gnss(self) -> list[GnssData]:
@@ -384,11 +386,16 @@ class BagNavPVTSource(GnssSourceBase):
             else:
                 cov_2x2 = np.zeros((2, 2))
 
+            # carrSoln (bits 6-7 of flags): 0=None, 1=float, 2=fixed
+            # NavSatFix.status 互換として carrSoln 値をそのまま fix_status に使う
+            carr_soln = (msg.flags >> 6) & 0x03
+
             self._gnss_list.append(GnssData(
                 timestamp=stamp,
                 x=x,
                 y=y,
                 covariance=cov_2x2,
+                fix_status=carr_soln,
             ))
 
             # get_raw_fix_at 用: NavSatFix 互換タプルを保存する
@@ -401,7 +408,7 @@ class BagNavPVTSource(GnssSourceBase):
                 from sensor_msgs.msg import NavSatFix as _NavSatFix
                 cov9 = [0.0] * 9
                 cov_type = _NavSatFix.COVARIANCE_TYPE_UNKNOWN
-            self._raw_list.append((stamp, lat, lon, 0, cov9, cov_type))
+            self._raw_list.append((stamp, lat, lon, carr_soln, cov9, cov_type))
 
         self._gnss_list.sort(key=lambda g: g.timestamp)
         self._timestamps = [g.timestamp for g in self._gnss_list]

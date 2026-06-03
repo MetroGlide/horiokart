@@ -11,8 +11,13 @@ import logging
 import rclpy
 
 from slam_gnss_2d.config import SlamConfig
-from slam_gnss_2d.input.base import OdomSourceBase, ScanSourceBase
-from slam_gnss_2d.input.ros2.ros_adapter import ROS2OdomSource, ROS2ScanSource
+from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
+from slam_gnss_2d.input.ros2.ros_adapter import (
+    ROS2GnssSource,
+    ROS2GnssUtmSource,
+    ROS2OdomSource,
+    ROS2ScanSource,
+)
 from slam_gnss_2d.slam_node_base import SlamNodeBase
 
 
@@ -22,6 +27,11 @@ class SlamGnss2DNode(SlamNodeBase):
 
     def _setup_io(self, cfg: SlamConfig) -> tuple[ScanSourceBase, OdomSourceBase]:
         return ROS2ScanSource(self, cfg.scan_topic), ROS2OdomSource(self, cfg.odom_topic)
+
+    def _setup_gnss_source(self, cfg: SlamConfig) -> GnssSourceBase:
+        if cfg.gnss_mode == 'gnss_anchored':
+            return ROS2GnssUtmSource(self, cfg.gnss_topic)
+        return ROS2GnssSource(self, cfg.gnss_topic)
 
 
 def main(args=None):
