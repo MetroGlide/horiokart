@@ -23,6 +23,8 @@ class GnssAnchoredParams:
     gnss_factor_yaw_variance: float
     # h_acc 導出のσ 上限。これを超える拘束はスキップする
     gnss_max_sigma_m: float = 2.0
+    # 位置がこの閾値以上変化した場合、全ノードを更新しマップを再描画する
+    gnss_rerender_threshold_m: float = 0.1
 
 
 class GnssAnchoredRunner:
@@ -102,12 +104,24 @@ class GnssAnchoredRunner:
             )
             self._last_node_index = latest_node.index
 
-        self._add_gnss_prior_for_latest(nodes)
+        pre_update_pose = self._optimizer.get_pose(latest_node.index)
+
+        prior_added = self._add_gnss_prior_for_latest(nodes)
         self._optimizer.update()
-        pose = self._optimizer.get_pose(latest_node.index)
-        if pose is None:
+        
+        post_update_pose = self._optimizer.get_pose(latest_node.index)
+        if post_update_pose is None:
             return {}, False
-        return {latest_node.index: pose}, False
+
+        if prior_added and pre_update_pose is not None:
+            dx = post_update_pose[0] - pre_update_pose[0]
+            dy = post_update_pose[1] - pre_update_pose[1]
+            dist = math.hypot(dx, dy)
+            if dist > self._params.gnss_rerender_threshold_m:
+                _logger.info(f'GNSS optimization caused a jump of {dist:.3f}m. Rerendering map.')
+                return self._optimizer.get_all_poses(), True
+
+        return {latest_node.index: post_update_pose}, False
 
     def _initialize_graph(
         self,
@@ -154,21 +168,21 @@ class GnssAnchoredRunner:
                 e.information,
             )
 
-    def _add_gnss_prior_for_latest(self, nodes: list[PoseNode]) -> None:
+    def _add_gnss_prior_for_latest(self, nodes: list[PoseNode]) -> bool:
         gnss = self._latest_gnss
         if gnss is None:
-            return
+            return False
         if gnss.timestamp <= self._last_gnss_ts_used:
-            return
+            return False
 
         sigma_xy = self._sigma_from_covariance_or_status(gnss)
         if sigma_xy <= 0.0:
             _logger.warning('GNSS prior skipped: invalid sigma_xy <= 0')
-            return
+            return False
         if sigma_xy > self._params.gnss_max_sigma_m:
             _logger.warning(
                 f'GNSS prior skipped: sigma_xy {sigma_xy:.2f} > max {self._params.gnss_max_sigma_m:.2f}')
-            return
+            return False
 
         gx, gy = self._anchor.to_local(gnss)
         node = self._nearest_node(nodes, gnss.timestamp)
@@ -182,6 +196,7 @@ class GnssAnchoredRunner:
         self._last_gnss_ts_used = gnss.timestamp
         _logger.info(
             f'GNSS prior added to node {node.index}: sigma_xy={sigma_xy:.2f}m')
+        return True
 
     def _sigma_from_covariance_or_status(self, gnss: GnssData) -> float:
         """h_acc 導出の共分散が有効ならそのσを返す。

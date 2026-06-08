@@ -76,6 +76,7 @@ class SlamOfflineNode(SlamNodeBase):
             if self._use_gnss and self._gnss_mode == 'batch':
                 self._run_gnss_phase()
             self.get_logger().info('Bag processing complete')
+            self.finalize()
 
     def _republish_gps_fix(self, timestamp: float) -> None:
         """bag 内の GPS fix をスキャン処理に同期して /gps/fix に再配信する。"""
@@ -110,7 +111,7 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        node.finalize()
     finally:
         node.destroy_node()
         rclpy.shutdown()

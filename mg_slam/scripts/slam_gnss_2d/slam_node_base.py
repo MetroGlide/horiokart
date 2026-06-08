@@ -92,6 +92,7 @@ class SlamNodeBase(Node, ABC):
                     gnss_float_sigma_m=cfg.gnss_float_sigma_m,
                     gnss_factor_yaw_variance=cfg.gnss_factor_yaw_variance,
                     gnss_max_sigma_m=cfg.gnss_max_sigma_m,
+                    gnss_rerender_threshold_m=cfg.gnss_rerender_threshold_m,
                 )
                 self._gnss_runner = GnssAnchoredRunner(
                     params=params,
@@ -107,6 +108,7 @@ class SlamNodeBase(Node, ABC):
         self._odom_miss_count = 0
         self._node_count = 0
         self._last_stat_time = time.monotonic()
+        self._finalized = False
 
         self.get_logger().info(
             f'{node_name} started (builder={cfg.pose_graph_builder}, '
@@ -204,6 +206,7 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('gnss_factor_yaw_variance', 1e8)
         self.declare_parameter('isam2_relinearize_threshold', 0.1)
         self.declare_parameter('gnss_max_sigma_m', 2.0)  # [m]
+        self.declare_parameter('gnss_rerender_threshold_m', 0.1)  # [m]
 
     def _build_config(self) -> SlamConfig:
         return SlamConfig(
@@ -272,6 +275,7 @@ class SlamNodeBase(Node, ABC):
             isam2_relinearize_threshold=self.get_parameter(
                 'isam2_relinearize_threshold').value,
             gnss_max_sigma_m=self.get_parameter('gnss_max_sigma_m').value,
+            gnss_rerender_threshold_m=self.get_parameter('gnss_rerender_threshold_m').value,
         )
 
     def _on_scan(self, scan: ScanData) -> None:
@@ -634,6 +638,39 @@ class SlamNodeBase(Node, ABC):
         array.markers.append(seq_m)
         array.markers.append(loop_m)
         self._pg_marker_pub.publish(array)
+
+    def finalize(self) -> None:
+        if self._finalized:
+            return
+        self._finalized = True
+        self.get_logger().info('Finalizing SLAM node...')
+        
+        rerender = False
+
+        if hasattr(self._pose_graph, '_run_optimize'):
+            self._pose_graph._run_optimize()
+            rerender = True
+
+        if self._use_gnss and self._gnss_mode == 'gnss_anchored' and self._gnss_runner is not None:
+            # force a couple updates to ensure convergence
+            self._gnss_runner._optimizer.update()
+            self._gnss_runner._optimizer.update()
+            all_poses = self._gnss_runner._optimizer.get_all_poses()
+            if all_poses:
+                nodes = self._pose_graph.get_nodes()
+                for n in nodes:
+                    pose = all_poses.get(n.index)
+                    if pose is not None:
+                        n.x, n.y, n.yaw = pose
+                rerender = True
+
+        if rerender:
+            nodes = self._pose_graph.get_nodes()
+            self._renderer.rerender_all(nodes)
+            self._rebuild_path(nodes)
+            self._map_dirty = True
+            self._publish_map_timer()
+            self.get_logger().info('Final map optimization and rendering complete.')
 
     def destroy_node(self) -> None:
         if self._use_gnss:

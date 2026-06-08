@@ -102,3 +102,4 @@ class SlamConfig:
     isam2_relinearize_threshold: float = 0.1
     # h_acc 導出のσ 上限 [m]。これを超える測位は拘束をスキップ。
     gnss_max_sigma_m: float = 2.0
+    gnss_rerender_threshold_m: float = 0.1
