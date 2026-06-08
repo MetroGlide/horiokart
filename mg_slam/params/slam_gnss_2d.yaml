@@ -38,7 +38,7 @@
     loop_closure_max_score: 0.0 # ループ辺のスコア上限 (ICP:平均点対線残差[m] / NDT:平均負対数尤度)。0.0で無効
 
     # GNSS 拘束設定（use_gnss: true のとき使用）
-    use_gnss: false
+    use_gnss: true
     gnss_mode: gnss_anchored # "batch" | "gnss_anchored"
     gnss_topic: /gps/fix
     gnss_noise_xy_m: 3.0 # GNSS 位置ノイズ [m]。position_covariance が不定の場合のフォールバック値
@@ -47,19 +47,21 @@
     gnss_max_time_delta_s: 5.0 # GNSS 測位とノードのタイムスタンプ差上限 [s]。超えた測位は拘束として使用しない
     gnss_source_type: navpvt # "navsat_fix" | "navpvt"
     # gnss_source_type: navsat_fix # "navsat_fix" | "navpvt"
-    gnss_navpvt_topic: /ublox/navpvt # gnss_source_type: navpvt のとき使用するトピック
+    gnss_navpvt_topic: /navpvt # gnss_source_type: navpvt のとき使用するトピック
     navpvt_hacc_scale: 1.0 # NavPVT h_acc → pos_std 変換スケール。実機キャリブレーション用
 
     # gnss_mode: gnss_anchored のとき使用するパラメータ
     gnss_init_distance_m: 2.0 # 初期方位推定に必要な最小移動距離 [m]
-    gnss_anchor_min_fix_status: 1 # アンカー採用最小fixステータス
+    gnss_anchor_min_fix_status: 0 # アンカー採用最小fixステータス
     gnss_anchor_sigma_m: 0.05 # ノード0のxy拘束σ [m]
     gnss_init_yaw_sigma_rad: 10.0 # ノード0のyaw拘束σ [rad]
     gnss_fix_sigma_m: 0.02 # 高精度fix時のGNSS拘束σ [m]
     gnss_float_sigma_m: 0.5 # 低精度fix時のGNSS拘束σ [m]
     gnss_factor_yaw_variance: 100000000.0 # GNSS Priorのyaw分散 [rad^2]
     isam2_relinearize_threshold: 0.1 # iSAM2再線形化閾値
-    gnss_max_sigma_m: 2.0 # h_acc 由来のσ上限 [m]。これを超える測位は拘束をスキップ
+    gnss_max_sigma_m: 5.0 # h_acc 由来のσ上限 [m]。これを超える測位は拘束をスキップ
+    gnss_rerender_threshold_m: 0.1 # GNSS拘束再描画閾値 [m]. これを超える位置変化があったときにGNSS拘束を再描画
+    gnss_optimizer: gtsam # "isam2" | "gtsam"
 
 slam_gnss_2d_offline_node:
   ros__parameters:

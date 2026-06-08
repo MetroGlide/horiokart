@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 from ..data_types import GnssData, PoseEdge, PoseNode
 from .anchor_manager import GnssAnchorManager
-from ..optimizer.isam2_optimizer import ISAM2Optimizer
+from ..optimizer.base import IncrementalOptimizerBase
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class GnssAnchoredRunner:
     def __init__(
         self,
         params: GnssAnchoredParams,
-        optimizer: ISAM2Optimizer,
+        optimizer: IncrementalOptimizerBase,
     ) -> None:
         self._params = params
         self._optimizer = optimizer

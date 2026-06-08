@@ -81,7 +81,6 @@ class SlamNodeBase(Node, ABC):
                 MarkerArray, 'slam_gnss_2d/gnss_prior_markers', 1)
             if self._gnss_mode == 'gnss_anchored':
                 from slam_gnss_2d.gnss.gnss_anchored_runner import GnssAnchoredParams, GnssAnchoredRunner
-                from slam_gnss_2d.optimizer.isam2_optimizer import ISAM2Optimizer
 
                 params = GnssAnchoredParams(
                     init_distance_m=cfg.gnss_init_distance_m,
@@ -94,11 +93,16 @@ class SlamNodeBase(Node, ABC):
                     gnss_max_sigma_m=cfg.gnss_max_sigma_m,
                     gnss_rerender_threshold_m=cfg.gnss_rerender_threshold_m,
                 )
+                if cfg.gnss_optimizer == 'gtsam':
+                    from slam_gnss_2d.optimizer.gtsam_incremental_adapter import GTSAMIncrementalAdapter
+                    opt = GTSAMIncrementalAdapter()
+                else:
+                    from slam_gnss_2d.optimizer.isam2_optimizer import ISAM2Optimizer
+                    opt = ISAM2Optimizer(relinearize_threshold=cfg.isam2_relinearize_threshold)
+
                 self._gnss_runner = GnssAnchoredRunner(
                     params=params,
-                    optimizer=ISAM2Optimizer(
-                        relinearize_threshold=cfg.isam2_relinearize_threshold,
-                    ),
+                    optimizer=opt,
                 )
 
         self.create_timer(1.0 / cfg.map_publish_hz, self._publish_map_timer)
@@ -207,6 +211,7 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('isam2_relinearize_threshold', 0.1)
         self.declare_parameter('gnss_max_sigma_m', 2.0)  # [m]
         self.declare_parameter('gnss_rerender_threshold_m', 0.1)  # [m]
+        self.declare_parameter('gnss_optimizer', 'isam2')
 
     def _build_config(self) -> SlamConfig:
         return SlamConfig(
@@ -276,6 +281,7 @@ class SlamNodeBase(Node, ABC):
                 'isam2_relinearize_threshold').value,
             gnss_max_sigma_m=self.get_parameter('gnss_max_sigma_m').value,
             gnss_rerender_threshold_m=self.get_parameter('gnss_rerender_threshold_m').value,
+            gnss_optimizer=self.get_parameter('gnss_optimizer').value,
         )
 
     def _on_scan(self, scan: ScanData) -> None:
