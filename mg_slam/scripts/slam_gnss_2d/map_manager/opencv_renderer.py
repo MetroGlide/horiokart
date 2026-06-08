@@ -66,7 +66,7 @@ class OpenCVRenderer(MapRendererBase):
             math.ceil((new_max_x - new_origin_x) / self._resolution),
             math.ceil((new_max_y - new_origin_y) / self._resolution),
         )
-        _logger.info(
+        _logger.debug(
             f'Map recomputed: size={new_size}px '
             f'({new_size * self._resolution:.0f}m), '
             f'origin=({new_origin_x:.1f}, {new_origin_y:.1f})'
@@ -146,12 +146,12 @@ class OpenCVRenderer(MapRendererBase):
             self._map[hit_py_valid, hit_px_valid] = 0
 
         if self._render_count == 1:
-            _logger.info(
+            _logger.debug(
                 f'First render: robot=({node.x:.2f}, {node.y:.2f}), '
                 f'hits={n_hits}, oob_hits={int((~in_bounds).sum())}'
             )
         elif self._render_count % 10 == 0:
-            _logger.info(
+            _logger.debug(
                 f'Render #{self._render_count}: '
                 f'robot=({node.x:.2f}, {node.y:.2f}), '
                 f'hits={n_hits}, oob_hits={int((~in_bounds).sum())}'

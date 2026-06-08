@@ -14,6 +14,10 @@ from tf2_msgs.msg import TFMessage
 from ..base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from ...data_types import GnssData, OdomData, ScanData
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 def _quaternion_to_yaw(q) -> float:
     siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
@@ -204,16 +208,23 @@ class BagGnssSource(GnssSourceBase):
 
         reader = _open_reader(self._bag_path, [self._gnss_topic])
         raw_fixes: list = []
+        total_msgs = 0
         while reader.has_next():
             (_, data, _) = reader.read_next()
             msg = deserialize_message(data, NavSatFix)
+            total_msgs += 1
             # STATUS_NO_FIX = -1 を除外する
             if msg.status.status < 0:
                 continue
             raw_fixes.append(msg)
 
         if not raw_fixes:
+            _logger.warning(
+                f"BagGnssSource: No valid fixes found in topic '{self._gnss_topic}'. Total messages checked: {total_msgs}")
             return
+
+        _logger.info(
+            f"BagGnssSource: Loaded {len(raw_fixes)} valid fixes from {total_msgs} messages in topic '{self._gnss_topic}'")
 
         # 最初の fix から UTM zone を自動決定して変換器を構築する
         first = raw_fixes[0]
@@ -344,21 +355,37 @@ class BagNavPVTSource(GnssSourceBase):
 
         reader = _open_reader(self._bag_path, [self._navpvt_topic])
         raw_msgs: list = []
+        total_msgs = 0
+        invalid_gnssFixOk = 0
+        invalid_fixType = 0
+
         while reader.has_next():
-            (_, data, _) = reader.read_next()
+            (_, data, t) = reader.read_next()
             msg = deserialize_message(data, NavPVT)
+            total_msgs += 1
             # gnssFixOk フラグ未セットまたは 2D fix 未満は除外
             if not (msg.flags & self._FLAGS_GNSS_FIX_OK):
+                invalid_gnssFixOk += 1
                 continue
             if msg.fix_type < self._FIX_TYPE_2D:
+                invalid_fixType += 1
                 continue
-            raw_msgs.append(msg)
+            raw_msgs.append((t, msg))
 
         if not raw_msgs:
+            _logger.warning(
+                f"BagNavPVTSource: No valid fixes found in topic '{self._navpvt_topic}'. "
+                f"Total messages: {total_msgs}, Rejected(gnssFixOk=0): {invalid_gnssFixOk}, Rejected(fix_type<2): {invalid_fixType}"
+            )
             return
 
+        _logger.info(
+            f"BagNavPVTSource: Loaded {len(raw_msgs)} valid fixes from topic '{self._navpvt_topic}'. "
+            f"(Total: {total_msgs}, Rejected(gnssFixOk=0): {invalid_gnssFixOk}, Rejected(fix_type<2): {invalid_fixType})"
+        )
+
         # 最初のメッセージから UTM zone を自動決定して変換器を構築する
-        first = raw_msgs[0]
+        _, first = raw_msgs[0]
         first_lon = first.lon * 1e-7
         first_lat = first.lat * 1e-7
         zone = int((first_lon + 180.0) / 6.0) + 1
@@ -367,8 +394,8 @@ class BagNavPVTSource(GnssSourceBase):
         transformer = Transformer.from_crs(
             'EPSG:4326', crs_utm, always_xy=True)
 
-        for msg in raw_msgs:
-            stamp = msg.i_tow * 1e-3  # iTOW は ms 単位
+        for t, msg in raw_msgs:
+            stamp = t * 1e-9  # rosbag の記録タイムスタンプ (ナノ秒) をフォールバックに使用する
             # ヘッダータイムスタンプがあればそちらを優先する
             if hasattr(msg, 'header') and msg.header.stamp.sec != 0:
                 stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9

@@ -7,6 +7,9 @@ from typing import Optional
 import numpy as np
 
 from ..data_types import GnssData, GnssPrior, PoseNode
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 def _nearest_node(
@@ -94,8 +97,12 @@ class GnssConstraintInserter:
             node = _nearest_node(
                 nodes, node_timestamps, gnss.timestamp, self._max_time_delta_s)
             if node is None:
+                _logger.warning(
+                    f'GNSS constraint skipped: no nearest node within {self._max_time_delta_s}s')
                 continue
 
+            _logger.info(
+                f'GNSS prior created for node {node.index} (det={det:.2e})')
             priors.append(GnssPrior(
                 node_index=node.index,
                 x=x_slam,

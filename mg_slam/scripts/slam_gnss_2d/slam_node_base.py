@@ -195,8 +195,8 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('gnss_source_type', 'navsat_fix')
         self.declare_parameter('gnss_navpvt_topic', '/ublox/navpvt')
         self.declare_parameter('navpvt_hacc_scale', 1.0)
-        self.declare_parameter('gnss_init_distance_m', 2.0)
-        self.declare_parameter('gnss_anchor_min_fix_status', 1)
+        self.declare_parameter('gnss_init_distance_m', 0.5)
+        self.declare_parameter('gnss_anchor_min_fix_status', 0)
         self.declare_parameter('gnss_anchor_sigma_m', 0.05)
         self.declare_parameter('gnss_init_yaw_sigma_rad', 10.0)
         self.declare_parameter('gnss_fix_sigma_m', 0.02)
@@ -305,7 +305,7 @@ class SlamNodeBase(Node, ABC):
         self._update_map_to_odom(node, odom)
         self._node_count += 1
         if self._node_count == 1 or self._node_count % 10 == 0:
-            self.get_logger().info(
+            self.get_logger().debug(
                 f'Node #{node.index}: x={node.x:.2f} y={node.y:.2f} '
                 f'yaw={math.degrees(node.yaw):.1f}deg'
             )
@@ -475,7 +475,7 @@ class SlamNodeBase(Node, ABC):
                     f', loop={rate:.0f}%'
                     f'({pg.loop_success_count}/{pg.loop_attempt_count})'
                 )
-            self.get_logger().info(
+            self.get_logger().debug(
                 f'[stat] nodes={self._node_count}, '
                 f'scans={self._scan_recv_count}, '
                 f'odom_miss={self._odom_miss_count}'

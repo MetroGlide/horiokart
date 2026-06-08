@@ -92,8 +92,8 @@ class SlamConfig:
     navpvt_hacc_scale: float = 1.0
 
     # 1-phase GNSS anchored モード設定（gnss_mode == "gnss_anchored"）
-    gnss_init_distance_m: float = 2.0
-    gnss_anchor_min_fix_status: int = 1
+    gnss_init_distance_m: float = 0.5
+    gnss_anchor_min_fix_status: int = 0
     gnss_anchor_sigma_m: float = 0.05
     gnss_init_yaw_sigma_rad: float = 10.0
     gnss_fix_sigma_m: float = 0.02

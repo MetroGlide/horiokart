@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from ..data_types import GnssData, PoseEdge, PoseNode
 from .anchor_manager import GnssAnchorManager
 from ..optimizer.isam2_optimizer import ISAM2Optimizer
+import logging
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -66,7 +69,9 @@ class GnssAnchoredRunner:
 
         if self._state == 'INITIALIZING':
             lx, ly = self._anchor.to_local(self._latest_gnss)
-            if math.hypot(lx, ly) < self._params.init_distance_m:
+            dist = math.hypot(lx, ly)
+            if dist < self._params.init_distance_m:
+                _logger.debug(f'Waiting for initialization distance: {dist:.2f}m / {self._params.init_distance_m:.2f}m')
                 return {}, False
             theta0 = math.atan2(ly, lx)
             self._initialize_graph(nodes, edges, theta0)
@@ -158,8 +163,11 @@ class GnssAnchoredRunner:
 
         sigma_xy = self._sigma_from_covariance_or_status(gnss)
         if sigma_xy <= 0.0:
+            _logger.warning('GNSS prior skipped: invalid sigma_xy <= 0')
             return
         if sigma_xy > self._params.gnss_max_sigma_m:
+            _logger.warning(
+                f'GNSS prior skipped: sigma_xy {sigma_xy:.2f} > max {self._params.gnss_max_sigma_m:.2f}')
             return
 
         gx, gy = self._anchor.to_local(gnss)
@@ -172,6 +180,8 @@ class GnssAnchoredRunner:
             self._params.gnss_factor_yaw_variance,
         )
         self._last_gnss_ts_used = gnss.timestamp
+        _logger.info(
+            f'GNSS prior added to node {node.index}: sigma_xy={sigma_xy:.2f}m')
 
     def _sigma_from_covariance_or_status(self, gnss: GnssData) -> float:
         """h_acc 導出の共分散が有効ならそのσを返す。
