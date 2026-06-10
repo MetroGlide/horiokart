@@ -20,7 +20,8 @@ from visualization_msgs.msg import Marker, MarkerArray
 
 from slam_gnss_2d.component_factory import build_gnss_aligner, build_pose_graph_builder
 from slam_gnss_2d.config import SlamConfig
-from slam_gnss_2d.data_types import PoseEdge, PoseNode, ScanData
+from slam_gnss_2d.data_types import PoseNode, ScanData
+from slam_gnss_2d.graph_orchestrator import GnssBatchResult, GraphOrchestrator
 from slam_gnss_2d.gnss.constraint_inserter import GnssConstraintInserter
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from slam_gnss_2d.map_manager.opencv_renderer import OpenCVRenderer
@@ -63,8 +64,25 @@ class SlamNodeBase(Node, ABC):
         self._odom_source.start()
         self._scan_source.start()
 
-        self._use_gnss = cfg.use_gnss
-        self._gnss_mode = cfg.gnss_mode
+        self._enable_scan_matching = cfg.enable_scan_matching
+        self._enable_gnss = cfg.enable_gnss
+        self._enable_loop_closure = cfg.enable_loop_closure
+        self._enable_incremental_optimizer = cfg.enable_incremental_optimizer
+        self._enable_batch_optimizer = cfg.enable_batch_optimizer
+        self._batch_trigger_mode = cfg.batch_trigger_mode
+        self._batch_trigger_on_loop_close = cfg.batch_trigger_on_loop_close
+        self._batch_trigger_every_n_nodes = cfg.batch_trigger_every_n_nodes
+        self._batch_optimize_on_finalize = cfg.batch_optimize_on_finalize
+        self._gnss_missing_grace_frames = cfg.gnss_missing_grace_frames
+        self._gnss_missing_streak = 0
+        self._gnss_degraded = False
+
+        self._use_gnss = cfg.use_gnss and self._enable_gnss
+        self._gnss_mode = self._normalize_gnss_mode(cfg.gnss_mode)
+        self._gnss_source = None
+        self._gnss_aligner = None
+        self._gnss_inserter = None
+        self._gnss_optimizer = None
         self._gnss_runner = None
         if self._use_gnss:
             self._gnss_source = self._setup_gnss_source(cfg)
@@ -79,7 +97,7 @@ class SlamNodeBase(Node, ABC):
                 MarkerArray, 'slam_gnss_2d/gnss_raw_markers', 1)
             self._gnss_prior_pub = self.create_publisher(
                 MarkerArray, 'slam_gnss_2d/gnss_prior_markers', 1)
-            if self._gnss_mode == 'gnss_anchored':
+            if self._gnss_mode == 'integrated' and self._enable_incremental_optimizer:
                 from slam_gnss_2d.gnss.gnss_anchored_runner import GnssAnchoredParams, GnssAnchoredRunner
 
                 params = GnssAnchoredParams(
@@ -98,12 +116,32 @@ class SlamNodeBase(Node, ABC):
                     opt = GTSAMIncrementalAdapter()
                 else:
                     from slam_gnss_2d.optimizer.isam2_optimizer import ISAM2Optimizer
-                    opt = ISAM2Optimizer(relinearize_threshold=cfg.isam2_relinearize_threshold)
+                    opt = ISAM2Optimizer(
+                        relinearize_threshold=cfg.isam2_relinearize_threshold)
 
                 self._gnss_runner = GnssAnchoredRunner(
                     params=params,
                     optimizer=opt,
                 )
+
+        self._orchestrator = GraphOrchestrator(
+            logger=self.get_logger(),
+            pose_graph=self._pose_graph,
+            use_gnss=self._use_gnss,
+            gnss_mode=self._gnss_mode,
+            enable_incremental_optimizer=self._enable_incremental_optimizer,
+            enable_batch_optimizer=self._enable_batch_optimizer,
+            batch_trigger_mode=self._batch_trigger_mode,
+            batch_trigger_on_loop_close=self._batch_trigger_on_loop_close,
+            batch_trigger_every_n_nodes=self._batch_trigger_every_n_nodes,
+            batch_optimize_on_finalize=self._batch_optimize_on_finalize,
+            gnss_missing_grace_frames=self._gnss_missing_grace_frames,
+            gnss_source=self._gnss_source,
+            gnss_runner=self._gnss_runner,
+            gnss_aligner=self._gnss_aligner,
+            gnss_inserter=self._gnss_inserter,
+            gnss_optimizer=self._gnss_optimizer,
+        )
 
         self.create_timer(1.0 / cfg.map_publish_hz, self._publish_map_timer)
         self.create_timer(0.1, self._publish_tf)
@@ -118,7 +156,9 @@ class SlamNodeBase(Node, ABC):
             f'{node_name} started (builder={cfg.pose_graph_builder}, '
             f'matcher={cfg.scan_matcher_type}, ref={cfg.scan_reference})\n'
             f'  scan: {cfg.scan_topic}, odom: {cfg.odom_topic}\n'
-            f'  map: dynamic @ {cfg.map_resolution}m/px, margin={cfg.map_expansion_margin}m'
+            f'  map: dynamic @ {cfg.map_resolution}m/px, margin={cfg.map_expansion_margin}m\n'
+            f'  gnss_mode: {self._gnss_mode}, incremental={self._enable_incremental_optimizer}, '
+            f'batch={self._enable_batch_optimizer}'
         )
 
     @abstractmethod
@@ -129,6 +169,17 @@ class SlamNodeBase(Node, ABC):
     def _setup_gnss_source(self, cfg: SlamConfig) -> GnssSourceBase:
         """GNSS ソースを構築して返す。use_gnss=True の場合のみ呼び出される。"""
         raise NotImplementedError
+
+    @staticmethod
+    def _normalize_gnss_mode(mode: str) -> str:
+        if mode == 'gnss_anchored':
+            return 'integrated'
+        if mode == 'batch':
+            return 'split_align'
+        return mode
+
+    def _is_split_align_mode(self) -> bool:
+        return self._gnss_mode == 'split_align'
 
     def _declare_params(self) -> None:
         # 購読トピック名
@@ -187,10 +238,25 @@ class SlamNodeBase(Node, ABC):
         # ループ辺スコア上限。ICP:平均点対線残差[m] / NDT:平均負対数尤度。0.0で無効
         self.declare_parameter('loop_closure_max_score', 0.0)
 
+        # 比較実験向け機能トグル
+        self.declare_parameter('enable_scan_matching', True)
+        self.declare_parameter('enable_gnss', True)
+        self.declare_parameter('enable_loop_closure', True)
+
+        # 最適化トグル
+        self.declare_parameter('enable_incremental_optimizer', True)
+        self.declare_parameter('enable_batch_optimizer', True)
+        # "manual" | "event" | "periodic"
+        self.declare_parameter('batch_trigger_mode', 'event')
+        self.declare_parameter('batch_trigger_on_loop_close', True)
+        self.declare_parameter('batch_trigger_every_n_nodes', 100)
+        self.declare_parameter('batch_optimize_on_finalize', True)
+        self.declare_parameter('gnss_missing_grace_frames', 30)
+
         # GNSS 拘束（use_gnss == True のとき slam_offline_node.py が使用する）
         self.declare_parameter('use_gnss', False)
-        # "batch" | "gnss_anchored"
-        self.declare_parameter('gnss_mode', 'batch')
+        # "integrated" | "split_align" (legacy: "gnss_anchored", "batch")
+        self.declare_parameter('gnss_mode', 'integrated')
         self.declare_parameter('gnss_topic', '/gps/fix')
         self.declare_parameter('gnss_noise_xy_m', 3.0)        # [m]
         # "kinematic_heading" | "precision_weighted"
@@ -253,8 +319,27 @@ class SlamNodeBase(Node, ABC):
                 'loop_closure_submap_radius').value,
             loop_closure_max_score=self.get_parameter(
                 'loop_closure_max_score').value,
+            enable_scan_matching=self.get_parameter(
+                'enable_scan_matching').value,
+            enable_gnss=self.get_parameter('enable_gnss').value,
+            enable_loop_closure=self.get_parameter(
+                'enable_loop_closure').value,
+            enable_incremental_optimizer=self.get_parameter(
+                'enable_incremental_optimizer').value,
+            enable_batch_optimizer=self.get_parameter(
+                'enable_batch_optimizer').value,
+            batch_trigger_mode=self.get_parameter('batch_trigger_mode').value,
+            batch_trigger_on_loop_close=self.get_parameter(
+                'batch_trigger_on_loop_close').value,
+            batch_trigger_every_n_nodes=self.get_parameter(
+                'batch_trigger_every_n_nodes').value,
+            batch_optimize_on_finalize=self.get_parameter(
+                'batch_optimize_on_finalize').value,
+            gnss_missing_grace_frames=self.get_parameter(
+                'gnss_missing_grace_frames').value,
             use_gnss=self.get_parameter('use_gnss').value,
-            gnss_mode=self.get_parameter('gnss_mode').value,
+            gnss_mode=self._normalize_gnss_mode(
+                self.get_parameter('gnss_mode').value),
             gnss_topic=self.get_parameter('gnss_topic').value,
             gnss_noise_xy_m=self.get_parameter('gnss_noise_xy_m').value,
             gnss_aligner=self.get_parameter('gnss_aligner').value,
@@ -280,7 +365,8 @@ class SlamNodeBase(Node, ABC):
             isam2_relinearize_threshold=self.get_parameter(
                 'isam2_relinearize_threshold').value,
             gnss_max_sigma_m=self.get_parameter('gnss_max_sigma_m').value,
-            gnss_rerender_threshold_m=self.get_parameter('gnss_rerender_threshold_m').value,
+            gnss_rerender_threshold_m=self.get_parameter(
+                'gnss_rerender_threshold_m').value,
             gnss_optimizer=self.get_parameter('gnss_optimizer').value,
         )
 
@@ -294,23 +380,14 @@ class SlamNodeBase(Node, ABC):
             )
             return
 
-        node = self._pose_graph.add_scan(scan, odom)
+        result = self._orchestrator.process_scan(scan, odom)
+        node = result.node
         if node is None:
             self.get_logger().debug(
                 f'Scan #{self._scan_recv_count} rejected: '
                 f'below threshold at ({odom.x:.2f}, {odom.y:.2f})'
             )
             return
-
-        latest_edge: PoseEdge | None = None
-        edges = self._pose_graph.get_edges()
-        if edges:
-            candidate = edges[-1]
-            if candidate.to_index == node.index:
-                latest_edge = candidate
-
-        if self._use_gnss and self._gnss_mode == 'gnss_anchored':
-            self._apply_gnss_incremental(scan, node, latest_edge)
 
         self._update_map_to_odom(node, odom)
         self._node_count += 1
@@ -320,15 +397,21 @@ class SlamNodeBase(Node, ABC):
                 f'yaw={math.degrees(node.yaw):.1f}deg'
             )
 
-        loop_closed = self._pose_graph.loop_just_closed
-        if loop_closed:
-            self._path_before_pub.publish(self._path_msg)
+        if result.batch_result is not None:
+            self._apply_batch_result(result.batch_result)
+            self._publish_pose_graph_markers()
+            return
+
+        if result.loop_closed or result.rerender_required:
+            if result.loop_closed:
+                self._path_before_pub.publish(self._path_msg)
             nodes = self._pose_graph.get_nodes()
             self._renderer.rerender_all(nodes)
             self._rebuild_path(nodes)
-            self.get_logger().info(
-                f'Loop closed at node #{node.index}: full rerender triggered'
-            )
+            if result.loop_closed:
+                self.get_logger().info(
+                    f'Loop closed at node #{node.index}: full rerender triggered'
+                )
         else:
             if not self._renderer.add_node(node):
                 self._renderer.rerender_all(self._pose_graph.get_nodes())
@@ -336,80 +419,23 @@ class SlamNodeBase(Node, ABC):
         self._publish_pose_graph_markers()
         self._map_dirty = True
 
-    def _apply_gnss_incremental(
-        self,
-        scan: ScanData,
-        latest_node: PoseNode,
-        latest_edge: PoseEdge | None,
-    ) -> None:
-        """gnss_anchored モードのリアルタイム GNSS 統合を適用する。"""
-        if self._gnss_runner is None:
-            return
-
-        gnss = self._gnss_source.get_gnss_at(scan.timestamp)
-        anchored_now = self._gnss_runner.on_gnss(gnss)
-        if anchored_now:
-            anchor = self._gnss_runner.anchor
-            if anchor is not None:
-                self.get_logger().info(
-                    f'GNSS anchor set: E={anchor[0]:.3f}, N={anchor[1]:.3f}'
-                )
-
-        nodes = self._pose_graph.get_nodes()
-        edges = self._pose_graph.get_edges()
-        updates, rerender_required = self._gnss_runner.process(
-            nodes=nodes,
-            edges=edges,
-            latest_node=latest_node,
-            latest_edge=latest_edge,
-        )
-        if not updates:
-            return
-
-        for n in nodes:
-            pose = updates.get(n.index)
-            if pose is None:
-                continue
-            n.x, n.y, n.yaw = pose
-
-        if rerender_required:
-            self._renderer.rerender_all(nodes)
-            self._rebuild_path(nodes)
-            self.get_logger().info('GNSS anchored mode entered RUNNING state')
-
-    def _run_gnss_phase(self) -> None:
-        """GNSS バッチ処理: Aligner → Inserter → 再最適化 → rerender。"""
-        gnss_list = self._gnss_source.get_all_gnss()
-        if not gnss_list:
-            self.get_logger().warn('GNSS phase skipped: no valid GNSS fixes')
-            return
-
-        nodes = self._pose_graph.get_nodes()
-        edges = self._pose_graph.get_edges()
-        if not nodes:
-            self.get_logger().warn('GNSS phase skipped: pose graph is empty')
-            return
-
-        transform = self._gnss_aligner.estimate_transform(nodes, gnss_list)
-        tx, ty, rot = transform
-        self.get_logger().info(
-            f'GNSS align: tx={tx:.2f}m ty={ty:.2f}m rot={math.degrees(rot):.2f}deg'
-            f' ({len(gnss_list)} GNSS fixes, {len(nodes)} nodes)'
-        )
-        self._publish_gnss_raw_markers(gnss_list, transform)
-
-        priors = self._gnss_inserter.build_priors(nodes, gnss_list, transform)
-        self.get_logger().info(
-            f'GNSS inserting {len(priors)} prior constraints')
+    def _apply_batch_result(self, result: GnssBatchResult) -> None:
+        self._publish_gnss_raw_markers(result.gnss_list, result.transform)
         self._path_before_pub.publish(self._path_msg)
-
-        updated = self._gnss_optimizer.optimize(
-            nodes, edges, gnss_priors=priors)
-        self._renderer.rerender_all(updated)
-        self._rebuild_path(updated)
+        self._renderer.rerender_all(result.updated_nodes)
+        self._rebuild_path(result.updated_nodes)
+        self._publish_gnss_prior_markers(result.updated_nodes, result.priors)
         self._map_dirty = True
-        self._publish_gnss_prior_markers(updated, priors)
-        self.get_logger().info('GNSS phase complete: map re-rendered with GNSS constraints')
+        self.get_logger().info('GNSS batch phase complete: map re-rendered with GNSS constraints')
+
+    def _run_split_align_batch_phase(self) -> bool:
+        """split_align 例外モードのGNSSバッチ処理を明示的に実行する。"""
+        result = self._orchestrator.run_split_align_batch()
+        if result is None:
+            return False
+        self._apply_batch_result(result)
+        self._publish_pose_graph_markers()
+        return True
 
     def _publish_gnss_raw_markers(self, gnss_list, transform) -> None:
         """GNSS点群を SLAM 座標系に変換してマゼンタ色の SPHERE_LIST で配信する。"""
@@ -650,27 +676,13 @@ class SlamNodeBase(Node, ABC):
             return
         self._finalized = True
         self.get_logger().info('Finalizing SLAM node...')
-        
-        rerender = False
 
-        if hasattr(self._pose_graph, '_run_optimize'):
-            self._pose_graph._run_optimize()
-            rerender = True
+        finalize_result = self._orchestrator.finalize()
+        if finalize_result.batch_result is not None:
+            self._apply_batch_result(finalize_result.batch_result)
+            finalize_result.rerender_required = False
 
-        if self._use_gnss and self._gnss_mode == 'gnss_anchored' and self._gnss_runner is not None:
-            # force a couple updates to ensure convergence
-            self._gnss_runner._optimizer.update()
-            self._gnss_runner._optimizer.update()
-            all_poses = self._gnss_runner._optimizer.get_all_poses()
-            if all_poses:
-                nodes = self._pose_graph.get_nodes()
-                for n in nodes:
-                    pose = all_poses.get(n.index)
-                    if pose is not None:
-                        n.x, n.y, n.yaw = pose
-                rerender = True
-
-        if rerender:
+        if finalize_result.rerender_required:
             nodes = self._pose_graph.get_nodes()
             self._renderer.rerender_all(nodes)
             self._rebuild_path(nodes)
@@ -679,7 +691,7 @@ class SlamNodeBase(Node, ABC):
             self.get_logger().info('Final map optimization and rendering complete.')
 
     def destroy_node(self) -> None:
-        if self._use_gnss:
+        if self._use_gnss and self._gnss_source is not None:
             self._gnss_source.stop()
         self._scan_source.stop()
         self._odom_source.stop()

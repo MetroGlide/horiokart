@@ -37,9 +37,23 @@
     loop_closure_submap_radius: 5.0 # ループ検証時の候補サブマップ合成半径 [m]
     loop_closure_max_score: 0.0 # ループ辺のスコア上限 (ICP:平均点対線残差[m] / NDT:平均負対数尤度)。0.0で無効
 
+    # 比較実験向け機能トグル
+    enable_scan_matching: true
+    enable_gnss: true
+    enable_loop_closure: true
+
+    # 最適化トグル
+    enable_incremental_optimizer: true
+    enable_batch_optimizer: true
+    batch_trigger_mode: event # "manual" | "event" | "periodic"
+    batch_trigger_on_loop_close: true
+    batch_trigger_every_n_nodes: 100
+    batch_optimize_on_finalize: true
+    gnss_missing_grace_frames: 30
+
     # GNSS 拘束設定（use_gnss: true のとき使用）
     use_gnss: true
-    gnss_mode: gnss_anchored # "batch" | "gnss_anchored"
+    gnss_mode: integrated # "integrated" | "split_align"
     gnss_topic: /gps/fix
     gnss_noise_xy_m: 3.0 # GNSS 位置ノイズ [m]。position_covariance が不定の場合のフォールバック値
     gnss_aligner: precision_weighted # "kinematic_heading" | "precision_weighted"
@@ -50,7 +64,7 @@
     gnss_navpvt_topic: /navpvt # gnss_source_type: navpvt のとき使用するトピック
     navpvt_hacc_scale: 1.0 # NavPVT h_acc → pos_std 変換スケール。実機キャリブレーション用
 
-    # gnss_mode: gnss_anchored のとき使用するパラメータ
+    # gnss_mode: integrated のとき使用するパラメータ
     gnss_init_distance_m: 2.0 # 初期方位推定に必要な最小移動距離 [m]
     gnss_anchor_min_fix_status: 0 # アンカー採用最小fixステータス
     gnss_anchor_sigma_m: 0.05 # ノード0のxy拘束σ [m]
