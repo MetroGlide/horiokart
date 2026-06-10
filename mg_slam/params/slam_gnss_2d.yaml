@@ -1,81 +1,93 @@
 /**:
   ros__parameters:
-    scan_topic: /scan_top_lidar
-    odom_topic: /odom
+    topics:
+      scan: "/scan_top_lidar"
+      odom: "/odom"
 
-    map_resolution: 0.05
-    map_expansion_margin: 100.0
-    # min_translation: 0.3
-    min_translation: 1.0
-    min_rotation: 0.1
-    map_publish_hz: 1.0
+    map:
+      resolution: 0.05
+      expansion_margin: 100.0
+      publish_hz: 1.0
 
-    # pose_graph_builder: loop_closure # "odom_only" | "scan_matching" | "loop_closure"
-    pose_graph_builder: scan_matching # "odom_only" | "scan_matching" | "loop_closure"
-    scan_matcher_type: ndt # "icp" | "ndt"
-    scan_reference: scan_to_local_map # "scan_to_scan" | "scan_to_local_map"
+    keyframe:
+      min_translation: 1.0
+      min_rotation: 0.1
 
-    icp_max_iterations: 100
-    icp_tolerance: 0.00001
-    icp_max_correspondence_dist: 1.0
+    # スキャンマッチング（フロントエンド）設定
+    scan_matching:
+      enabled: true
+      type: "ndt" # "icp" | "ndt"
+      reference: "scan_to_local_map" # "scan_to_scan" | "scan_to_local_map"
+      max_failure_streak: 5
+      icp:
+        max_iterations: 100
+        tolerance: 0.00001
+        max_correspondence_dist: 1.0
+      ndt:
+        cell_size: 1.0
+      local_map:
+        window: 30
+        radius: 30.0
 
-    ndt_cell_size: 1.0
+    # ループクロージャ設定
+    loop_closure:
+      enabled: true
+      search_radius: 2.0
+      min_node_gap: 50
+      max_failure_streak: 3
+      matcher_type: "icp"
+      icp:
+        max_iterations: 100
+        tolerance: 0.00001
+        max_correspondence_dist: 1.0
+      ndt:
+        cell_size: 1.0
+      max_dyaw_deg: 145.0
+      crossing_reject_deg: 45.0
+      submap_radius: 5.0
+      max_score: 0.0
 
-    local_map_window: 30
-    local_map_radius: 30.0
+    # GNSS設定
+    gnss:
+      enabled: true
+      mode: "integrated" # "integrated" | "split_align"
+      source: "navpvt" # "navsat_fix" | "navpvt"
+      topics:
+        fix: "/gps/fix"
+        navpvt: "/navpvt"
+      navpvt_hacc_scale: 1.0
+      validation:
+        max_time_delta_s: 5.0
+        max_sigma_m: 5.0
+        missing_grace_frames: 30
+      anchor:
+        min_fix_status: 0
+        sigma_m: 0.05
+        init_yaw_sigma_rad: 10.0
+        init_distance_m: 2.0
+      sigma:
+        fix_m: 0.02
+        float_m: 0.5
+        noise_xy_m: 3.0
+        factor_yaw_variance: 100000000.0
+      aligner:
+        type: "precision_weighted"
+        kinematic_min_speed_ms: 0.5
 
-    matcher_max_failure_streak: 5 # この回数連続失敗で odom フォールバック
-
-    # ループクロージャ設定（pose_graph_builder: loop_closure のとき使用）
-    loop_closure_search_radius: 2.0 # ループ候補ノード間距面間値 [m]
-    loop_closure_min_node_gap: 50 # ループ候補の最小ノード間隔
-    loop_closure_max_failure_streak: 3 # ループ検証連続失敗上限
-    optimize_every_n_loops: 3 # N本ループ辺追加ごとに最適化
-    loop_closure_matcher_type: icp # "icp" | "ndt". NDTは180°対称false positiveリスクがあるためICP推奨
-    loop_closure_max_dyaw_deg: 145.0 # ループ辺のdyaw絶対値上限 [deg]. Uターンループ（最大~142°）を許容しつつ180°対称誤検出（~151°）を拒否
-    loop_closure_crossing_reject_deg: 45.0 # パス交差拒否閾値 [deg]. |dyaw| が [this, 180-this] 帯域（例: [45°,135°]）なら拒否。0.0で無効
-    loop_closure_submap_radius: 5.0 # ループ検証時の候補サブマップ合成半径 [m]
-    loop_closure_max_score: 0.0 # ループ辺のスコア上限 (ICP:平均点対線残差[m] / NDT:平均負対数尤度)。0.0で無効
-
-    # 比較実験向け機能トグル
-    enable_scan_matching: true
-    enable_gnss: true
-    enable_loop_closure: true
-
-    # 最適化トグル
-    enable_incremental_optimizer: true
-    enable_batch_optimizer: true
-    batch_trigger_mode: event # "manual" | "event" | "periodic"
-    batch_trigger_on_loop_close: true
-    batch_trigger_every_n_nodes: 100
-    batch_optimize_on_finalize: true
-    gnss_missing_grace_frames: 30
-
-    # GNSS 拘束設定（use_gnss: true のとき使用）
-    use_gnss: true
-    gnss_mode: integrated # "integrated" | "split_align"
-    gnss_topic: /gps/fix
-    gnss_noise_xy_m: 3.0 # GNSS 位置ノイズ [m]。position_covariance が不定の場合のフォールバック値
-    gnss_aligner: precision_weighted # "kinematic_heading" | "precision_weighted"
-    kinematic_min_speed_ms: 0.5 # GNSS アライナーが有効とみなす最小移動速度 [m/s]
-    gnss_max_time_delta_s: 5.0 # GNSS 測位とノードのタイムスタンプ差上限 [s]。超えた測位は拘束として使用しない
-    gnss_source_type: navpvt # "navsat_fix" | "navpvt"
-    # gnss_source_type: navsat_fix # "navsat_fix" | "navpvt"
-    gnss_navpvt_topic: /navpvt # gnss_source_type: navpvt のとき使用するトピック
-    navpvt_hacc_scale: 1.0 # NavPVT h_acc → pos_std 変換スケール。実機キャリブレーション用
-
-    # gnss_mode: integrated のとき使用するパラメータ
-    gnss_init_distance_m: 2.0 # 初期方位推定に必要な最小移動距離 [m]
-    gnss_anchor_min_fix_status: 0 # アンカー採用最小fixステータス
-    gnss_anchor_sigma_m: 0.05 # ノード0のxy拘束σ [m]
-    gnss_init_yaw_sigma_rad: 10.0 # ノード0のyaw拘束σ [rad]
-    gnss_fix_sigma_m: 0.02 # 高精度fix時のGNSS拘束σ [m]
-    gnss_float_sigma_m: 0.5 # 低精度fix時のGNSS拘束σ [m]
-    gnss_factor_yaw_variance: 100000000.0 # GNSS Priorのyaw分散 [rad^2]
-    isam2_relinearize_threshold: 0.1 # iSAM2再線形化閾値
-    gnss_max_sigma_m: 5.0 # h_acc 由来のσ上限 [m]。これを超える測位は拘束をスキップ
-    gnss_rerender_threshold_m: 0.1 # GNSS拘束再描画閾値 [m]. これを超える位置変化があったときにGNSS拘束を再描画
-    gnss_optimizer: gtsam # "isam2" | "gtsam"
+    # バックエンド最適化設定
+    optimization:
+      backend: "gtsam" # "isam2" | "gtsam"
+      incremental: true
+      batch: true
+      batch_trigger:
+        mode: "event"
+        on_loop_close: true
+        every_n_nodes: 100
+        on_finalize: true
+      optimize_every_n_loops: 3
+      rerender_threshold_m: 0.1
+      isam2:
+        relinearize_threshold: 0.1
 
 slam_gnss_2d_offline_node:
   ros__parameters:

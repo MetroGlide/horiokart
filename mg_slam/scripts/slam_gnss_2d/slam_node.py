@@ -24,11 +24,13 @@ class SlamGnss2DNode(SlamNodeBase):
     def __init__(self) -> None:
         super().__init__('slam_gnss_2d_node')
 
-    def _setup_io(self, cfg: SlamConfig) -> tuple[ScanSourceBase, OdomSourceBase]:
-        return ROS2ScanSource(self, cfg.scan_topic), ROS2OdomSource(self, cfg.odom_topic)
+    def _setup_io(self, cfg: SlamConfig):
+        from .input.ros2.subscriber import ROS2OdomSource, ROS2ScanSource
+        return ROS2ScanSource(self, cfg.topics.scan), ROS2OdomSource(self, cfg.topics.odom)
 
-    def _setup_gnss_source(self, cfg: SlamConfig) -> GnssSourceBase:
-        return ROS2GnssUtmSource(self, cfg.gnss_topic)
+    def _setup_gnss_source(self, cfg: SlamConfig):
+        from .input.ros2.subscriber import ROS2GnssUtmSource
+        return ROS2GnssUtmSource(self, cfg.gnss.topics.fix)
 
 
 def main(args=None):

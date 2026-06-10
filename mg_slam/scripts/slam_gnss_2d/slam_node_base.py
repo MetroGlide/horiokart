@@ -36,8 +36,8 @@ class SlamNodeBase(Node, ABC):
 
         self._pose_graph = build_pose_graph_builder(cfg)
         self._renderer = OpenCVRenderer(
-            resolution=cfg.map_resolution,
-            expansion_margin=cfg.map_expansion_margin,
+            resolution=cfg.map.resolution,
+            expansion_margin=cfg.map.expansion_margin,
         )
 
         self._map_pub = self.create_publisher(
@@ -60,16 +60,16 @@ class SlamNodeBase(Node, ABC):
         self._odom_source.start()
         self._scan_source.start()
 
-        self._enable_scan_matching = cfg.enable_scan_matching
-        self._enable_gnss = cfg.enable_gnss
-        self._enable_loop_closure = cfg.enable_loop_closure
-        self._enable_incremental_optimizer = cfg.enable_incremental_optimizer
+        self._enable_scan_matching = cfg.scan_matching.enabled
+        self._enable_gnss = cfg.gnss.enabled
+        self._enable_loop_closure = cfg.loop_closure.enabled
+        self._enable_incremental_optimizer = cfg.optimization.incremental
 
-        self._gnss_missing_grace_frames = cfg.gnss_missing_grace_frames
+        self._gnss_missing_grace_frames = cfg.gnss.validation.missing_grace_frames
         self._gnss_missing_streak = 0
         self._gnss_degraded = False
 
-        self._use_gnss = cfg.use_gnss and self._enable_gnss
+        self._use_gnss = cfg.gnss.enabled
         self._gnss_source = None
         self._gnss_runner = None
         if self._use_gnss:
@@ -79,23 +79,23 @@ class SlamNodeBase(Node, ABC):
                 from slam_gnss_2d.gnss.gnss_anchored_runner import GnssAnchoredParams, GnssAnchoredRunner
 
                 params = GnssAnchoredParams(
-                    init_distance_m=cfg.gnss_init_distance_m,
-                    anchor_min_fix_status=cfg.gnss_anchor_min_fix_status,
-                    anchor_sigma_m=cfg.gnss_anchor_sigma_m,
-                    init_yaw_sigma_rad=cfg.gnss_init_yaw_sigma_rad,
-                    gnss_fix_sigma_m=cfg.gnss_fix_sigma_m,
-                    gnss_float_sigma_m=cfg.gnss_float_sigma_m,
-                    gnss_factor_yaw_variance=cfg.gnss_factor_yaw_variance,
-                    gnss_max_sigma_m=cfg.gnss_max_sigma_m,
-                    gnss_rerender_threshold_m=cfg.gnss_rerender_threshold_m,
+                    init_distance_m=cfg.gnss.anchor.init_distance_m,
+                    anchor_min_fix_status=cfg.gnss.anchor.min_fix_status,
+                    anchor_sigma_m=cfg.gnss.anchor.sigma_m,
+                    init_yaw_sigma_rad=cfg.gnss.anchor.init_yaw_sigma_rad,
+                    gnss_fix_sigma_m=cfg.gnss.sigma.fix_m,
+                    gnss_float_sigma_m=cfg.gnss.sigma.float_m,
+                    gnss_factor_yaw_variance=cfg.gnss.sigma.factor_yaw_variance,
+                    gnss_max_sigma_m=cfg.gnss.validation.max_sigma_m,
+                    gnss_rerender_threshold_m=cfg.optimization.rerender_threshold_m,
                 )
-                if cfg.gnss_optimizer == 'gtsam':
+                if cfg.optimization.backend == 'gtsam':
                     from slam_gnss_2d.optimizer.gtsam_incremental_adapter import GTSAMIncrementalAdapter
                     opt = GTSAMIncrementalAdapter()
                 else:
                     from slam_gnss_2d.optimizer.isam2_optimizer import ISAM2Optimizer
                     opt = ISAM2Optimizer(
-                        relinearize_threshold=cfg.isam2_relinearize_threshold)
+                        relinearize_threshold=cfg.optimization.isam2.relinearize_threshold)
 
                 self._gnss_runner = GnssAnchoredRunner(
                     params=params,
@@ -112,7 +112,7 @@ class SlamNodeBase(Node, ABC):
             gnss_runner=self._gnss_runner,
         )
 
-        self.create_timer(1.0 / cfg.map_publish_hz, self._publish_map_timer)
+        self.create_timer(1.0 / cfg.map.publish_hz, self._publish_map_timer)
         self.create_timer(0.1, self._publish_tf)
 
         self._scan_recv_count = 0
@@ -122,10 +122,10 @@ class SlamNodeBase(Node, ABC):
         self._finalized = False
 
         self.get_logger().info(
-            f'{node_name} started (builder={cfg.pose_graph_builder}, '
-            f'matcher={cfg.scan_matcher_type}, ref={cfg.scan_reference})\n'
-            f'  scan: {cfg.scan_topic}, odom: {cfg.odom_topic}\n'
-            f'  map: dynamic @ {cfg.map_resolution}m/px, margin={cfg.map_expansion_margin}m\n'
+            f'{node_name} started (scan_matching={cfg.scan_matching.enabled}, loop_closure={cfg.loop_closure.enabled}, '
+            f'matcher={cfg.scan_matching.type}, ref={cfg.scan_matching.reference})\n'
+            f'  scan: {cfg.topics.scan}, odom: {cfg.topics.odom}\n'
+            f'  map: dynamic @ {cfg.map.resolution}m/px, margin={cfg.map.expansion_margin}m\n'
             f'  incremental={self._enable_incremental_optimizer}'
         )
 
@@ -139,162 +139,177 @@ class SlamNodeBase(Node, ABC):
         raise NotImplementedError
 
     def _declare_params(self) -> None:
-        # 購読トピック名
-        self.declare_parameter('scan_topic', '/scan_top_lidar')
-        self.declare_parameter('odom_topic', '/odom')
+        self.declare_parameter('topics.scan', '/scan_top_lidar')
+        self.declare_parameter('topics.odom', '/odom')
 
-        # 占有格子マップ設定
-        self.declare_parameter('map_resolution', 0.05)         # [m/px]
-        self.declare_parameter('map_expansion_margin', 100.0)  # [m]
+        self.declare_parameter('map.resolution', 0.05)
+        self.declare_parameter('map.expansion_margin', 100.0)
+        self.declare_parameter('map.publish_hz', 1.0)
 
-        # キーフレーム採択閾値
-        self.declare_parameter('min_translation', 0.3)  # [m]
-        self.declare_parameter('min_rotation', 0.1)     # [rad] ≈ 5.7°
+        self.declare_parameter('keyframe.min_translation', 1.0)
+        self.declare_parameter('keyframe.min_rotation', 0.1)
 
-        # 配信
-        self.declare_parameter('map_publish_hz', 1.0)  # [Hz]
+        self.declare_parameter('scan_matching.enabled', True)
+        self.declare_parameter('scan_matching.type', 'ndt')
+        self.declare_parameter('scan_matching.reference', 'scan_to_local_map')
+        self.declare_parameter('scan_matching.max_failure_streak', 5)
+        self.declare_parameter('scan_matching.icp.max_iterations', 100)
+        self.declare_parameter('scan_matching.icp.tolerance', 1e-5)
+        self.declare_parameter('scan_matching.icp.max_correspondence_dist', 1.0)
+        self.declare_parameter('scan_matching.ndt.cell_size', 1.0)
+        self.declare_parameter('scan_matching.local_map.window', 30)
+        self.declare_parameter('scan_matching.local_map.radius', 30.0)
 
-        # ポーズグラフ構築アルゴリズム
-        # "odom_only" | "scan_matching" | "loop_closure"
-        self.declare_parameter('pose_graph_builder', 'scan_matching')
-        self.declare_parameter('scan_matcher_type',
-                               'icp')             # "icp" | "ndt"
-        # "scan_to_scan" | "scan_to_local_map"
-        self.declare_parameter('scan_reference', 'scan_to_scan')
+        self.declare_parameter('loop_closure.enabled', True)
+        self.declare_parameter('loop_closure.search_radius', 2.0)
+        self.declare_parameter('loop_closure.min_node_gap', 50)
+        self.declare_parameter('loop_closure.max_failure_streak', 3)
+        self.declare_parameter('loop_closure.matcher_type', 'icp')
+        self.declare_parameter('loop_closure.icp.max_iterations', 100)
+        self.declare_parameter('loop_closure.icp.tolerance', 1e-5)
+        self.declare_parameter('loop_closure.icp.max_correspondence_dist', 1.0)
+        self.declare_parameter('loop_closure.ndt.cell_size', 1.0)
+        self.declare_parameter('loop_closure.max_dyaw_deg', 145.0)
+        self.declare_parameter('loop_closure.crossing_reject_deg', 45.0)
+        self.declare_parameter('loop_closure.submap_radius', 5.0)
+        self.declare_parameter('loop_closure.max_score', 0.0)
 
-        # ICP パラメータ（scan_matcher_type == "icp" のとき使用）
-        self.declare_parameter('icp_max_iterations', 30)
-        # 更新ノルムがこの値未満で収束 [m]
-        self.declare_parameter('icp_tolerance', 1e-4)
-        self.declare_parameter(
-            'icp_max_correspondence_dist', 0.5)  # [m] 大きいと誤対応リスク増
+        self.declare_parameter('gnss.enabled', True)
+        self.declare_parameter('gnss.mode', 'integrated')
+        self.declare_parameter('gnss.source', 'navpvt')
+        self.declare_parameter('gnss.topics.fix', '/gps/fix')
+        self.declare_parameter('gnss.topics.navpvt', '/navpvt')
+        self.declare_parameter('gnss.navpvt_hacc_scale', 1.0)
+        self.declare_parameter('gnss.validation.max_time_delta_s', 5.0)
+        self.declare_parameter('gnss.validation.max_sigma_m', 5.0)
+        self.declare_parameter('gnss.validation.missing_grace_frames', 30)
+        self.declare_parameter('gnss.anchor.min_fix_status', 0)
+        self.declare_parameter('gnss.anchor.sigma_m', 0.05)
+        self.declare_parameter('gnss.anchor.init_yaw_sigma_rad', 10.0)
+        self.declare_parameter('gnss.anchor.init_distance_m', 2.0)
+        self.declare_parameter('gnss.sigma.fix_m', 0.02)
+        self.declare_parameter('gnss.sigma.float_m', 0.5)
+        self.declare_parameter('gnss.sigma.noise_xy_m', 3.0)
+        self.declare_parameter('gnss.sigma.factor_yaw_variance', 1e8)
+        self.declare_parameter('gnss.aligner.type', 'precision_weighted')
+        self.declare_parameter('gnss.aligner.kinematic_min_speed_ms', 0.5)
 
-        # NDT パラメータ（scan_matcher_type == "ndt" のとき使用）
-        self.declare_parameter('ndt_cell_size', 1.0)  # [m] 大きいほど粗く高速
-
-        # ローカルマップパラメータ（scan_reference == "scan_to_local_map" のとき使用）
-        # スライディングウィンドウ幅 [ノード数]
-        self.declare_parameter('local_map_window', 20)
-        self.declare_parameter('local_map_radius', 15.0)  # 参照点群の抽出半径 [m]
-
-        # 連続失敗上限（この回数連続失敗で odom フォールバック）
-        self.declare_parameter('matcher_max_failure_streak', 5)
-
-        # ループクロージャパラメータ（pose_graph_builder == "loop_closure" のとき使用）
-        self.declare_parameter('loop_closure_search_radius', 2.0)   # [m]
-        self.declare_parameter('loop_closure_min_node_gap', 50)
-        self.declare_parameter('loop_closure_max_failure_streak', 3)
-        self.declare_parameter('optimize_every_n_loops', 1)
-        self.declare_parameter(
-            'loop_closure_matcher_type', 'icp')  # "icp" | "ndt"
-        self.declare_parameter('loop_closure_max_dyaw_deg', 90.0)   # [deg]
-        # パス交差 false positive 排除: |dyaw| が [crossing_reject, 180-crossing_reject] 帯域なら拒否
-        self.declare_parameter(
-            'loop_closure_crossing_reject_deg', 0.0)  # [deg], 0.0で無効
-        self.declare_parameter('loop_closure_submap_radius', 5.0)   # [m]
-        # ループ辺スコア上限。ICP:平均点対線残差[m] / NDT:平均負対数尤度。0.0で無効
-        self.declare_parameter('loop_closure_max_score', 0.0)
-
-        # 比較実験向け機能トグル
-        self.declare_parameter('enable_scan_matching', True)
-        self.declare_parameter('enable_gnss', True)
-        self.declare_parameter('enable_loop_closure', True)
-
-        # 最適化トグル
-        self.declare_parameter('enable_incremental_optimizer', True)
-        self.declare_parameter('gnss_missing_grace_frames', 30)
-
-        # GNSS 拘束（use_gnss == True のとき slam_offline_node.py が使用する）
-        self.declare_parameter('use_gnss', False)
-        self.declare_parameter('gnss_topic', '/gps/fix')
-        # "navsat_fix" | "navpvt"
-        self.declare_parameter('gnss_source_type', 'navsat_fix')
-        self.declare_parameter('gnss_navpvt_topic', '/ublox/navpvt')
-        self.declare_parameter('navpvt_hacc_scale', 1.0)
-        self.declare_parameter('gnss_init_distance_m', 0.5)
-        self.declare_parameter('gnss_anchor_min_fix_status', 0)
-        self.declare_parameter('gnss_anchor_sigma_m', 0.05)
-        self.declare_parameter('gnss_init_yaw_sigma_rad', 10.0)
-        self.declare_parameter('gnss_fix_sigma_m', 0.02)
-        self.declare_parameter('gnss_float_sigma_m', 0.5)
-        self.declare_parameter('gnss_factor_yaw_variance', 1e8)
-        self.declare_parameter('isam2_relinearize_threshold', 0.1)
-        self.declare_parameter('gnss_max_sigma_m', 2.0)  # [m]
-        self.declare_parameter('gnss_rerender_threshold_m', 0.1)  # [m]
-        self.declare_parameter('gnss_optimizer', 'isam2')
+        self.declare_parameter('optimization.backend', 'gtsam')
+        self.declare_parameter('optimization.incremental', True)
+        self.declare_parameter('optimization.batch', True)
+        self.declare_parameter('optimization.batch_trigger.mode', 'event')
+        self.declare_parameter('optimization.batch_trigger.on_loop_close', True)
+        self.declare_parameter('optimization.batch_trigger.every_n_nodes', 100)
+        self.declare_parameter('optimization.batch_trigger.on_finalize', True)
+        self.declare_parameter('optimization.optimize_every_n_loops', 3)
+        self.declare_parameter('optimization.rerender_threshold_m', 0.1)
+        self.declare_parameter('optimization.isam2.relinearize_threshold', 0.1)
 
     def _build_config(self) -> SlamConfig:
+        from slam_gnss_2d.config import (
+            TopicsConfig, MapConfig, KeyframeConfig, ScanMatchingConfig, IcpConfig, NdtConfig, LocalMapConfig,
+            LoopClosureConfig, GnssConfig, GnssTopicsConfig, GnssValidationConfig, GnssAnchorConfig,
+            GnssSigmaConfig, GnssAlignerConfig, OptimizationConfig, BatchTriggerConfig, Isam2Config
+        )
+
         return SlamConfig(
-            scan_topic=self.get_parameter('scan_topic').value,
-            odom_topic=self.get_parameter('odom_topic').value,
-            map_resolution=self.get_parameter('map_resolution').value,
-            map_expansion_margin=self.get_parameter(
-                'map_expansion_margin').value,
-            min_translation=self.get_parameter('min_translation').value,
-            min_rotation=self.get_parameter('min_rotation').value,
-            map_publish_hz=self.get_parameter('map_publish_hz').value,
-            pose_graph_builder=self.get_parameter('pose_graph_builder').value,
-            scan_matcher_type=self.get_parameter('scan_matcher_type').value,
-            scan_reference=self.get_parameter('scan_reference').value,
-            icp_max_iterations=self.get_parameter('icp_max_iterations').value,
-            icp_tolerance=self.get_parameter('icp_tolerance').value,
-            icp_max_correspondence_dist=self.get_parameter(
-                'icp_max_correspondence_dist').value,
-            ndt_cell_size=self.get_parameter('ndt_cell_size').value,
-            local_map_window=self.get_parameter('local_map_window').value,
-            local_map_radius=self.get_parameter('local_map_radius').value,
-            matcher_max_failure_streak=self.get_parameter(
-                'matcher_max_failure_streak').value,
-            loop_closure_search_radius=self.get_parameter(
-                'loop_closure_search_radius').value,
-            loop_closure_min_node_gap=self.get_parameter(
-                'loop_closure_min_node_gap').value,
-            loop_closure_max_failure_streak=self.get_parameter(
-                'loop_closure_max_failure_streak').value,
-            optimize_every_n_loops=self.get_parameter(
-                'optimize_every_n_loops').value,
-            loop_closure_matcher_type=self.get_parameter(
-                'loop_closure_matcher_type').value,
-            loop_closure_max_dyaw_deg=self.get_parameter(
-                'loop_closure_max_dyaw_deg').value,
-            loop_closure_crossing_reject_deg=self.get_parameter(
-                'loop_closure_crossing_reject_deg').value,
-            loop_closure_submap_radius=self.get_parameter(
-                'loop_closure_submap_radius').value,
-            loop_closure_max_score=self.get_parameter(
-                'loop_closure_max_score').value,
-            enable_scan_matching=self.get_parameter(
-                'enable_scan_matching').value,
-            enable_gnss=self.get_parameter('enable_gnss').value,
-            enable_loop_closure=self.get_parameter(
-                'enable_loop_closure').value,
-            enable_incremental_optimizer=self.get_parameter(
-                'enable_incremental_optimizer').value,
-            gnss_missing_grace_frames=self.get_parameter(
-                'gnss_missing_grace_frames').value,
-            use_gnss=self.get_parameter('use_gnss').value,
-            gnss_topic=self.get_parameter('gnss_topic').value,
-            gnss_source_type=self.get_parameter('gnss_source_type').value,
-            gnss_navpvt_topic=self.get_parameter('gnss_navpvt_topic').value,
-            navpvt_hacc_scale=self.get_parameter('navpvt_hacc_scale').value,
-            gnss_init_distance_m=self.get_parameter(
-                'gnss_init_distance_m').value,
-            gnss_anchor_min_fix_status=self.get_parameter(
-                'gnss_anchor_min_fix_status').value,
-            gnss_anchor_sigma_m=self.get_parameter(
-                'gnss_anchor_sigma_m').value,
-            gnss_init_yaw_sigma_rad=self.get_parameter(
-                'gnss_init_yaw_sigma_rad').value,
-            gnss_fix_sigma_m=self.get_parameter('gnss_fix_sigma_m').value,
-            gnss_float_sigma_m=self.get_parameter('gnss_float_sigma_m').value,
-            gnss_factor_yaw_variance=self.get_parameter(
-                'gnss_factor_yaw_variance').value,
-            isam2_relinearize_threshold=self.get_parameter(
-                'isam2_relinearize_threshold').value,
-            gnss_max_sigma_m=self.get_parameter('gnss_max_sigma_m').value,
-            gnss_rerender_threshold_m=self.get_parameter(
-                'gnss_rerender_threshold_m').value,
-            gnss_optimizer=self.get_parameter('gnss_optimizer').value,
+            topics=TopicsConfig(
+                scan=self.get_parameter('topics.scan').value,
+                odom=self.get_parameter('topics.odom').value,
+            ),
+            map=MapConfig(
+                resolution=self.get_parameter('map.resolution').value,
+                expansion_margin=self.get_parameter('map.expansion_margin').value,
+                publish_hz=self.get_parameter('map.publish_hz').value,
+            ),
+            keyframe=KeyframeConfig(
+                min_translation=self.get_parameter('keyframe.min_translation').value,
+                min_rotation=self.get_parameter('keyframe.min_rotation').value,
+            ),
+            scan_matching=ScanMatchingConfig(
+                enabled=self.get_parameter('scan_matching.enabled').value,
+                type=self.get_parameter('scan_matching.type').value,
+                reference=self.get_parameter('scan_matching.reference').value,
+                max_failure_streak=self.get_parameter('scan_matching.max_failure_streak').value,
+                icp=IcpConfig(
+                    max_iterations=self.get_parameter('scan_matching.icp.max_iterations').value,
+                    tolerance=self.get_parameter('scan_matching.icp.tolerance').value,
+                    max_correspondence_dist=self.get_parameter('scan_matching.icp.max_correspondence_dist').value,
+                ),
+                ndt=NdtConfig(
+                    cell_size=self.get_parameter('scan_matching.ndt.cell_size').value,
+                ),
+                local_map=LocalMapConfig(
+                    window=self.get_parameter('scan_matching.local_map.window').value,
+                    radius=self.get_parameter('scan_matching.local_map.radius').value,
+                ),
+            ),
+            loop_closure=LoopClosureConfig(
+                enabled=self.get_parameter('loop_closure.enabled').value,
+                search_radius=self.get_parameter('loop_closure.search_radius').value,
+                min_node_gap=self.get_parameter('loop_closure.min_node_gap').value,
+                max_failure_streak=self.get_parameter('loop_closure.max_failure_streak').value,
+                matcher_type=self.get_parameter('loop_closure.matcher_type').value,
+                icp=IcpConfig(
+                    max_iterations=self.get_parameter('loop_closure.icp.max_iterations').value,
+                    tolerance=self.get_parameter('loop_closure.icp.tolerance').value,
+                    max_correspondence_dist=self.get_parameter('loop_closure.icp.max_correspondence_dist').value,
+                ),
+                ndt=NdtConfig(
+                    cell_size=self.get_parameter('loop_closure.ndt.cell_size').value,
+                ),
+                max_dyaw_deg=self.get_parameter('loop_closure.max_dyaw_deg').value,
+                crossing_reject_deg=self.get_parameter('loop_closure.crossing_reject_deg').value,
+                submap_radius=self.get_parameter('loop_closure.submap_radius').value,
+                max_score=self.get_parameter('loop_closure.max_score').value,
+            ),
+            gnss=GnssConfig(
+                enabled=self.get_parameter('gnss.enabled').value,
+                mode=self.get_parameter('gnss.mode').value,
+                source=self.get_parameter('gnss.source').value,
+                topics=GnssTopicsConfig(
+                    fix=self.get_parameter('gnss.topics.fix').value,
+                    navpvt=self.get_parameter('gnss.topics.navpvt').value,
+                ),
+                navpvt_hacc_scale=self.get_parameter('gnss.navpvt_hacc_scale').value,
+                validation=GnssValidationConfig(
+                    max_time_delta_s=self.get_parameter('gnss.validation.max_time_delta_s').value,
+                    max_sigma_m=self.get_parameter('gnss.validation.max_sigma_m').value,
+                    missing_grace_frames=self.get_parameter('gnss.validation.missing_grace_frames').value,
+                ),
+                anchor=GnssAnchorConfig(
+                    min_fix_status=self.get_parameter('gnss.anchor.min_fix_status').value,
+                    sigma_m=self.get_parameter('gnss.anchor.sigma_m').value,
+                    init_yaw_sigma_rad=self.get_parameter('gnss.anchor.init_yaw_sigma_rad').value,
+                    init_distance_m=self.get_parameter('gnss.anchor.init_distance_m').value,
+                ),
+                sigma=GnssSigmaConfig(
+                    fix_m=self.get_parameter('gnss.sigma.fix_m').value,
+                    float_m=self.get_parameter('gnss.sigma.float_m').value,
+                    noise_xy_m=self.get_parameter('gnss.sigma.noise_xy_m').value,
+                    factor_yaw_variance=self.get_parameter('gnss.sigma.factor_yaw_variance').value,
+                ),
+                aligner=GnssAlignerConfig(
+                    type=self.get_parameter('gnss.aligner.type').value,
+                    kinematic_min_speed_ms=self.get_parameter('gnss.aligner.kinematic_min_speed_ms').value,
+                ),
+            ),
+            optimization=OptimizationConfig(
+                backend=self.get_parameter('optimization.backend').value,
+                incremental=self.get_parameter('optimization.incremental').value,
+                batch=self.get_parameter('optimization.batch').value,
+                batch_trigger=BatchTriggerConfig(
+                    mode=self.get_parameter('optimization.batch_trigger.mode').value,
+                    on_loop_close=self.get_parameter('optimization.batch_trigger.on_loop_close').value,
+                    every_n_nodes=self.get_parameter('optimization.batch_trigger.every_n_nodes').value,
+                    on_finalize=self.get_parameter('optimization.batch_trigger.on_finalize').value,
+                ),
+                optimize_every_n_loops=self.get_parameter('optimization.optimize_every_n_loops').value,
+                rerender_threshold_m=self.get_parameter('optimization.rerender_threshold_m').value,
+                isam2=Isam2Config(
+                    relinearize_threshold=self.get_parameter('optimization.isam2.relinearize_threshold').value,
+                )
+            ),
         )
 
     def _on_scan(self, scan: ScanData) -> None:
