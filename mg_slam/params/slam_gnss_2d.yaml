@@ -23,15 +23,24 @@
         max_iterations: 100
         tolerance: 0.00001
         max_correspondence_dist: 1.0
+        robust_kernel: "huber"
+        robust_kernel_scale: 0.1
       ndt:
         cell_size: 1.0
+        cell_sizes: [1.0]
+        use_bilinear: true
+      csm:
+        linear_search_window: 1.0
+        angular_search_window: 0.5
+        linear_step: 0.05
+        angular_step: 0.02
       local_map:
         window: 30
         radius: 30.0
 
     # ループクロージャ設定
     loop_closure:
-      enabled: true
+      enabled: false
       search_radius: 2.0
       min_node_gap: 50
       max_failure_streak: 3
@@ -40,8 +49,17 @@
         max_iterations: 100
         tolerance: 0.00001
         max_correspondence_dist: 1.0
+        robust_kernel: "huber"
+        robust_kernel_scale: 0.1
       ndt:
         cell_size: 1.0
+        cell_sizes: [1.0]
+        use_bilinear: true
+      csm:
+        linear_search_window: 1.0
+        angular_search_window: 0.5
+        linear_step: 0.05
+        angular_step: 0.02
       max_dyaw_deg: 145.0
       crossing_reject_deg: 45.0
       submap_radius: 5.0

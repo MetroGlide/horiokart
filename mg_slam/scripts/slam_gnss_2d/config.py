@@ -28,11 +28,15 @@ class IcpConfig:
     max_iterations: int = 100
     tolerance: float = 1e-5
     max_correspondence_dist: float = 1.0   # [m] 大きいと誤対応リスク増
+    robust_kernel: str = 'huber'           # 'none', 'huber', 'cauchy'
+    robust_kernel_scale: float = 0.1       # ロバストカーネルのスケールパラメータ
 
 @dataclass(frozen=True)
 class NdtConfig:
     """NDT パラメータ"""
-    cell_size: float = 1.0   # [m] 大きいほど粗く高速
+    cell_size: float = 1.0   # [m] 互換性のため残す
+    cell_sizes: tuple[float, ...] = (1.0,) # マルチ解像度探索用のセルサイズリスト
+    use_bilinear: bool = False             # Bilinear補間の有効化フラグ
 
 @dataclass(frozen=True)
 class LocalMapConfig:
@@ -41,14 +45,23 @@ class LocalMapConfig:
     radius: float = 30.0  # 参照点群の抽出半径 [m]
 
 @dataclass(frozen=True)
+class CsmConfig:
+    """CSM パラメータ"""
+    linear_search_window: float = 1.0
+    angular_search_window: float = 0.5
+    linear_step: float = 0.05
+    angular_step: float = 0.02
+
+@dataclass(frozen=True)
 class ScanMatchingConfig:
     """スキャンマッチング設定"""
     enabled: bool = True
-    type: str = 'ndt'              # "icp" | "ndt"
+    type: str = 'ndt'              # "icp" | "ndt" | "csm"
     reference: str = 'scan_to_local_map' # "scan_to_scan" | "scan_to_local_map"
     max_failure_streak: int = 5    # 連続失敗がこの回数に達したら odom フォールバック
     icp: IcpConfig = IcpConfig()
     ndt: NdtConfig = NdtConfig()
+    csm: CsmConfig = CsmConfig()
     local_map: LocalMapConfig = LocalMapConfig()
 
 @dataclass(frozen=True)
@@ -60,9 +73,10 @@ class LoopClosureConfig:
     max_failure_streak: int = 3  # ループ検証連続失敗上限
     # ループ検証専用マッチャー。NDTはセル対称性によるfalse positiveリスクがあるため
     # 連続マッチング（scan_matching.type）とは独立して設定できる。
-    matcher_type: str = 'icp'    # "icp" | "ndt"
+    matcher_type: str = 'icp'    # "icp" | "ndt" | "csm"
     icp: IcpConfig = IcpConfig()
     ndt: NdtConfig = NdtConfig()
+    csm: CsmConfig = CsmConfig()
     # ループ辺のdyaw絶対値上限 [deg]。Uターンループを許容する値
     max_dyaw_deg: float = 145.0
     # パス交差による false positive を拒否する dyaw 境界 [deg]。

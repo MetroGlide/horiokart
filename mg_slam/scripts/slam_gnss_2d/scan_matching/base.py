@@ -16,17 +16,23 @@ class ScanMatcherBase(ABC):
     """
 
     @abstractmethod
+    def set_target_cloud(self, src_pts: np.ndarray) -> None:
+        """参照点群（ターゲット）をセットし、必要な事前計算（KDTree構築、法線計算、セル構築など）を行う。
+
+        Args:
+            src_pts: 参照点群 (N, 2)。
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def match(
         self,
-        src_pts: np.ndarray,
         dst: ScanData,
         initial_guess: OdomData,
     ) -> MatchResult:
-        """src_pts を基準として dst をマッチングし、補正後の相対変換を返す。
+        """セットされたターゲットを基準として dst をマッチングし、補正後の相対変換を返す。
 
         Args:
-            src_pts: 参照点群 (N, 2)。最後ノードのボディフレーム基準。
-                     1枚スキャン分またはローカルマップ集約分のいずれかが渡される。
             dst: 現フレームのスキャン（変換対象スキャン）。
             initial_guess: オドメトリから得られる初期推定値。
                 x/y/yaw は src_pts フレームを基準とした相対デルタ。

@@ -97,8 +97,8 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
         src_pts = self._provider.get_reference_pts()
         if src_pts is not None:
             self.icp_attempt_count += 1
+            self._matcher.set_target_cloud(src_pts)
             result = self._matcher.match(
-                src_pts=src_pts,
                 dst=scan,
                 initial_guess=initial_guess,
             )

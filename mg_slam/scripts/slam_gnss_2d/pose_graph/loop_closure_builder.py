@@ -179,8 +179,8 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         )
 
         self.loop_attempt_count += 1
+        self._loop_matcher.set_target_cloud(src_pts)
         result = self._loop_matcher.match(
-            src_pts=src_pts,
             dst=node.scan,
             initial_guess=initial_guess,
         )

@@ -79,18 +79,29 @@ def _build_matcher(config: SlamConfig) -> ScanMatcherBase:
             max_iterations=config.scan_matching.icp.max_iterations,
             tolerance=config.scan_matching.icp.tolerance,
             max_correspondence_dist=config.scan_matching.icp.max_correspondence_dist,
+            robust_kernel=config.scan_matching.icp.robust_kernel,
+            robust_kernel_scale=config.scan_matching.icp.robust_kernel_scale,
         )
     elif config.scan_matching.type == 'ndt':
         from .scan_matching.ndt_matcher import NDTMatcher
         return NDTMatcher(
             max_iterations=config.scan_matching.icp.max_iterations,
             tolerance=config.scan_matching.icp.tolerance,
-            cell_size=config.scan_matching.ndt.cell_size,
+            cell_sizes=list(config.scan_matching.ndt.cell_sizes),
+            use_bilinear=config.scan_matching.ndt.use_bilinear,
+        )
+    elif config.scan_matching.type == 'csm':
+        from .scan_matching.csm_matcher import CSMMatcher
+        return CSMMatcher(
+            linear_search_window=config.scan_matching.csm.linear_search_window,
+            angular_search_window=config.scan_matching.csm.angular_search_window,
+            linear_step=config.scan_matching.csm.linear_step,
+            angular_step=config.scan_matching.csm.angular_step,
         )
     else:
         raise ValueError(
             f"Unknown scan_matcher_type: '{config.scan_matching.type}'. "
-            "Valid options: 'icp', 'ndt'"
+            "Valid options: 'icp', 'ndt', 'csm'"
         )
 
 
@@ -107,18 +118,29 @@ def _build_loop_matcher(config: SlamConfig) -> ScanMatcherBase:
             max_iterations=config.loop_closure.icp.max_iterations,
             tolerance=config.loop_closure.icp.tolerance,
             max_correspondence_dist=config.loop_closure.icp.max_correspondence_dist,
+            robust_kernel=config.loop_closure.icp.robust_kernel,
+            robust_kernel_scale=config.loop_closure.icp.robust_kernel_scale,
         )
     elif config.loop_closure.matcher_type == 'ndt':
         from .scan_matching.ndt_matcher import NDTMatcher
         return NDTMatcher(
             max_iterations=config.loop_closure.icp.max_iterations,
             tolerance=config.loop_closure.icp.tolerance,
-            cell_size=config.loop_closure.ndt.cell_size,
+            cell_sizes=list(config.loop_closure.ndt.cell_sizes),
+            use_bilinear=config.loop_closure.ndt.use_bilinear,
+        )
+    elif config.loop_closure.matcher_type == 'csm':
+        from .scan_matching.csm_matcher import CSMMatcher
+        return CSMMatcher(
+            linear_search_window=config.loop_closure.csm.linear_search_window,
+            angular_search_window=config.loop_closure.csm.angular_search_window,
+            linear_step=config.loop_closure.csm.linear_step,
+            angular_step=config.loop_closure.csm.angular_step,
         )
     else:
         raise ValueError(
             f"Unknown loop_closure_matcher_type: '{config.loop_closure.matcher_type}'. "
-            "Valid options: 'icp', 'ndt'"
+            "Valid options: 'icp', 'ndt', 'csm'"
         )
 
 
