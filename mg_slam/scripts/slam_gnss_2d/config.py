@@ -76,35 +76,13 @@ class SlamConfig:
 
     # 最適化トグル
     enable_incremental_optimizer: bool = True
-    enable_batch_optimizer: bool = True
-    # バッチ最適化トリガー: "manual" | "event" | "periodic"
-    batch_trigger_mode: str = 'event'
-    # loop close 時にもバッチ最適化をトリガーする
-    batch_trigger_on_loop_close: bool = True
-    # periodic モード時、Nノードごとにバッチ最適化
-    batch_trigger_every_n_nodes: int = 100
-    # 終了時に最終バッチ最適化を実行する
-    batch_optimize_on_finalize: bool = True
 
     # センサー欠測時降格ポリシー
     gnss_missing_grace_frames: int = 30
 
     # GNSS 拘束（use_gnss == True のとき slam_offline_node.py が使用する）
     use_gnss: bool = False
-    # GNSS 統合モード。"integrated" | "split_align"
-    # legacy: "gnss_anchored" -> integrated, "batch" -> split_align
-    gnss_mode: str = 'integrated'
     gnss_topic: str = '/gps/fix'
-    # GNSS 位置ノイズ [m]。position_covariance が不定の場合のフォールバック値
-    gnss_noise_xy_m: float = 3.0
-    # GNSS アライナー種別。"kinematic_heading" | "precision_weighted"
-    gnss_aligner: str = 'kinematic_heading'
-    # KinematicHeadingAligner / PrecisionWeightedAligner が有効とみなす最小移動速度 [m/s]。
-    # この速度未満の区間は座標系回転の推定に使わない。
-    kinematic_min_speed_ms: float = 0.5
-    # GNSS 測位とポーズノードのタイムスタンプ差の上限 [s]。
-    # この時間差を超えた GNSS 測位は拘束として使用しない。
-    gnss_max_time_delta_s: float = 5.0
     # GNSS ソース種別。"navsat_fix" | "navpvt"
     gnss_source_type: str = 'navsat_fix'
     # NavPVT トピック名（gnss_source_type == "navpvt" のとき使用）
@@ -112,7 +90,7 @@ class SlamConfig:
     # NavPVT h_acc → pos_std 変換スケール。実機キャリブレーション用。
     navpvt_hacc_scale: float = 1.0
 
-    # 1-phase GNSS anchored モード設定（gnss_mode == "integrated"）
+    # 1-phase GNSS anchored モード設定
     gnss_init_distance_m: float = 0.5
     gnss_anchor_min_fix_status: int = 0
     gnss_anchor_sigma_m: float = 0.05

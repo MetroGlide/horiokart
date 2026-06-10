@@ -13,7 +13,6 @@ import rclpy
 from slam_gnss_2d.config import SlamConfig
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from slam_gnss_2d.input.ros2.ros_adapter import (
-    ROS2GnssSource,
     ROS2GnssUtmSource,
     ROS2OdomSource,
     ROS2ScanSource,
@@ -29,9 +28,7 @@ class SlamGnss2DNode(SlamNodeBase):
         return ROS2ScanSource(self, cfg.scan_topic), ROS2OdomSource(self, cfg.odom_topic)
 
     def _setup_gnss_source(self, cfg: SlamConfig) -> GnssSourceBase:
-        if cfg.gnss_mode == 'integrated':
-            return ROS2GnssUtmSource(self, cfg.gnss_topic)
-        return ROS2GnssSource(self, cfg.gnss_topic)
+        return ROS2GnssUtmSource(self, cfg.gnss_topic)
 
 
 def main(args=None):

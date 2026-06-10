@@ -73,9 +73,6 @@ class SlamOfflineNode(SlamNodeBase):
     def _process_step(self) -> None:
         if not self._bag_scan_source.step():
             self._step_timer.cancel()
-            if self._use_gnss and self._is_split_align_mode():
-                self.get_logger().info('Running split_align GNSS batch phase (offline explicit path)')
-                self._run_split_align_batch_phase()
             self.get_logger().info('Bag processing complete')
             self.finalize()
 

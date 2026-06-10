@@ -174,48 +174,7 @@ class ROS2OdomSource(OdomSourceBase):
         ))
 
 
-class ROS2GnssSource(GnssSourceBase):
-    """ROS2 NavSatFix トピックから GnssData を供給するアダプター。Phase 4 で使用する。
 
-    Phase 4 で UTM 変換を行うまでの仮実装として longitude/latitude を x/y に格納する。
-    """
-
-    def __init__(self, node: Node, topic: str = '/gps/fix') -> None:
-        self._node = node
-        self._topic = topic
-        self._buffer: deque[GnssData] = deque(maxlen=_GNSS_BUFFER_SIZE)
-        self._sub = None
-
-    def start(self) -> None:
-        self._sub = self._node.create_subscription(
-            NavSatFix, self._topic, self._on_msg, 10
-        )
-
-    def stop(self) -> None:
-        if self._sub is not None:
-            self._node.destroy_subscription(self._sub)
-            self._sub = None
-
-    def get_gnss_at(self, timestamp: float) -> Optional[GnssData]:
-        if not self._buffer:
-            return None
-        return min(self._buffer, key=lambda g: abs(g.timestamp - timestamp))
-
-    def get_all_gnss(self) -> list[GnssData]:
-        return list(self._buffer)
-
-    def _on_msg(self, msg: NavSatFix) -> None:
-        stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        cov = msg.position_covariance
-        cov_2x2 = np.array(
-            [[cov[0], cov[1]], [cov[3], cov[4]]], dtype=np.float64)
-        self._buffer.append(GnssData(
-            timestamp=stamp,
-            x=msg.longitude,
-            y=msg.latitude,
-            covariance=cov_2x2,
-            fix_status=int(msg.status.status),
-        ))
 
 
 class ROS2GnssUtmSource(GnssSourceBase):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from .config import SlamConfig
-from .gnss.aligner_base import GnssAlignerBase
+
 from .pose_graph.base import PoseGraphBuilderBase
 from .scan_matching.base import ScanMatcherBase
 from .scan_matching.reference_provider.base import ReferenceProviderBase
@@ -138,35 +138,7 @@ def _build_reference_provider(config: SlamConfig) -> ReferenceProviderBase:
         )
 
 
-def build_gnss_aligner(config: SlamConfig) -> GnssAlignerBase:
-    """設定オブジェクトから GNSS アライナーを構築して返す。ROS 非依存。
 
-    Args:
-        config: slam_gnss_2d の全パラメータ集約オブジェクト。
-
-    Returns:
-        GnssAlignerBase の具体実装インスタンス。
-
-    Raises:
-        ValueError: 未知のアライナー種別が指定された場合。
-    """
-    if config.gnss_aligner == 'kinematic_heading':
-        from .gnss.kinematic_aligner import KinematicHeadingAligner
-        return KinematicHeadingAligner(
-            min_speed_ms=config.kinematic_min_speed_ms,
-        )
-    elif config.gnss_aligner == 'precision_weighted':
-        from .gnss.precision_weighted_aligner import PrecisionWeightedAligner
-        return PrecisionWeightedAligner(
-            min_speed_ms=config.kinematic_min_speed_ms,
-            default_noise_xy_m=config.gnss_noise_xy_m,
-            max_time_delta_s=config.gnss_max_time_delta_s,
-        )
-    else:
-        raise ValueError(
-            f"Unknown gnss_aligner: '{config.gnss_aligner}'. "
-            "Valid options: 'kinematic_heading', 'precision_weighted'"
-        )
 
 
 def build_gnss_source(config: SlamConfig, bag_path: str):
