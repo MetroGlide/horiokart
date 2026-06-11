@@ -97,7 +97,6 @@ class GnssTopicsConfig:
 
 @dataclass(frozen=True)
 class GnssValidationConfig:
-    max_time_delta_s: float = 5.0
     max_sigma_m: float = 5.0 # h_acc 導出のσ 上限 [m]。これを超える測位は拘束をスキップ。
     missing_grace_frames: int = 30 # センサー欠測時降格ポリシー
 
@@ -112,33 +111,18 @@ class GnssAnchorConfig:
 class GnssSigmaConfig:
     fix_m: float = 0.02
     float_m: float = 0.5
-    noise_xy_m: float = 3.0
     factor_yaw_variance: float = 1e8
-
-@dataclass(frozen=True)
-class GnssAlignerConfig:
-    type: str = 'precision_weighted'
-    kinematic_min_speed_ms: float = 0.5
 
 @dataclass(frozen=True)
 class GnssConfig:
     """GNSS 拘束設定"""
     enabled: bool = True
-    mode: str = 'integrated'
     source: str = 'navpvt' # GNSS ソース種別。"navsat_fix" | "navpvt"
     topics: GnssTopicsConfig = GnssTopicsConfig()
     navpvt_hacc_scale: float = 1.0 # NavPVT h_acc → pos_std 変換スケール。実機キャリブレーション用。
     validation: GnssValidationConfig = GnssValidationConfig()
     anchor: GnssAnchorConfig = GnssAnchorConfig()
     sigma: GnssSigmaConfig = GnssSigmaConfig()
-    aligner: GnssAlignerConfig = GnssAlignerConfig()
-
-@dataclass(frozen=True)
-class BatchTriggerConfig:
-    mode: str = 'event'
-    on_loop_close: bool = True
-    every_n_nodes: int = 100
-    on_finalize: bool = True
 
 @dataclass(frozen=True)
 class Isam2Config:
@@ -149,8 +133,6 @@ class OptimizationConfig:
     """最適化設定"""
     backend: str = 'gtsam' # "isam2" | "gtsam"
     incremental: bool = True
-    batch: bool = True
-    batch_trigger: BatchTriggerConfig = BatchTriggerConfig()
     optimize_every_n_loops: int = 3 # N本ループ辺追加ごとに最適化
     rerender_threshold_m: float = 0.1
     isam2: Isam2Config = Isam2Config()

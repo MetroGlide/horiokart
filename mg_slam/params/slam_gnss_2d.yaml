@@ -17,7 +17,7 @@
     scan_matching:
       enabled: true
       type: "ndt" # "icp" | "ndt"
-      reference: "scan_to_local_map" # "scan_to_scan" | "scan_to_local_map"
+      reference: "scan_to_scan" # "scan_to_scan" | "scan_to_local_map"
       max_failure_streak: 5
       icp:
         max_iterations: 100
@@ -68,14 +68,12 @@
     # GNSS設定
     gnss:
       enabled: true
-      mode: "integrated" # "integrated" | "split_align"
       source: "navpvt" # "navsat_fix" | "navpvt"
       topics:
         fix: "/gps/fix"
         navpvt: "/navpvt"
       navpvt_hacc_scale: 1.0
       validation:
-        max_time_delta_s: 5.0
         max_sigma_m: 5.0
         missing_grace_frames: 30
       anchor:
@@ -86,22 +84,12 @@
       sigma:
         fix_m: 0.02
         float_m: 0.5
-        noise_xy_m: 3.0
         factor_yaw_variance: 100000000.0
-      aligner:
-        type: "precision_weighted"
-        kinematic_min_speed_ms: 0.5
 
     # バックエンド最適化設定
     optimization:
       backend: "gtsam" # "isam2" | "gtsam"
       incremental: true
-      batch: true
-      batch_trigger:
-        mode: "event"
-        on_loop_close: true
-        every_n_nodes: 100
-        on_finalize: true
       optimize_every_n_loops: 3
       rerender_threshold_m: 0.1
       isam2:

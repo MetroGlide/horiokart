@@ -175,12 +175,10 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('loop_closure.max_score', 0.0)
 
         self.declare_parameter('gnss.enabled', True)
-        self.declare_parameter('gnss.mode', 'integrated')
         self.declare_parameter('gnss.source', 'navpvt')
         self.declare_parameter('gnss.topics.fix', '/gps/fix')
         self.declare_parameter('gnss.topics.navpvt', '/navpvt')
         self.declare_parameter('gnss.navpvt_hacc_scale', 1.0)
-        self.declare_parameter('gnss.validation.max_time_delta_s', 5.0)
         self.declare_parameter('gnss.validation.max_sigma_m', 5.0)
         self.declare_parameter('gnss.validation.missing_grace_frames', 30)
         self.declare_parameter('gnss.anchor.min_fix_status', 0)
@@ -189,18 +187,10 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('gnss.anchor.init_distance_m', 2.0)
         self.declare_parameter('gnss.sigma.fix_m', 0.02)
         self.declare_parameter('gnss.sigma.float_m', 0.5)
-        self.declare_parameter('gnss.sigma.noise_xy_m', 3.0)
         self.declare_parameter('gnss.sigma.factor_yaw_variance', 1e8)
-        self.declare_parameter('gnss.aligner.type', 'precision_weighted')
-        self.declare_parameter('gnss.aligner.kinematic_min_speed_ms', 0.5)
 
         self.declare_parameter('optimization.backend', 'gtsam')
         self.declare_parameter('optimization.incremental', True)
-        self.declare_parameter('optimization.batch', True)
-        self.declare_parameter('optimization.batch_trigger.mode', 'event')
-        self.declare_parameter('optimization.batch_trigger.on_loop_close', True)
-        self.declare_parameter('optimization.batch_trigger.every_n_nodes', 100)
-        self.declare_parameter('optimization.batch_trigger.on_finalize', True)
         self.declare_parameter('optimization.optimize_every_n_loops', 3)
         self.declare_parameter('optimization.rerender_threshold_m', 0.1)
         self.declare_parameter('optimization.isam2.relinearize_threshold', 0.1)
@@ -209,7 +199,7 @@ class SlamNodeBase(Node, ABC):
         from slam_gnss_2d.config import (
             TopicsConfig, MapConfig, KeyframeConfig, ScanMatchingConfig, IcpConfig, NdtConfig, LocalMapConfig,
             LoopClosureConfig, GnssConfig, GnssTopicsConfig, GnssValidationConfig, GnssAnchorConfig,
-            GnssSigmaConfig, GnssAlignerConfig, OptimizationConfig, BatchTriggerConfig, Isam2Config
+            GnssSigmaConfig, OptimizationConfig, Isam2Config
         )
 
         return SlamConfig(
@@ -265,7 +255,6 @@ class SlamNodeBase(Node, ABC):
             ),
             gnss=GnssConfig(
                 enabled=self.get_parameter('gnss.enabled').value,
-                mode=self.get_parameter('gnss.mode').value,
                 source=self.get_parameter('gnss.source').value,
                 topics=GnssTopicsConfig(
                     fix=self.get_parameter('gnss.topics.fix').value,
@@ -273,7 +262,6 @@ class SlamNodeBase(Node, ABC):
                 ),
                 navpvt_hacc_scale=self.get_parameter('gnss.navpvt_hacc_scale').value,
                 validation=GnssValidationConfig(
-                    max_time_delta_s=self.get_parameter('gnss.validation.max_time_delta_s').value,
                     max_sigma_m=self.get_parameter('gnss.validation.max_sigma_m').value,
                     missing_grace_frames=self.get_parameter('gnss.validation.missing_grace_frames').value,
                 ),
@@ -286,24 +274,12 @@ class SlamNodeBase(Node, ABC):
                 sigma=GnssSigmaConfig(
                     fix_m=self.get_parameter('gnss.sigma.fix_m').value,
                     float_m=self.get_parameter('gnss.sigma.float_m').value,
-                    noise_xy_m=self.get_parameter('gnss.sigma.noise_xy_m').value,
                     factor_yaw_variance=self.get_parameter('gnss.sigma.factor_yaw_variance').value,
-                ),
-                aligner=GnssAlignerConfig(
-                    type=self.get_parameter('gnss.aligner.type').value,
-                    kinematic_min_speed_ms=self.get_parameter('gnss.aligner.kinematic_min_speed_ms').value,
                 ),
             ),
             optimization=OptimizationConfig(
                 backend=self.get_parameter('optimization.backend').value,
                 incremental=self.get_parameter('optimization.incremental').value,
-                batch=self.get_parameter('optimization.batch').value,
-                batch_trigger=BatchTriggerConfig(
-                    mode=self.get_parameter('optimization.batch_trigger.mode').value,
-                    on_loop_close=self.get_parameter('optimization.batch_trigger.on_loop_close').value,
-                    every_n_nodes=self.get_parameter('optimization.batch_trigger.every_n_nodes').value,
-                    on_finalize=self.get_parameter('optimization.batch_trigger.on_finalize').value,
-                ),
                 optimize_every_n_loops=self.get_parameter('optimization.optimize_every_n_loops').value,
                 rerender_threshold_m=self.get_parameter('optimization.rerender_threshold_m').value,
                 isam2=Isam2Config(
