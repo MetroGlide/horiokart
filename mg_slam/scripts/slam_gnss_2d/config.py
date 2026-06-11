@@ -15,6 +15,8 @@ class MapConfig:
     resolution: float = 0.05          # [m/px]
     expansion_margin: float = 100.0   # [m]
     publish_hz: float = 1.0           # 配信周期 [Hz]
+    renderer: str = 'opencv'          # レンダラーの種別 ('opencv' | 'counting')
+    hit_threshold: float = 0.3        # 占有と判定するヒット率の閾値（counting用）
 
 @dataclass(frozen=True)
 class KeyframeConfig:

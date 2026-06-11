@@ -23,7 +23,7 @@ from slam_gnss_2d.config import SlamConfig
 from slam_gnss_2d.data_types import PoseNode, ScanData
 from slam_gnss_2d.graph_orchestrator import GraphOrchestrator
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
-from slam_gnss_2d.map_manager.opencv_renderer import OpenCVRenderer
+from slam_gnss_2d.map_manager import OpenCVRenderer, CountingRenderer
 
 
 class SlamNodeBase(Node, ABC):
@@ -35,10 +35,17 @@ class SlamNodeBase(Node, ABC):
         self._scan_source, self._odom_source = self._setup_io(cfg)
 
         self._pose_graph = build_pose_graph_builder(cfg)
-        self._renderer = OpenCVRenderer(
-            resolution=cfg.map.resolution,
-            expansion_margin=cfg.map.expansion_margin,
-        )
+        if cfg.map.renderer == 'counting':
+            self._renderer = CountingRenderer(
+                resolution=cfg.map.resolution,
+                expansion_margin=cfg.map.expansion_margin,
+                hit_threshold=cfg.map.hit_threshold,
+            )
+        else:
+            self._renderer = OpenCVRenderer(
+                resolution=cfg.map.resolution,
+                expansion_margin=cfg.map.expansion_margin,
+            )
 
         self._map_pub = self.create_publisher(
             OccupancyGrid, 'slam_gnss_2d/map', 1)
@@ -145,6 +152,8 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('map.resolution', 0.05)
         self.declare_parameter('map.expansion_margin', 100.0)
         self.declare_parameter('map.publish_hz', 1.0)
+        self.declare_parameter('map.renderer', 'opencv')
+        self.declare_parameter('map.hit_threshold', 0.3)
 
         self.declare_parameter('keyframe.min_translation', 1.0)
         self.declare_parameter('keyframe.min_rotation', 0.1)
@@ -211,6 +220,8 @@ class SlamNodeBase(Node, ABC):
                 resolution=self.get_parameter('map.resolution').value,
                 expansion_margin=self.get_parameter('map.expansion_margin').value,
                 publish_hz=self.get_parameter('map.publish_hz').value,
+                renderer=self.get_parameter('map.renderer').value,
+                hit_threshold=self.get_parameter('map.hit_threshold').value,
             ),
             keyframe=KeyframeConfig(
                 min_translation=self.get_parameter('keyframe.min_translation').value,
