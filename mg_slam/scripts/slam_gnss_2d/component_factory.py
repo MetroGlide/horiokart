@@ -38,7 +38,6 @@ def build_pose_graph_builder(config: SlamConfig) -> PoseGraphBuilderBase:
     elif builder_type == 'loop_closure':
         from .pose_graph.scan_matching_builder import ScanMatchingBuilder
         from .pose_graph.loop_closure_builder import LoopClosureBuilder
-        from .optimizer.gtsam_optimizer import GTSAMOptimizer
         inner = ScanMatchingBuilder(
             matcher=_build_matcher(config),
             provider=_build_reference_provider(config),
@@ -49,7 +48,6 @@ def build_pose_graph_builder(config: SlamConfig) -> PoseGraphBuilderBase:
         return LoopClosureBuilder(
             inner=inner,
             loop_matcher=_build_loop_matcher(config),
-            optimizer=GTSAMOptimizer(),
             loop_closure_search_radius=config.loop_closure.search_radius,
             loop_closure_min_node_gap=config.loop_closure.min_node_gap,
             loop_closure_max_failure_streak=config.loop_closure.max_failure_streak,

@@ -10,7 +10,7 @@ from .base import PoseGraphBuilderBase
 from .scan_matching_builder import ScanMatchingBuilder
 from ..data_types import OdomData, PoseEdge, PoseNode, ScanData
 from ..scan_matching.base import ScanMatcherBase
-from ..optimizer.base import GraphOptimizerBase
+from ..optimizer.base import IncrementalOptimizerBase
 
 _logger = logging.getLogger(__name__)
 
@@ -44,7 +44,6 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         self,
         inner: ScanMatchingBuilder,
         loop_matcher: ScanMatcherBase,
-        optimizer: GraphOptimizerBase,
         loop_closure_search_radius: float = 2.0,
         loop_closure_min_node_gap: int = 50,
         loop_closure_max_failure_streak: int = 3,
@@ -56,7 +55,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
     ) -> None:
         self._inner = inner
         self._loop_matcher = loop_matcher
-        self._optimizer = optimizer
+        self._incremental_optimizer: IncrementalOptimizerBase | None = None
         self._search_radius = loop_closure_search_radius
         self._min_node_gap = loop_closure_min_node_gap
         self._max_failure_streak = loop_closure_max_failure_streak
@@ -73,6 +72,19 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         self.loop_attempt_count: int = 0
         self.loop_success_count: int = 0
         self._all_nodes_cache: list[PoseNode] = []
+        self._optimize_pending: bool = False
+
+    def set_incremental_optimizer(self, optimizer: IncrementalOptimizerBase) -> None:
+        self._incremental_optimizer = optimizer
+
+    @property
+    def optimize_pending(self) -> bool:
+        return self._optimize_pending
+
+    def run_optimize_pending(self) -> None:
+        if self._optimize_pending:
+            self._optimize_pending = False
+            self._run_optimize()
 
     def add_scan(self, scan: ScanData, odom: OdomData) -> Optional[PoseNode]:
         node = self._inner.add_scan(scan, odom)
@@ -90,7 +102,10 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         if new_loops_added > 0:
             total_loops = len(self._loop_edges)
             if total_loops % self._optimize_every_n_loops == 0:
-                self._run_optimize()
+                if self._incremental_optimizer is not None:
+                    self._optimize_pending = True
+                else:
+                    self._run_optimize()
 
         return node
 
@@ -162,6 +177,14 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
             True: ループ辺が追加された
             False: 未収束またはスキップ
         """
+        # 同一 candidate からのループ辺が既に存在する場合はスキップ
+        if any(e.from_index == candidate.index for e in self._loop_edges):
+            _logger.debug(
+                f'Loop edge skipped: candidate {candidate.index} already has '
+                f'a loop edge (target node {node.index})'
+            )
+            return False
+
         src_pts = self._build_candidate_submap(candidate)
         if len(src_pts) == 0:
             return False
@@ -247,14 +270,42 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
 
     def _run_optimize(self) -> None:
         """全ノード・全エッジでグラフ最適化を実行し、内部ノードリストを更新する。"""
-        all_nodes = self._inner.get_nodes()
-        all_edges = self._inner.get_edges() + self._loop_edges
-        updated = self._optimizer.optimize(all_nodes, all_edges)
-        self._inner.replace_nodes(updated)
+        if self._incremental_optimizer is None:
+            _logger.warning("No incremental optimizer wired. Skipping loop closure optimization.")
+            return
+
+        if not self._loop_edges:
+            return
+
+        # 最新のループ辺をインクリメンタルオプティマイザに追加
+        latest_edge = self._loop_edges[-1]
+        self._incremental_optimizer.add_between_factor(
+            from_index=latest_edge.from_index,
+            to_index=latest_edge.to_index,
+            dx=latest_edge.dx,
+            dy=latest_edge.dy,
+            dyaw=latest_edge.dyaw,
+            information=latest_edge.information,
+        )
+
+        # 最適化更新を実行 (2回実行するのが安全)
+        self._incremental_optimizer.update()
+        self._incremental_optimizer.update()
+
+        all_poses = self._incremental_optimizer.get_all_poses()
+        if all_poses:
+            all_nodes = self._inner.get_nodes()
+            for node in all_nodes:
+                pose = all_poses.get(node.index)
+                if pose is not None:
+                    node.x, node.y, node.yaw = pose
+            self._inner.replace_nodes(all_nodes)
+
         self._all_nodes_cache = self._inner.get_nodes()
         self._loop_just_closed_flag = True
         _logger.info(
-            f'Graph optimized: {len(all_nodes)} nodes, '
+            f'Incremental graph optimized with loop closure: '
+            f'{len(self._all_nodes_cache)} nodes, '
             f'{len(self._inner.get_edges())} seq edges, '
             f'{len(self._loop_edges)} loop edges'
         )
@@ -273,6 +324,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         self.loop_attempt_count = 0
         self.loop_success_count = 0
         self._all_nodes_cache.clear()
+        self._optimize_pending = False
 
     def get_loop_edges(self) -> list[PoseEdge]:
         return list(self._loop_edges)

@@ -49,6 +49,18 @@ class GraphOrchestrator:
         self._gnss_missing_streak = 0
         self._gnss_degraded = False
 
+        self._wire_shared_optimizer()
+
+    def _wire_shared_optimizer(self) -> None:
+        from .pose_graph.loop_closure_builder import LoopClosureBuilder
+        if not isinstance(self._pose_graph, LoopClosureBuilder):
+            return
+        if self._gnss_runner is None:
+            return
+        shared_optimizer = self._gnss_runner._optimizer
+        self._pose_graph.set_incremental_optimizer(shared_optimizer)
+        self._logger.info('Shared IncrementalOptimizer wired: loop closure will use GNSS-integrated optimization')
+
     def process_scan(self, scan: ScanData, odom: OdomData) -> ScanProcessResult:
         node = self._pose_graph.add_scan(scan, odom)
         if node is None:
@@ -67,6 +79,11 @@ class GraphOrchestrator:
                 latest_node=node,
                 latest_edge=latest_edge,
             )
+
+            # 遅延されたループ最適化があれば実行
+            if hasattr(self._pose_graph, 'optimize_pending') and self._pose_graph.optimize_pending:
+                self._pose_graph.run_optimize_pending()
+                rerender_required = True
 
         loop_closed = self._pose_graph.loop_just_closed
 
@@ -101,10 +118,17 @@ class GraphOrchestrator:
         )
 
     def _get_latest_edge(self, node_index: int) -> Optional[PoseEdge]:
-        edges = self._pose_graph.get_edges()
-        if not edges:
+        all_edges = self._pose_graph.get_edges()
+        if hasattr(self._pose_graph, 'get_loop_edges'):
+            loop_edges = self._pose_graph.get_loop_edges()
+            loop_set = {(e.from_index, e.to_index) for e in loop_edges}
+            seq_edges = [e for e in all_edges if (e.from_index, e.to_index) not in loop_set]
+        else:
+            seq_edges = all_edges
+
+        if not seq_edges:
             return None
-        candidate = edges[-1]
+        candidate = seq_edges[-1]
         if candidate.to_index == node_index:
             return candidate
         return None
