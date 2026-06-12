@@ -26,6 +26,10 @@ interface RobotPageLayoutProps {
   onPoseSet?: (x: number, y: number, yaw: number) => void;
   extraPanels?: ReactNode;
   extraOverlay?: ReactNode;
+  /** viewerOverride が渡された場合、RosViewer の代わりにこのコンポーネントをビューワーエリアに描画する */
+  viewerOverride?: ReactNode;
+  /** Three.js シーン内に追加で描画する要素 (ページ固有レイヤー等) */
+  extraSceneChildren?: ReactNode;
 }
 
 export default function RobotPageLayout({
@@ -37,6 +41,8 @@ export default function RobotPageLayout({
   onPoseSet,
   extraPanels,
   extraOverlay,
+  viewerOverride,
+  extraSceneChildren,
 }: RobotPageLayoutProps) {
   const {
     enabled: vizEnabled,
@@ -136,40 +142,47 @@ export default function RobotPageLayout({
             </button>
             <div className="flex-1 flex flex-col gap-2 min-h-0">
               <div className="flex-1 min-h-0 bg-gray-900 rounded-lg overflow-hidden border border-gray-700 relative">
-                <RosViewer
-                  client={client}
-                  initialMode={viewerMode}
-                  interactionMode={interactionMode}
-                  onPoseSet={onPoseSet}
-                  className="w-full h-full"
-                />
-                <div className="absolute inset-0 pointer-events-none">
-                  <div className="absolute top-10 left-2 flex flex-col gap-2 pointer-events-auto w-40">
-                    {overlays.velocityGauge && (
-                      <VelocityGauge client={client} compact />
-                    )}
-                    {overlays.systemMetrics && (
-                      <SystemMetrics client={client} compact />
-                    )}
-                    {overlays.gpsStatus && <GpsStatusOverlay fix={fix} />}
-                  </div>
-                  {overlays.gpsMap && (
-                    <div className="absolute bottom-4 left-10 pointer-events-auto">
-                      <GpsMapOverlay
-                        fix={fix}
-                        trail={trail}
-                        mapWidth={gpsMapSize === "default" ? 192 : 384}
-                        mapHeight={gpsMapSize === "2x-square" ? 384 : 192}
-                      />
+                {viewerOverride != null ? (
+                  <div className="w-full h-full">{viewerOverride}</div>
+                ) : (
+                  <>
+                    <RosViewer
+                      client={client}
+                      initialMode={viewerMode}
+                      interactionMode={interactionMode}
+                      onPoseSet={onPoseSet}
+                      className="w-full h-full"
+                      extraSceneChildren={extraSceneChildren}
+                    />
+                    <div className="absolute inset-0 pointer-events-none">
+                      <div className="absolute top-10 left-2 flex flex-col gap-2 pointer-events-auto w-40">
+                        {overlays.velocityGauge && (
+                          <VelocityGauge client={client} compact />
+                        )}
+                        {overlays.systemMetrics && (
+                          <SystemMetrics client={client} compact />
+                        )}
+                        {overlays.gpsStatus && <GpsStatusOverlay fix={fix} />}
+                      </div>
+                      {overlays.gpsMap && (
+                        <div className="absolute bottom-4 left-10 pointer-events-auto">
+                          <GpsMapOverlay
+                            fix={fix}
+                            trail={trail}
+                            mapWidth={gpsMapSize === "default" ? 192 : 384}
+                            mapHeight={gpsMapSize === "2x-square" ? 384 : 192}
+                          />
+                        </div>
+                      )}
+                      {overlays.joystick && (
+                        <div className="absolute bottom-4 right-4 pointer-events-auto">
+                          <JoystickPad client={client} />
+                        </div>
+                      )}
+                      {extraOverlay}
                     </div>
-                  )}
-                  {overlays.joystick && (
-                    <div className="absolute bottom-4 right-4 pointer-events-auto">
-                      <JoystickPad client={client} />
-                    </div>
-                  )}
-                  {extraOverlay}
-                </div>
+                  </>
+                )}
               </div>
               {(layers.colorImage || layers.depthImage) && (
                 <div className="flex gap-2 h-40 flex-shrink-0">

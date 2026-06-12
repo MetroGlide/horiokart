@@ -54,7 +54,9 @@ export default function App() {
                   />
                   <Route
                     path="/slam-gnss-2d"
-                    element={<SlamGnss2DPage client={client} />}
+                    element={
+                      <SlamGnss2DPage client={client} sysManager={sysManager} />
+                    }
                   />
                   <Route
                     path="/system"

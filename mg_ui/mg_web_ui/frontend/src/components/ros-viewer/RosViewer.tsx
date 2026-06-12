@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState } from "react";
+import { ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { MapControls, OrbitControls } from "@react-three/drei";
@@ -115,6 +115,7 @@ interface SceneProps {
   interactionMode: ViewerInteractionMode;
   onPoseSet: (x: number, y: number, yaw: number) => void;
   resetToken: number;
+  extraSceneChildren?: ReactNode;
 }
 
 function CameraFollowRobot({
@@ -252,6 +253,7 @@ function Scene({
   interactionMode,
   onPoseSet,
   resetToken,
+  extraSceneChildren,
 }: SceneProps) {
   const { layers } = useVisualization();
   const tfBuffer = useTfBuffer(client);
@@ -355,6 +357,7 @@ function Scene({
       {interactionMode !== "none" && (
         <PoseArrowInteraction mode={interactionMode} onPoseSet={onPoseSet} />
       )}
+      {extraSceneChildren}
     </>
   );
 }
@@ -365,6 +368,8 @@ interface RosViewerProps {
   className?: string;
   interactionMode?: ViewerInteractionMode;
   onPoseSet?: (x: number, y: number, yaw: number) => void;
+  /** Three.js シーン内に追加で描画する要素 (ページ固有レイヤー等) */
+  extraSceneChildren?: ReactNode;
 }
 
 export default function RosViewer({
@@ -373,6 +378,7 @@ export default function RosViewer({
   className,
   interactionMode = "none",
   onPoseSet,
+  extraSceneChildren,
 }: RosViewerProps) {
   const { enabled } = useVisualization();
   const [viewMode, setViewMode] = useState<ViewerMode>(initialMode);
@@ -441,6 +447,7 @@ export default function RosViewer({
             interactionMode={interactionMode}
             onPoseSet={onPoseSet ?? (() => {})}
             resetToken={resetToken}
+            extraSceneChildren={extraSceneChildren}
           />
         </Suspense>
       </Canvas>

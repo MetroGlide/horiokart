@@ -14,9 +14,11 @@
         "@foxglove/schemas": "^2.0.0",
         "@react-three/drei": "^9.0.0",
         "@react-three/fiber": "^8.0.0",
+        "@types/proj4": "^2.5.6",
+        "pigeon-maps": "^0.21.4",
+        "proj4": "^2.20.9",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
-        "pigeon-maps": "^0.21.4",
         "react-router-dom": "^6.24.1",
         "three": "^0.169.0"
     },
