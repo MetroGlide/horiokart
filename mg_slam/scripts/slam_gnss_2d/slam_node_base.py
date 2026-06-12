@@ -23,7 +23,7 @@ from slam_gnss_2d.config import SlamConfig
 from slam_gnss_2d.data_types import PoseNode, ScanData
 from slam_gnss_2d.graph_orchestrator import GraphOrchestrator
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
-from slam_gnss_2d.map_manager import OpenCVRenderer, CountingRenderer
+from slam_gnss_2d.map_manager import OverwriteRenderer, CountingRenderer
 
 
 class SlamNodeBase(Node, ABC):
@@ -42,7 +42,7 @@ class SlamNodeBase(Node, ABC):
                 hit_threshold=cfg.map.hit_threshold,
             )
         else:
-            self._renderer = OpenCVRenderer(
+            self._renderer = OverwriteRenderer(
                 resolution=cfg.map.resolution,
                 expansion_margin=cfg.map.expansion_margin,
             )
@@ -152,7 +152,7 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('map.resolution', 0.05)
         self.declare_parameter('map.expansion_margin', 100.0)
         self.declare_parameter('map.publish_hz', 1.0)
-        self.declare_parameter('map.renderer', 'opencv')
+        self.declare_parameter('map.renderer', 'overwrite')
         self.declare_parameter('map.hit_threshold', 0.3)
 
         self.declare_parameter('keyframe.min_translation', 1.0)

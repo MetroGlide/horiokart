@@ -12,8 +12,8 @@ from ..data_types import PoseNode
 _logger = logging.getLogger(__name__)
 
 
-class OpenCVRenderer(MapRendererBase):
-    """OpenCV cv2.line を使った Ray-Casting による占有格子マップ実装。
+class OverwriteRenderer(MapRendererBase):
+    """OpenCV cv2.line を使った Ray-Casting による占有格子マップ（上書き方式）実装。
 
     内部マップは uint8 で管理する:
         128 = unknown
@@ -67,7 +67,7 @@ class OpenCVRenderer(MapRendererBase):
             math.ceil((new_max_y - new_origin_y) / self._resolution),
         )
         _logger.debug(
-            f'Map recomputed: size={new_size}px '
+            f'Map recomputed (Overwrite): size={new_size}px '
             f'({new_size * self._resolution:.0f}m), '
             f'origin=({new_origin_x:.1f}, {new_origin_y:.1f})'
         )
@@ -127,9 +127,6 @@ class OpenCVRenderer(MapRendererBase):
         )
         hit_px_valid = hit_px[in_bounds]
         hit_py_valid = hit_py[in_bounds]
-
-        hit_px_valid = hit_px[in_bounds]
-        hit_py_valid = hit_py[in_bounds]
         n_hits = len(hit_px_valid)
 
         if n_hits > 0:
@@ -147,12 +144,12 @@ class OpenCVRenderer(MapRendererBase):
 
         if self._render_count == 1:
             _logger.debug(
-                f'First render: robot=({node.x:.2f}, {node.y:.2f}), '
+                f'First render (Overwrite): robot=({node.x:.2f}, {node.y:.2f}), '
                 f'hits={n_hits}, oob_hits={int((~in_bounds).sum())}'
             )
         elif self._render_count % 10 == 0:
             _logger.debug(
-                f'Render #{self._render_count}: '
+                f'Render #{self._render_count} (Overwrite): '
                 f'robot=({node.x:.2f}, {node.y:.2f}), '
                 f'hits={n_hits}, oob_hits={int((~in_bounds).sum())}'
             )

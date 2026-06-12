@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from .opencv_renderer import OpenCVRenderer
+from .overwrite_renderer import OverwriteRenderer
 from .counting_renderer import CountingRenderer
 
 __all__ = [
-    'OpenCVRenderer',
+    'OverwriteRenderer',
     'CountingRenderer',
 ]

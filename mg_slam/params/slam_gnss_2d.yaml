@@ -8,9 +8,11 @@
       resolution: 0.05
       expansion_margin: 100.0
       publish_hz: 1.0
+      renderer: "counting" # "overwrite" | "counting"
+      hit_threshold: 0.3
 
     keyframe:
-      min_translation: 1.0
+      min_translation: 0.5
       min_rotation: 0.1
 
     # スキャンマッチング（フロントエンド）設定
@@ -27,7 +29,7 @@
         robust_kernel_scale: 0.1
       ndt:
         cell_size: 1.0
-        cell_sizes: [1.0]
+        cell_sizes: [2.0, 1.0, 0.5]
         use_bilinear: true
       csm:
         linear_search_window: 1.0
@@ -40,7 +42,7 @@
 
     # ループクロージャ設定
     loop_closure:
-      enabled: false
+      enabled: true
       search_radius: 2.0
       min_node_gap: 50
       max_failure_streak: 3
@@ -53,7 +55,7 @@
         robust_kernel_scale: 0.1
       ndt:
         cell_size: 1.0
-        cell_sizes: [1.0]
+        cell_sizes: [2.0, 1.0, 0.5]
         use_bilinear: true
       csm:
         linear_search_window: 1.0
@@ -63,7 +65,7 @@
       max_dyaw_deg: 145.0
       crossing_reject_deg: 45.0
       submap_radius: 5.0
-      max_score: 0.0
+      max_score: 0.05
 
     # GNSS設定
     gnss:
