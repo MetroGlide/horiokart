@@ -253,6 +253,8 @@ class BagGnssSource(GnssSourceBase):
                 y=y,
                 covariance=cov_2x2,
                 fix_status=int(msg.status.status),
+                latitude=msg.latitude,
+                longitude=msg.longitude,
             ))
             self._raw_list.append((
                 stamp,
@@ -292,6 +294,8 @@ class BagGnssSource(GnssSourceBase):
             covariance=prev.covariance + alpha *
             (next_.covariance - prev.covariance),
             fix_status=prev.fix_status,
+            latitude=prev.latitude + alpha * (next_.latitude - prev.latitude),
+            longitude=prev.longitude + alpha * (next_.longitude - prev.longitude),
         )
 
     def get_all_gnss(self) -> list[GnssData]:
@@ -423,6 +427,8 @@ class BagNavPVTSource(GnssSourceBase):
                 y=y,
                 covariance=cov_2x2,
                 fix_status=carr_soln,
+                latitude=lat,
+                longitude=lon,
             ))
 
             # get_raw_fix_at 用: NavSatFix 互換タプルを保存する
@@ -464,6 +470,9 @@ class BagNavPVTSource(GnssSourceBase):
             y=prev.y + alpha * (next_.y - prev.y),
             covariance=prev.covariance + alpha *
             (next_.covariance - prev.covariance),
+            fix_status=prev.fix_status,
+            latitude=prev.latitude + alpha * (next_.latitude - prev.latitude),
+            longitude=prev.longitude + alpha * (next_.longitude - prev.longitude),
         )
 
     def get_all_gnss(self) -> list[GnssData]:

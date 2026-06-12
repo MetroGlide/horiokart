@@ -245,4 +245,6 @@ class ROS2GnssUtmSource(GnssSourceBase):
             y=y,
             covariance=cov_2x2,
             fix_status=int(msg.status.status),
+            latitude=msg.latitude,
+            longitude=msg.longitude,
         ))

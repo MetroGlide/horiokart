@@ -14,6 +14,8 @@ from abc import ABC, abstractmethod
 from geometry_msgs.msg import Point as RosPoint, PoseStamped, TransformStamped
 from nav_msgs.msg import OccupancyGrid, Path
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSHistoryPolicy
+from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import ColorRGBA
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
@@ -47,14 +49,25 @@ class SlamNodeBase(Node, ABC):
                 expansion_margin=cfg.map.expansion_margin,
             )
 
+        # nav2 map_saver_cli は TRANSIENT_LOCAL + RELIABLE を要求するため合わせる
+        map_qos = QoSProfile(
+            reliability=QoSReliabilityPolicy.RELIABLE,
+            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
+            history=QoSHistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
         self._map_pub = self.create_publisher(
-            OccupancyGrid, 'slam_gnss_2d/map', 1)
+            OccupancyGrid, 'map', map_qos)
         self._path_pub = self.create_publisher(Path, 'slam_gnss_2d/path', 1)
         self._pg_marker_pub = self.create_publisher(
             MarkerArray, 'slam_gnss_2d/pose_graph', 1)
         self._path_before_pub = self.create_publisher(
             Path, 'slam_gnss_2d/path_before_optimize', 1)
         self._tf_broadcaster = TransformBroadcaster(self)
+
+        self._anchor_pub = self.create_publisher(
+            NavSatFix, 'slam_gnss_2d/anchor', map_qos)
+        self._anchor_published = False
 
         self._path_msg = Path()
         self._path_msg.header.frame_id = 'map'
@@ -164,7 +177,8 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('scan_matching.max_failure_streak', 5)
         self.declare_parameter('scan_matching.icp.max_iterations', 100)
         self.declare_parameter('scan_matching.icp.tolerance', 1e-5)
-        self.declare_parameter('scan_matching.icp.max_correspondence_dist', 1.0)
+        self.declare_parameter(
+            'scan_matching.icp.max_correspondence_dist', 1.0)
         self.declare_parameter('scan_matching.ndt.cell_size', 1.0)
         self.declare_parameter('scan_matching.local_map.window', 30)
         self.declare_parameter('scan_matching.local_map.radius', 30.0)
@@ -218,50 +232,70 @@ class SlamNodeBase(Node, ABC):
             ),
             map=MapConfig(
                 resolution=self.get_parameter('map.resolution').value,
-                expansion_margin=self.get_parameter('map.expansion_margin').value,
+                expansion_margin=self.get_parameter(
+                    'map.expansion_margin').value,
                 publish_hz=self.get_parameter('map.publish_hz').value,
                 renderer=self.get_parameter('map.renderer').value,
                 hit_threshold=self.get_parameter('map.hit_threshold').value,
             ),
             keyframe=KeyframeConfig(
-                min_translation=self.get_parameter('keyframe.min_translation').value,
+                min_translation=self.get_parameter(
+                    'keyframe.min_translation').value,
                 min_rotation=self.get_parameter('keyframe.min_rotation').value,
             ),
             scan_matching=ScanMatchingConfig(
                 enabled=self.get_parameter('scan_matching.enabled').value,
                 type=self.get_parameter('scan_matching.type').value,
                 reference=self.get_parameter('scan_matching.reference').value,
-                max_failure_streak=self.get_parameter('scan_matching.max_failure_streak').value,
+                max_failure_streak=self.get_parameter(
+                    'scan_matching.max_failure_streak').value,
                 icp=IcpConfig(
-                    max_iterations=self.get_parameter('scan_matching.icp.max_iterations').value,
-                    tolerance=self.get_parameter('scan_matching.icp.tolerance').value,
-                    max_correspondence_dist=self.get_parameter('scan_matching.icp.max_correspondence_dist').value,
+                    max_iterations=self.get_parameter(
+                        'scan_matching.icp.max_iterations').value,
+                    tolerance=self.get_parameter(
+                        'scan_matching.icp.tolerance').value,
+                    max_correspondence_dist=self.get_parameter(
+                        'scan_matching.icp.max_correspondence_dist').value,
                 ),
                 ndt=NdtConfig(
-                    cell_size=self.get_parameter('scan_matching.ndt.cell_size').value,
+                    cell_size=self.get_parameter(
+                        'scan_matching.ndt.cell_size').value,
                 ),
                 local_map=LocalMapConfig(
-                    window=self.get_parameter('scan_matching.local_map.window').value,
-                    radius=self.get_parameter('scan_matching.local_map.radius').value,
+                    window=self.get_parameter(
+                        'scan_matching.local_map.window').value,
+                    radius=self.get_parameter(
+                        'scan_matching.local_map.radius').value,
                 ),
             ),
             loop_closure=LoopClosureConfig(
                 enabled=self.get_parameter('loop_closure.enabled').value,
-                search_radius=self.get_parameter('loop_closure.search_radius').value,
-                min_node_gap=self.get_parameter('loop_closure.min_node_gap').value,
-                max_failure_streak=self.get_parameter('loop_closure.max_failure_streak').value,
-                matcher_type=self.get_parameter('loop_closure.matcher_type').value,
+                search_radius=self.get_parameter(
+                    'loop_closure.search_radius').value,
+                min_node_gap=self.get_parameter(
+                    'loop_closure.min_node_gap').value,
+                max_failure_streak=self.get_parameter(
+                    'loop_closure.max_failure_streak').value,
+                matcher_type=self.get_parameter(
+                    'loop_closure.matcher_type').value,
                 icp=IcpConfig(
-                    max_iterations=self.get_parameter('loop_closure.icp.max_iterations').value,
-                    tolerance=self.get_parameter('loop_closure.icp.tolerance').value,
-                    max_correspondence_dist=self.get_parameter('loop_closure.icp.max_correspondence_dist').value,
+                    max_iterations=self.get_parameter(
+                        'loop_closure.icp.max_iterations').value,
+                    tolerance=self.get_parameter(
+                        'loop_closure.icp.tolerance').value,
+                    max_correspondence_dist=self.get_parameter(
+                        'loop_closure.icp.max_correspondence_dist').value,
                 ),
                 ndt=NdtConfig(
-                    cell_size=self.get_parameter('loop_closure.ndt.cell_size').value,
+                    cell_size=self.get_parameter(
+                        'loop_closure.ndt.cell_size').value,
                 ),
-                max_dyaw_deg=self.get_parameter('loop_closure.max_dyaw_deg').value,
-                crossing_reject_deg=self.get_parameter('loop_closure.crossing_reject_deg').value,
-                submap_radius=self.get_parameter('loop_closure.submap_radius').value,
+                max_dyaw_deg=self.get_parameter(
+                    'loop_closure.max_dyaw_deg').value,
+                crossing_reject_deg=self.get_parameter(
+                    'loop_closure.crossing_reject_deg').value,
+                submap_radius=self.get_parameter(
+                    'loop_closure.submap_radius').value,
                 max_score=self.get_parameter('loop_closure.max_score').value,
             ),
             gnss=GnssConfig(
@@ -271,30 +305,41 @@ class SlamNodeBase(Node, ABC):
                     fix=self.get_parameter('gnss.topics.fix').value,
                     navpvt=self.get_parameter('gnss.topics.navpvt').value,
                 ),
-                navpvt_hacc_scale=self.get_parameter('gnss.navpvt_hacc_scale').value,
+                navpvt_hacc_scale=self.get_parameter(
+                    'gnss.navpvt_hacc_scale').value,
                 validation=GnssValidationConfig(
-                    max_sigma_m=self.get_parameter('gnss.validation.max_sigma_m').value,
-                    missing_grace_frames=self.get_parameter('gnss.validation.missing_grace_frames').value,
+                    max_sigma_m=self.get_parameter(
+                        'gnss.validation.max_sigma_m').value,
+                    missing_grace_frames=self.get_parameter(
+                        'gnss.validation.missing_grace_frames').value,
                 ),
                 anchor=GnssAnchorConfig(
-                    min_fix_status=self.get_parameter('gnss.anchor.min_fix_status').value,
+                    min_fix_status=self.get_parameter(
+                        'gnss.anchor.min_fix_status').value,
                     sigma_m=self.get_parameter('gnss.anchor.sigma_m').value,
-                    init_yaw_sigma_rad=self.get_parameter('gnss.anchor.init_yaw_sigma_rad').value,
-                    init_distance_m=self.get_parameter('gnss.anchor.init_distance_m').value,
+                    init_yaw_sigma_rad=self.get_parameter(
+                        'gnss.anchor.init_yaw_sigma_rad').value,
+                    init_distance_m=self.get_parameter(
+                        'gnss.anchor.init_distance_m').value,
                 ),
                 sigma=GnssSigmaConfig(
                     fix_m=self.get_parameter('gnss.sigma.fix_m').value,
                     float_m=self.get_parameter('gnss.sigma.float_m').value,
-                    factor_yaw_variance=self.get_parameter('gnss.sigma.factor_yaw_variance').value,
+                    factor_yaw_variance=self.get_parameter(
+                        'gnss.sigma.factor_yaw_variance').value,
                 ),
             ),
             optimization=OptimizationConfig(
                 backend=self.get_parameter('optimization.backend').value,
-                incremental=self.get_parameter('optimization.incremental').value,
-                optimize_every_n_loops=self.get_parameter('optimization.optimize_every_n_loops').value,
-                rerender_threshold_m=self.get_parameter('optimization.rerender_threshold_m').value,
+                incremental=self.get_parameter(
+                    'optimization.incremental').value,
+                optimize_every_n_loops=self.get_parameter(
+                    'optimization.optimize_every_n_loops').value,
+                rerender_threshold_m=self.get_parameter(
+                    'optimization.rerender_threshold_m').value,
                 isam2=Isam2Config(
-                    relinearize_threshold=self.get_parameter('optimization.isam2.relinearize_threshold').value,
+                    relinearize_threshold=self.get_parameter(
+                        'optimization.isam2.relinearize_threshold').value,
                 )
             ),
         )
@@ -343,9 +388,22 @@ class SlamNodeBase(Node, ABC):
         self._publish_pose_graph_markers()
         self._map_dirty = True
 
-
-
     def _publish_map_timer(self) -> None:
+        # Publish anchor if available and not yet published
+        if self._use_gnss and self._gnss_runner is not None and not self._anchor_published:
+            latlon = self._gnss_runner.anchor_latlon
+            if latlon is not None:
+                lat, lon = latlon
+                msg = NavSatFix()
+                msg.header.stamp = self.get_clock().now().to_msg()
+                msg.header.frame_id = 'map'
+                msg.latitude = lat
+                msg.longitude = lon
+                msg.status.status = 0  # STATUS_FIX
+                self._anchor_pub.publish(msg)
+                self._anchor_published = True
+                self.get_logger().info(f'Anchor published: Lat={lat:.7f}, Lon={lon:.7f}')
+
         now = time.monotonic()
         if now - self._last_stat_time >= 30.0:
             pg = self._pose_graph

@@ -51,6 +51,10 @@ class GnssAnchoredRunner:
     def anchor(self) -> tuple[float, float] | None:
         return self._anchor.anchor_utm
 
+    @property
+    def anchor_latlon(self) -> tuple[float, float] | None:
+        return self._anchor.anchor_latlon
+
     def on_gnss(self, gnss: GnssData | None) -> bool:
         if gnss is None:
             return False
