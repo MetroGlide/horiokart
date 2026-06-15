@@ -38,6 +38,7 @@ def generate_launch_description():
     use_gps_arg = launch_argument_creator.create(
         "use_gps", default="true")
 
+
     # Launch drivers
     launch_drivers = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(

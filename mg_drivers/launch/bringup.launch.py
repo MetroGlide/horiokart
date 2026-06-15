@@ -29,6 +29,7 @@ def generate_launch_description():
     use_gps_arg = launch_argument_creator.create(
         "use_gps", default="true")
 
+
     pkg_name = "mg_drivers"
     pkg_share = get_package_share_directory(pkg_name)
 

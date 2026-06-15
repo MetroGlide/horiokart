@@ -1,5 +1,5 @@
 gtsam
-numpy
+numpy<2.0
 scipy
 opencv-python
 pyproj

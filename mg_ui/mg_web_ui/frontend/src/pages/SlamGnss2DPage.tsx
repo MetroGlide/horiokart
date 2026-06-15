@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FoxgloveClientHandle } from "../hooks/useFoxgloveClient";
 import { SystemManagerHandle } from "../hooks/useSystemManagerClient";
 import { TOPICS } from "../ros/topics";
@@ -11,6 +11,7 @@ import SatelliteOverlayViewer, {
 import MapLayer from "../components/ros-viewer/layers/MapLayer";
 import PathLine from "../components/ros-viewer/layers/PathLine";
 import MarkerArrayLayer from "../components/ros-viewer/layers/MarkerArrayLayer";
+import { getSysManagerUrl } from "../utils/systemManagerConfig";
 
 // -------------------------------------------------------------------
 // SLAM-GNSS-2D 固有のレイヤー状態
@@ -90,8 +91,79 @@ export default function SlamGnss2DPage({
   const [tileType, setTileType] = useState<TileType>("satellite");
   const [slamOpacity, setSlamOpacity] = useState<SlamOpacity>(0.6);
 
+  // Saved SLAM Map / Preview モード
+  const [slamMaps, setSlamMaps] = useState<string[]>([]);
+  const [selectedMap, setSelectedMap] = useState<string>("");
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [targetDirectory, setTargetDirectory] = useState<string>("/root/ros2_data/slam_maps");
+  const [isSaving, setIsSaving] = useState(false);
+
   const toggleLayer = (key: keyof LayerState) => (v: boolean) =>
     setLayers((prev) => ({ ...prev, [key]: v }));
+
+  const fetchSlamMaps = async (dir?: string) => {
+    const fetchDir = dir || targetDirectory;
+    try {
+      const r = await fetch(
+        `${getSysManagerUrl()}/slam_gnss_2d/maps?base_dir=${encodeURIComponent(fetchDir)}`
+      );
+      const data = await r.json();
+      if (data.success && data.maps) {
+        setSlamMaps(data.maps);
+        if (data.maps.length > 0) {
+          if (!data.maps.includes(selectedMap)) {
+            setSelectedMap(data.maps[0]);
+          }
+        } else {
+          setSelectedMap("");
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    fetchSlamMaps(targetDirectory);
+  }, [targetDirectory]);
+
+  const saveSlamMap = async () => {
+    if (!_sysManager) return;
+    setIsSaving(true);
+    try {
+      const res = await _sysManager.callApi('/slam_gnss_2d/map/save', {
+        output_dir: targetDirectory
+      });
+      if (res.success) {
+        alert("SLAM map saved successfully: " + res.message);
+        await fetchSlamMaps(targetDirectory);
+      } else {
+        console.error("Failed to save SLAM map detailed error:", res.message);
+        alert("Failed to save SLAM map: " + res.message);
+      }
+    } catch (e) {
+      console.error("Error saving SLAM map exception:", e);
+      alert("Error saving SLAM map: " + String(e));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const startPreview = async () => {
+    if (!_sysManager || !selectedMap) return;
+    setIsPreviewing(true);
+    setSatelliteMode(true); // プレビュー時は自動で衛星モードON
+    const fullPath = targetDirectory.endsWith('/') 
+      ? `${targetDirectory}${selectedMap}` 
+      : `${targetDirectory}/${selectedMap}`;
+    await _sysManager.callApi(`/slam_gnss_2d/preview/start`, { slam_map_path: fullPath });
+  };
+
+  const stopPreview = async () => {
+    if (!_sysManager) return;
+    await _sysManager.callApi(`/slam_gnss_2d/preview/stop`, {});
+    setIsPreviewing(false);
+  };
 
   // -------------------------------------------------------------------
   // サイドバーアコーディオンアイテム
@@ -133,6 +205,101 @@ export default function SlamGnss2DPage({
           <p className="text-xs text-gray-500 mt-2">
             ※ 通常 SLAM ビュー時のみ有効
           </p>
+        </SectionCard>
+      ),
+    },
+
+    // ── Saved SLAM Map (新規) ──
+    {
+      id: "saved-map",
+      label: "SLAM Map",
+      children: (
+        <SectionCard title="SLAM Map Management">
+          <div className="space-y-3">
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">
+                Target Directory
+              </label>
+              <input
+                type="text"
+                value={targetDirectory}
+                onChange={(e) => setTargetDirectory(e.target.value)}
+                className="w-full text-xs bg-gray-800 border border-gray-600 rounded p-1.5 focus:outline-none focus:border-blue-500 transition-colors font-mono"
+                placeholder="/root/ros2_data/slam_maps"
+                disabled={isPreviewing}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={saveSlamMap}
+                disabled={isSaving || isPreviewing}
+                className={`flex-1 text-xs py-1.5 rounded transition-all font-semibold ${
+                  isSaving || isPreviewing
+                    ? "bg-gray-700 cursor-not-allowed text-gray-500"
+                    : "bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-md shadow-emerald-950/20"
+                }`}
+              >
+                {isSaving ? "Saving..." : "Save SLAM Map"}
+              </button>
+              <button
+                onClick={() => fetchSlamMaps()}
+                disabled={isPreviewing}
+                className="text-xs bg-gray-700 hover:bg-gray-600 px-2.5 py-1.5 rounded transition-colors"
+              >
+                Reload
+              </button>
+            </div>
+
+            <hr className="border-gray-700 my-2" />
+
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">
+                Select Map for Preview
+              </label>
+              {slamMaps.length > 0 ? (
+                <select
+                  value={selectedMap}
+                  onChange={(e) => setSelectedMap(e.target.value)}
+                  className="w-full text-xs bg-gray-800 border border-gray-600 rounded p-1.5 focus:outline-none focus:border-blue-500 font-mono"
+                  disabled={isPreviewing}
+                >
+                  {slamMaps.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs text-gray-500 italic">No SLAM maps found in directory</p>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={startPreview}
+                disabled={isPreviewing || !selectedMap}
+                className={`flex-1 text-xs py-1.5 rounded transition-all font-semibold ${
+                  isPreviewing || !selectedMap
+                    ? "bg-gray-700 cursor-not-allowed text-gray-500"
+                    : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-950/20"
+                }`}
+              >
+                Start Preview
+              </button>
+              <button
+                onClick={stopPreview}
+                disabled={!isPreviewing}
+                className={`flex-1 text-xs py-1.5 rounded transition-all font-semibold ${
+                  !isPreviewing
+                    ? "bg-gray-700 cursor-not-allowed text-gray-500"
+                    : "bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white shadow-md shadow-red-950/20"
+                }`}
+              >
+                Stop Preview
+              </button>
+            </div>
+          </div>
         </SectionCard>
       ),
     },
@@ -283,7 +450,7 @@ export default function SlamGnss2DPage({
     <RobotPageLayout
       client={client}
       accordionItems={accordionItems}
-      defaultOpen={["layers", "satellite"]}
+      defaultOpen={["layers", "satellite", "saved-map"]}
       viewerMode="2d"
       viewerOverride={viewerOverride}
       extraSceneChildren={satelliteMode ? undefined : extraSceneChildren}

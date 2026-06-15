@@ -29,6 +29,7 @@ def generate_launch_description():
     use_gps_arg = launch_argument_creator.create(
         "use_gps", default="true")
 
+
     pkg_name = "mg_drivers"
     pkg_share = get_package_share_directory(pkg_name)
 
@@ -78,75 +79,7 @@ def generate_launch_description():
                     use_gps_arg.launch_config),
             ),
 
-            Node(
-                package=pkg_name,
-                executable="gnss_odometry_node.py",
-                name="gnss_odometry_node",
-                output="screen",
-                parameters=[{
-                    "use_sim_time": simulation_arg.launch_config,
-                    "map_frame_id": "map",
-                    "gps_frame_id": "gps_link",
-                    # GNSS input selection: 'navsatfix' or 'navpvt'
-                    "gnss_input": "navpvt",
 
-                    # min_speed_for_heading: m/s (if ground speed < this, motion heading is ignored)
-                    "min_speed_for_heading": 0.5,
-                    # heading_smoothing_alpha: unitless (0..1), larger -> more weight to latest observation
-                    "heading_smoothing_alpha": 0.6,
-
-                    # apply_heading_invert: bool, multiply heading by -1 when True
-                    "apply_heading_invert": True,
-                    # apply_heading_add_pi: bool, add 180 deg (pi rad) to heading when True
-                    "apply_heading_add_pi": True,
-
-                    # NavPVT covariance/default parameters
-                    "navpvt_hacc_to_pos_std_scale": 1.0,
-                    "navpvt_vacc_to_pos_std_scale": 1.0,
-                    "navpvt_headacc_to_yaw_std_scale": 1.5,
-
-                    "min_publish_distance": 1.0,  # [m]
-
-                    # Heading estimator parameters
-                    "heading_source": "computed",  # 'navpvt' or 'computed'
-                    "computed_heading_min_distance": 0.6,  # [m]
-                    "computed_heading_smoothing_alpha": 0.6,
-
-                    "static_transform_label": "kakunin_start_area",
-                }],
-                remappings=[
-                    ("/ublox/navpvt", "/navpvt"),
-                    ("/odom/gps", "/odom/gps_origin"),
-                ],
-                condition=launch.conditions.IfCondition(
-                    use_gps_arg.launch_config),
-            ),
-
-            #################################################
-            # Publish controller nodes
-            #################################################
-
-            # Generic publish controller for GPS odometry
-            Node(
-                package=pkg_name,
-                executable="generic_publish_controller_node.py",
-                name="gnss_odom_publish_controller_node",
-                output="screen",
-                parameters=[{
-                    "msg_module": "nav_msgs.msg",
-                    "msg_class": "Odometry",
-                    "publish": True,
-                    "queue_size": 1,
-                    "use_sim_time": simulation_arg.launch_config,
-                }],
-                remappings=[
-                    ("input_topic", "/odom/gps_origin"),
-                    ("output_topic", "/odom/gps"),
-                ],
-                condition=launch.conditions.IfCondition(
-                    use_gps_arg.launch_config
-                ),
-            ),
 
             Node(
                 package="mg_drivers",

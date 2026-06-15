@@ -44,6 +44,8 @@ install(PROGRAMS
   scripts/actual_path_publisher.py
   scripts/slam_gnss_2d/slam_node.py
   scripts/slam_gnss_2d/slam_offline_node.py
+  scripts/slam_gnss_2d/slam_gnss_nav_bridge_node.py
+  scripts/slam_gnss_2d/anchor_publisher_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

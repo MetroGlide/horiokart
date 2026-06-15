@@ -26,6 +26,8 @@ from slam_gnss_2d.data_types import PoseNode, ScanData
 from slam_gnss_2d.graph_orchestrator import GraphOrchestrator
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from slam_gnss_2d.map_manager import OverwriteRenderer, CountingRenderer
+from slam_gnss_2d.slam_data_saver import SlamDataSaver
+from std_srvs.srv import Trigger
 
 
 class SlamNodeBase(Node, ABC):
@@ -68,6 +70,9 @@ class SlamNodeBase(Node, ABC):
         self._anchor_pub = self.create_publisher(
             NavSatFix, 'slam_gnss_2d/anchor', map_qos)
         self._anchor_published = False
+
+        self._save_srv = self.create_service(
+            Trigger, 'slam_gnss_2d/save_slam_map', self._handle_save_slam_map)
 
         self._path_msg = Path()
         self._path_msg.header.frame_id = 'map'
@@ -204,6 +209,8 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('gnss.navpvt_hacc_scale', 1.0)
         self.declare_parameter('gnss.validation.max_sigma_m', 5.0)
         self.declare_parameter('gnss.validation.missing_grace_frames', 30)
+        
+        self.declare_parameter('save_dir', '')
         self.declare_parameter('gnss.anchor.min_fix_status', 0)
         self.declare_parameter('gnss.anchor.sigma_m', 0.05)
         self.declare_parameter('gnss.anchor.init_yaw_sigma_rad', 10.0)
@@ -343,6 +350,56 @@ class SlamNodeBase(Node, ABC):
                 )
             ),
         )
+
+    def _handle_save_slam_map(self, request, response):
+        """SLAMマップデータ（マップ画像、ポーズグラフ、GNSS座標変換情報など）を保存する。"""
+        output_dir = self.get_parameter('save_dir').value
+        if not output_dir:
+            # Fallback to default directory if save_dir is not set
+            output_dir = '/root/ros2_data/slam_maps/latest'
+        
+        try:
+            nodes = self._pose_graph.get_nodes()
+            edges = self._pose_graph.get_edges()
+
+            # Save PoseGraph
+            pg_path = SlamDataSaver.save_pose_graph(output_dir, nodes, edges)
+            msg_parts = [f"PoseGraph saved: {pg_path}"]
+
+            # Save GNSS transform if available
+            if self._gnss_runner is not None and self._gnss_runner.anchor_latlon is not None:
+                anchor = self._gnss_runner.anchor  # [easting, northing]
+                lat, lon = self._gnss_runner.anchor_latlon
+                
+                import math
+                zone = int(math.floor((lon + 180.0) / 6.0)) + 1
+                hemisphere = "north" if lat >= 0 else "south"
+                
+                rotation_rad = self._gnss_runner.init_rotation if self._gnss_runner.init_rotation is not None else 0.0
+
+                gnss_path = SlamDataSaver.save_gnss_transform(
+                    output_dir=output_dir,
+                    anchor_lat=lat,
+                    anchor_lon=lon,
+                    anchor_utm_easting=anchor[0] if anchor else 0.0,
+                    anchor_utm_northing=anchor[1] if anchor else 0.0,
+                    utm_zone=zone,
+                    utm_hemisphere=hemisphere,
+                    rotation_rad=rotation_rad,
+                    backend_name=self.get_parameter('optimization.backend').value
+                )
+                msg_parts.append(f"GNSS transform saved: {gnss_path}")
+
+            response.success = True
+            response.message = "; ".join(msg_parts)
+            self.get_logger().info(f"SLAM map saved successfully: {response.message}")
+
+        except Exception as e:
+            response.success = False
+            response.message = f"Failed to save SLAM map: {e}"
+            self.get_logger().error(response.message)
+
+        return response
 
     def _on_scan(self, scan: ScanData) -> None:
         self._scan_recv_count += 1

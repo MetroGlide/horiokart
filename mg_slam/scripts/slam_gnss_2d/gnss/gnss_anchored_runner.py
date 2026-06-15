@@ -42,6 +42,7 @@ class GnssAnchoredRunner:
         self._latest_gnss: GnssData | None = None
         self._last_node_index = -1
         self._last_gnss_ts_used = float('-inf')
+        self._init_rotation: float | None = None
 
     @property
     def state(self) -> str:
@@ -54,6 +55,10 @@ class GnssAnchoredRunner:
     @property
     def anchor_latlon(self) -> tuple[float, float] | None:
         return self._anchor.anchor_latlon
+
+    @property
+    def init_rotation(self) -> float | None:
+        return self._init_rotation
 
     def on_gnss(self, gnss: GnssData | None) -> bool:
         if gnss is None:
@@ -80,11 +85,15 @@ class GnssAnchoredRunner:
                 _logger.debug(f'Waiting for initialization distance: {dist:.2f}m / {self._params.init_distance_m:.2f}m')
                 return {}, False
             theta0 = math.atan2(ly, lx)
+            _logger.info(f"Initializing graph with {len(nodes)} nodes and {len(edges)} edges")
             self._initialize_graph(nodes, edges, theta0)
             self._state = 'RUNNING'
             self._last_node_index = nodes[-1].index
+            _logger.info("Adding GNSS prior for latest")
             self._add_gnss_prior_for_latest(nodes)
+            _logger.info("Calling optimizer.update()")
             self._optimizer.update()
+            _logger.info("Optimizer update finished")
             return self._optimizer.get_all_poses(), True
 
         if latest_edge is not None and latest_node.index > self._last_node_index:
@@ -135,6 +144,7 @@ class GnssAnchoredRunner:
     ) -> None:
         node0 = nodes[0]
         rot = theta0 - node0.yaw
+        self._init_rotation = rot
         c = math.cos(rot)
         s = math.sin(rot)
 
@@ -161,6 +171,9 @@ class GnssAnchoredRunner:
                 continue
             self._optimizer.add_initial_estimate(
                 idx, pose[0], pose[1], pose[2])
+
+        edge_str = ", ".join([f"{e.from_index}->{e.to_index}" for e in edges])
+        _logger.info(f"Edges to add: {edge_str}")
 
         for e in edges:
             self._optimizer.add_between_factor(
@@ -190,13 +203,19 @@ class GnssAnchoredRunner:
 
         gx, gy = self._anchor.to_local(gnss)
         node = self._nearest_node(nodes, gnss.timestamp)
-        self._optimizer.add_gnss_prior(
-            node.index,
-            gx,
-            gy,
-            sigma_xy,
-            self._params.gnss_factor_yaw_variance,
-        )
+        _logger.info(f"Nearest node for GNSS ts {gnss.timestamp} is node {node.index}")
+        
+        try:
+            self._optimizer.add_gnss_prior(
+                node.index,
+                gx,
+                gy,
+                sigma_xy,
+                self._params.gnss_factor_yaw_variance,
+            )
+        except Exception as e:
+            _logger.error(f"Error adding GNSS prior: {e}")
+            
         self._last_gnss_ts_used = gnss.timestamp
         _logger.info(
             f'GNSS prior added to node {node.index}: sigma_xy={sigma_xy:.2f}m')

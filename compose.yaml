@@ -139,6 +139,19 @@ services:
         ros2 bag play $$ROSBAG_FILE $${ROSBAG_TOPICS:+--topics $$ROSBAG_TOPICS} --clock
       "
 
+  map-preview:
+    <<: *runtime-base
+    environment:
+      - DISPLAY=${DISPLAY}
+      - PYTHONUNBUFFERED=1
+      - SLAM_MAP_DIR=${SLAM_MAP_DIR}
+    command: >
+      bash -c "
+        source /opt/ros/humble/setup.bash &&
+        source /root/ros2_ws/install/setup.bash &&
+        ros2 launch mg_slam map_preview.launch.py slam_map_dir:=$$SLAM_MAP_DIR
+      "
+
   gazebo-simulation:
     <<: *simulation-base
     command: >
