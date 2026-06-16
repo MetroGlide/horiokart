@@ -115,6 +115,19 @@ endif
 down:
 	$(COMPOSE) down
 
+# --- 再最適化 ---
+# 実行例: make reoptimize INPUT_DIR=/app/maps/latest [OUTPUT_DIR=/app/maps/latest_opt] [CONFIG_FILE=/app/mg_slam/params/slam_gnss_2d.yaml] [BAG_PATH=/app/bags/my_bag]
+reoptimize:
+	$(COMPOSE) run --rm develop bash -c \
+	  "source /opt/ros/humble/setup.bash && \
+	   source /root/ros2_ws/install/setup.bash && \
+	   export PYTHONPATH=/app/mg_slam/scripts:\$$PYTHONPATH && \
+	   python3 /app/mg_slam/scripts/slam_gnss_2d/reoptimize_pose_graph.py \
+	     --input_dir '$(INPUT_DIR)' \
+	     $(if $(OUTPUT_DIR),--output_dir '$(OUTPUT_DIR)',) \
+	     $(if $(CONFIG_FILE),--config_file '$(CONFIG_FILE)',) \
+	     $(if $(BAG_PATH),--bag_path '$(BAG_PATH)',)"
+
 # --- テスト ---
 # 全テスト: make test
 # 特定パッケージ: make test pkg=mg_waypoint_navigation

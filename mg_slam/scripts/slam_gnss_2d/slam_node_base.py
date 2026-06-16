@@ -363,7 +363,12 @@ class SlamNodeBase(Node, ABC):
             edges = self._pose_graph.get_edges()
 
             # Save PoseGraph
-            pg_path = SlamDataSaver.save_pose_graph(output_dir, nodes, edges)
+            bag_path = None
+            if self.has_parameter('bag_path'):
+                bag_path = self.get_parameter('bag_path').value
+                if not bag_path:
+                    bag_path = None
+            pg_path = SlamDataSaver.save_pose_graph(output_dir, nodes, edges, bag_path=bag_path)
             msg_parts = [f"PoseGraph saved: {pg_path}"]
 
             # Save GNSS transform if available

@@ -49,7 +49,8 @@ class SlamDataSaver:
     def save_pose_graph(
         output_dir: str,
         nodes: List[PoseNode],
-        edges: List[PoseEdge]
+        edges: List[PoseEdge],
+        bag_path: Optional[str] = None
     ) -> str:
         """
         ポーズグラフを pose_graph.json として保存する
@@ -86,7 +87,8 @@ class SlamDataSaver:
                 "created_at": datetime.now().isoformat(),
                 "num_nodes": len(nodes),
                 "num_sequential_edges": len(sequential_edges),
-                "num_loop_edges": len(loop_edges)
+                "num_loop_edges": len(loop_edges),
+                "bag_path": bag_path
             },
             "nodes": nodes_data,
             "sequential_edges": sequential_edges,
