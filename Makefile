@@ -22,7 +22,7 @@ _up_flags = $(if $(DETACH),-d,)
         _collect-deps \
         rviz2 rviz2-slam rviz2-navigation down xhost config \
         test \
-        diagnostics system-manager foxglove-bridge web-ui web-ui-dev tui
+        diagnostics system-manager foxglove-bridge web-ui web-ui-dev tui ui-all ui-dev-all
 
 # --- サービス起動 ---
 
@@ -146,6 +146,12 @@ system-manager:
 
 web-ui:
 	$(COMPOSE) up $(_up_flags) web-ui
+
+ui-all:
+	$(COMPOSE) up $(_up_flags) system-manager web-ui foxglove-bridge diagnostics
+
+ui-dev-all:
+	$(COMPOSE) up $(_up_flags) system-manager web-ui-dev foxglove-bridge diagnostics
 
 web-ui-dev:
 	$(COMPOSE) up web-ui-dev
