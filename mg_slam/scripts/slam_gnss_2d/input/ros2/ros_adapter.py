@@ -248,3 +248,88 @@ class ROS2GnssUtmSource(GnssSourceBase):
             latitude=msg.latitude,
             longitude=msg.longitude,
         ))
+
+
+class ROS2NavpvtSource(GnssSourceBase):
+    """ROS2 ublox_msgs/NavPVT を UTM に変換して GnssData を供給するアダプター。"""
+
+    _FLAGS_GNSS_FIX_OK = 0x01
+    _FIX_TYPE_2D = 2
+
+    def __init__(self, node: Node, topic: str = '/navpvt', hacc_scale: float = 1.0) -> None:
+        self._node = node
+        self._topic = topic
+        self._hacc_scale = hacc_scale
+        self._buffer: deque[GnssData] = deque(maxlen=_GNSS_BUFFER_SIZE)
+        self._sub = None
+        self._transformer = None
+        self._recv_count = 0
+
+    def start(self) -> None:
+        from ublox_msgs.msg import NavPVT
+        self._sub = self._node.create_subscription(
+            NavPVT, self._topic, self._on_msg, 10
+        )
+
+    def stop(self) -> None:
+        if self._sub is not None:
+            self._node.destroy_subscription(self._sub)
+            self._sub = None
+
+    def get_gnss_at(self, timestamp: float) -> Optional[GnssData]:
+        if not self._buffer:
+            return None
+        return min(self._buffer, key=lambda g: abs(g.timestamp - timestamp))
+
+    def get_all_gnss(self) -> list[GnssData]:
+        return list(self._buffer)
+
+    def _on_msg(self, msg) -> None:
+        if not (msg.flags & self._FLAGS_GNSS_FIX_OK):
+            return
+        if msg.fix_type < self._FIX_TYPE_2D:
+            return
+
+        now = self._node.get_clock().now()
+        stamp = now.nanoseconds * 1e-9
+
+        lon = msg.lon * 1e-7
+        lat = msg.lat * 1e-7
+
+        if self._transformer is None:
+            from pyproj import CRS, Transformer
+            zone = int((lon + 180.0) / 6.0) + 1
+            south = lat < 0.0
+            crs_utm = CRS.from_dict({'proj': 'utm', 'zone': zone, 'south': south})
+            self._transformer = Transformer.from_crs('EPSG:4326', crs_utm, always_xy=True)
+            self._node.get_logger().info(
+                f'GNSS UTM transformer initialized: zone={zone} south={south}'
+            )
+
+        x, y = self._transformer.transform(lon, lat)
+
+        if msg.h_acc > 0:
+            pos_std = (msg.h_acc / 1000.0) * self._hacc_scale
+            pos_var = pos_std * pos_std
+            cov_2x2 = np.array([[pos_var, 0.0], [0.0, pos_var]], dtype=np.float64)
+        else:
+            cov_2x2 = np.zeros((2, 2), dtype=np.float64)
+
+        carr_soln = (msg.flags >> 6) & 0x03
+
+        self._recv_count += 1
+        if self._recv_count == 1 or self._recv_count % 100 == 0:
+            self._node.get_logger().info(
+                f'ROS2NavpvtSource [{self._topic}]: #{self._recv_count}, '
+                f'x={x:.2f} y={y:.2f} status={carr_soln}'
+            )
+
+        self._buffer.append(GnssData(
+            timestamp=stamp,
+            x=x,
+            y=y,
+            covariance=cov_2x2,
+            fix_status=carr_soln,
+            latitude=lat,
+            longitude=lon,
+        ))
