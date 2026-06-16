@@ -155,6 +155,36 @@
           <publish_odom_tf>false</publish_odom_tf>
         </plugin>
       </gazebo>
+
+      <!--
+        WheelSlip プラグイン: 車輪スリップを物理エンジンレベルで再現し、DiffDrive オドメトリに蓄積誤差（ドリフト）を発生させる。
+
+        パラメータ説明:
+          slip_compliance_lateral     : 横方向（タイヤ幅方向）のスリップ従順度。 値が大きいほど旋回・直進時に横ズレが増加し、オドメトリのヨー誤差および位置誤差が大きくなる。
+                                        単位: [m / (N·s)] (力あたりのスリップ速度)
+          slip_compliance_longitudinal: 前後方向（進行方向）のスリップ従順度。 値が大きいほど加減速時にホイールが空転・ロックし、直進距離の誤差が大きくなる。
+
+        調整の考え方:
+          0.0          : スリップなし（物理的に理想車輪）
+          0.01 〜 0.05 : 軽微なスリップ（硬い床面、乾燥路面を想定）
+          0.1  〜 0.3  : 中程度のスリップ（工場床の埃・砂、緩い路面を想定）
+          0.5  以上    : 大きなスリップ（濡れた床、砂利路面を想定）
+
+        両ホイールを同値にすると左右対称のスリップとなる。左右に異なる値を設定すると非対称スリップ（直進時のカーブ）を再現できる。
+      -->
+      <gazebo>
+        <plugin filename="ignition-gazebo-wheel-slip-system"
+                name="ignition::gazebo::systems::WheelSlip">
+          <wheel link_name="left_wheel_link">
+            <slip_compliance_lateral>0.1</slip_compliance_lateral>
+            <slip_compliance_longitudinal>0.0</slip_compliance_longitudinal>
+          </wheel>
+          <wheel link_name="right_wheel_link">
+            <slip_compliance_lateral>0.1</slip_compliance_lateral>
+            <slip_compliance_longitudinal>0.0</slip_compliance_longitudinal>
+          </wheel>
+        </plugin>
+      </gazebo>
     </xacro:if>
 
   </xacro:macro>
