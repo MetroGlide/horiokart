@@ -182,13 +182,19 @@ slam_toolbox（内部の Karto mapper）はスキャン間の相対変位推定�
 
 ## 4. サブマップと占有格子生成
 
-SMapper は内部に Karto の `Mapper` を保持し、複数の処理済スキャン（`mapper_->GetAllProcessedScans()`）から占有格子を生成します。
+SLAMの地図更新は、スキャン入力（`laserCallback`）とは非同期の別スレッドで周期的に実行されます。占有格子生成までの主要なコードフローは以下の通りです。
 
-- `SMapper::getOccupancyGrid(const double & resolution)` は `karto::OccupancyGrid::CreateFromScans(...)` を呼び、解像度に応じた格子を生成する。
-- `vis_utils::toNavMap()`（`include/slam_toolbox/visualization_utils.hpp`）で Karto の格子を `nav_msgs::msg::OccupancyGrid` に変換する（未知=-1、空=0、占有=100 など）。
-- 地図更新は別スレッドで周期実行され、`publishVisualizations()` → `updateMap()` → `sst_->publish(map)` の経路で配信される。
+1) スキャンの受信と間引き（`src/slam_toolbox/src/slam_toolbox_common.cpp`）
+- `SlamToolbox::laserCallback()`: 受信した `LaserScan` のオドメトリ姿勢を計算し、`shouldProcessScan()` で移動距離や角度変化の閾値に基づいて間引きを行います。
+- 処理対象となったスキャンは `addScan()` から内部の `smapper_->getMapper()->Process(...)` へ渡され、ポーズグラフに追加されます。
 
-複数サブマップの統合は `merge_maps_kinematic` のようなノードで扱われる。
+2) 地図の生成（`include/slam_toolbox/slam_mapper.hpp` / `src/slam_toolbox/src/slam_mapper.cpp`）
+- `SMapper::getOccupancyGrid(const double & resolution)`: 内部の処理済スキャン集合から `karto::OccupancyGrid::CreateFromScans(...)` を呼んで Karto の占有格子を生成します。
+
+3) ROSへの変換と配信（`include/slam_toolbox/visualization_utils.hpp`）
+- `publishVisualizations()` が `map_update_interval` に従って定期的に `updateMap()` を呼び出します。
+- `vis_utils::toNavMap()` で Karto の格子情報を ROS の `nav_msgs::msg::OccupancyGrid` にマッピング（未知=-1、空=0、占有=100）し、`sst_->publish(map)` で `/map` トピックに配信します。
+- `map` の Publisher は通常 `transient_local` QoSを使用するため、Late-joining subscriber も過去の地図を受け取ることができます。
 
 ## 5. ポーズグラフ（頂点・エッジ）と情報行列
 
@@ -248,44 +254,64 @@ $$
 
 ## 8. サブマップ統合と地図保存（運用ノード）
 
-- `merge_maps_kinematic` は複数のサブマップを統合して単一の占有格子を生成する用途に使われる。マルチロボットやログの統合処理で利用される。
-- `map_saver`（`map_saver::MapSaver`）は `save_map` サービスを提供し、内部キャッシュされた `nav_msgs::msg::OccupancyGrid` を外部 CLI（`map_saver_cli` 等）で PNG/YAML に保存する。外部 CLI の存在や PATH に依存する点に注意。
+### 8.1. サブマップ統合（`src/slam_toolbox/src/merge_maps_kinematic.cpp`）
+- 複数のサブマップ（個々の `karto::Mapper` が持つスキャン集合）を取り込み、`karto::OccupancyGrid::CreateFromScans(...)` により統合地図を生成するノードです。
+- 統合後は `vis_utils::toNavMap()` を経て ROS の `nav_msgs::msg::OccupancyGrid` を Publish します。マルチロボットや分割マップの統合に利用されます。
+
+### 8.2. 地図の保存と動的取得（`src/slam_toolbox/src/map_saver.cpp`）
+- `map_saver::MapSaver`: `slam_toolbox/save_map` サービスを提供します。
+- トピックから最新の `nav_msgs::msg::OccupancyGrid` を内部キャッシュし、保存リクエストが来た際に外部 CLI（`ros2 run nav2_map_server map_saver_cli ...`）を `system()` 経由で呼び出して PNG + YAML を出力します。
+- **注意点**: 外部 CLI の呼び出しは実行環境（PATH、パッケージの有無、実行権限）に依存し、戻り値は `system()` のステータスに依存するため失敗時の扱いに注意が必要です。
+- なお、現在の地図を動的に取得するための `slam_toolbox/dynamic_map` サービス（`nav_msgs::srv::GetMap` 相当）は `slam_toolbox_common.cpp` の `mapCallback()` で提供されています。
 
 ## 9. 高レベル処理フロー（図）
 
-以下は全体の処理フローを示す mermaid 図です。
+以下は全体の詳細な処理フローを示す mermaid 図です。
 
 ```mermaid
 flowchart TD
-	A["センサ: LaserScan (/scan)"] --> B["LaserAssistant: Scan 前処理"]
-	B --> C["getLaser() -> Karto LaserRangeFinder"]
-	C --> D["shouldProcessScan() 閾値判定"]
-	D -- "処理対象" --> E["addScan() -> mapper->Process(scan)"]
-	E --> F["内部: スキャン登録（頂点追加）"]
-	F --> G["スキャン間マッチング (correlation -> fine matching)"]
-	G --> H["リンク (LinkInfo: 相対変位 + 共分散) を生成"]
-	H --> I["ポーズグラフにエッジを追加"]
-	I --> J["グラフ最適化 (Ceres 等) を実行"]
-	J --> K["最適化結果を頂点へ反映 (CorrectPoses)"]
-	K --> L["SMapper::getOccupancyGrid() -> vis_utils::toNavMap()"]
-	L --> M["map publisher -> /map (transient_local)"]
+   subgraph Sensor Input
+      A["センサ入力 / LaserScan (/scan)"]
+   end
 
-	P["merge_maps_kinematic: サブマップ統合"]
-	F --> P["サブマップ集合"]
-	P --> L["統合サブマップ -> 地図生成へ反映"]
+   subgraph Subscription & Preprocess (slam_toolbox_common / laser_utils)
+      B["message_filters::Subscriber"] --> C["SlamToolbox::laserCallback()"]
+      C --> D["getLaser() / LaserAssistant 前処理"]
+      D --> E["shouldProcessScan() - 間引き判定"]
+      E -- "処理対象" --> F["addScan() -> smapper_->getMapper()->Process()"]
+   end
 
-	Q["map_saver: save_map サービス (map_saver_cli 呼び出し)"]
-	M --> Q["地図を受け取り保存要求を処理"]
+   subgraph Pose Graph & Optimization (slam_mapper / ceres_solver)
+      F --> G["内部: スキャン登録（頂点追加）"]
+      G --> H["スキャン間マッチング (coarse -> fine)"]
+      H --> I["エッジ生成 (LinkInfo) & グラフに追加"]
+      I --> J["グラフ最適化 (Ceres 等) を実行"]
+      J --> K["最適化結果を頂点へ反映 (CorrectPoses)"]
+   end
 
-	subgraph LoopClosure
-	  G --> N["LoopSearch: coarse -> fine 検出"]
-	  N --> O["検証 (response / variance 閾値)"]
-	  O -- "合格" --> I
-	end
+   subgraph Map Generation (slam_mapper / visualization_utils)
+      K --> L["SMapper::getOccupancyGrid() -> karto::OccupancyGrid"]
+      L --> M["vis_utils::toNavMap() -> nav_msgs::OccupancyGrid"]
+      M --> N["sst_->publish() -> /map (transient_local)"]
+   end
 
-	style A fill:#f9f,stroke:#333,stroke-width:1px
-	style M fill:#bff,stroke:#333,stroke-width:1px
-	style O fill:#fdd,stroke:#333,stroke-width:1px
+   subgraph Output & Merging
+      N --> O["map_saver::MapSaver (slam_toolbox/save_map)"]
+      N --> P["slam_toolbox/dynamic_map (mapCallback)"]
+      Q["merge_maps_kinematic ノード"] --> L
+   end
+
+   subgraph LoopClosure
+      H --> R["LoopSearch: coarse -> fine 検出"]
+      R --> S["検証 (response / variance 閾値)"]
+      S -- "合格" --> I
+   end
+
+   A --> B
+   
+   style A fill:#f9f,stroke:#333,stroke-width:1px
+   style N fill:#bff,stroke:#333,stroke-width:1px
+   style S fill:#fdd,stroke:#333,stroke-width:1px
 ```
 
 

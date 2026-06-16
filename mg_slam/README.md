@@ -1,7 +1,7 @@
 # mg_slam
 
 2D LiDAR + オドメトリ + GNSS を組み合わせた占有格子マップ生成パッケージ。
-スキャンマッチング・ループクロージャ・GNSS拘束付き再最適化を段階的に実装した
+スキャンマッチング・ループクロージャ・インクリメンタルGNSS拘束付き最適化を実装した
 自作SLAMエンジン（`slam_gnss_2d`）と、slam_toolbox のラッパー（`bringup_slam_toolbox`）の
 2種類のバックエンドを提供する。
 
@@ -12,9 +12,8 @@
 - [パッケージ構成](#パッケージ構成)
 - [slam\_gnss\_2d アーキテクチャ](#slam_gnss_2d-アーキテクチャ)
 - [処理フロー](#処理フロー)
-  - [オンラインSLAM](#オンラインslam)
-  - [オフラインSLAM（bag再処理）](#オフラインslamtbag再処理)
-  - [GNSS 2パス処理](#gnss-2パス処理)
+  - [オンライン/オフライン共通SLAMフロー](#オンラインオフライン共通slamフロー)
+  - [インクリメンタルGNSS統合](#インクリメンタルgnss統合)
 - [アルゴリズム詳細](#アルゴリズム詳細)
   - [スキャンマッチング](#スキャンマッチング)
   - [ループクロージャ](#ループクロージャ)
@@ -23,6 +22,8 @@
   - [オンラインSLAM起動](#オンラインslam起動)
   - [rosbag 収録](#rosbag-収録)
   - [オフライン再処理](#オフライン再処理)
+  - [マップ・パラメータの保存](#マップパラメータの保存)
+  - [ナビゲーション時の連携（SlamGnssNavBridge）](#ナビゲーション時の連携slamgnssnavbridge)
 - [パラメータ一覧](#パラメータ一覧)
 - [ディレクトリ構成](#ディレクトリ構成)
 - [詳細ドキュメント](#詳細ドキュメント)
@@ -41,7 +42,9 @@ mg_slam/
 ├── params/
 │   └── slam_gnss_2d.yaml                # 全パラメータのデフォルト値
 ├── scripts/
-│   └── slam_gnss_2d/                    # slam_gnss_2d エンジン本体
+│   ├── slam_gnss_2d/                    # slam_gnss_2d エンジンコアロジック
+│   ├── slam_gnss_nav_bridge_node.py     # ナビゲーション連携用座標変換ブリッジノード
+│   └── anchor_publisher_node.py         # マップ基準アンカー配信ノード
 └── doc/
     ├── slam_gnss_2d_design.md           # アーキテクチャ設計・設計決定事項
     └── slam_gnss_2d_gnss_algorithm.md   # GNSSアルゴリズム詳細
@@ -53,7 +56,7 @@ mg_slam/
 
 ### 層構造
 
-コードは3層に分離されており、コアロジックはROSに依存しない。
+コードはモジュール化されており、コアロジックはROSに依存しない。
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -61,7 +64,7 @@ mg_slam/
 │                                                         │
 │  ScanSourceBase  ─── ROS2ScanSource  (/scan)            │
 │  OdomSourceBase  ─── ROS2OdomSource  (/odom)            │
-│  GnssSourceBase  ─── ROS2GnssSource  (/gps/fix)         │
+│  GnssSourceBase  ─── ROS2GnssSource  (/gps/fix / /navpvt)│
 │                  ├── BagScanSource   (rosbag2)           │
 │                  ├── BagOdomSource   (rosbag2)           │
 │                  └── BagGnssSource   (rosbag2)           │
@@ -71,24 +74,31 @@ mg_slam/
 ┌─────────────────────────────────────────────────────────┐
 │  Core Logic  — ROSに完全非依存                           │
 │                                                         │
+│  GraphOrchestrator   ─── 全体のポーズグラフ更新とGNSSの統合を統括│
 │  PoseGraphBuilderBase                                   │
 │    ├── OdomOnlyBuilder       オドメトリのみ配置          │
 │    ├── ScanMatchingBuilder   ICP/NDT補正                 │
 │    └── LoopClosureBuilder    ループ検出 + GTSAM最適化    │
 │                                                         │
-│  GnssAlignerBase                                        │
-│    └── KinematicHeadingAligner  座標系変換推定           │
-│  GnssConstraintInserter         GNSS拘束生成             │
-│  GTSAMOptimizer                 ポーズグラフ最適化       │
+│  GnssAnchoredRunner  ─── アンカー管理と変位ベース初期方位推定    │
+│    └── GnssAnchorManager  基準アンカー(UTM)管理          │
+│                                                         │
+│  IncrementalOptimizerBase                               │
+│    ├── GtsamIncrementalAdapter                          │
+│    └── ISAM2Optimizer        iSAM2を用いた逐次最適化    │
+│  GraphOptimizerBase                                     │
+│    └── GTSAMOptimizer        一括最適化                  │
 │                                                         │
 │  MapRendererBase                                        │
-│    └── OpenCVRenderer  ray-casting → OccupancyGrid      │
+│    └── OpenCVRenderer        ray-casting → OccupancyGrid │
 └─────────────────────────────────────────────────────────┘
-                           │ list[PoseNode]
+                           │ list[PoseNode] / files
                            ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Node Layer  — slam_node.py / slam_offline_node.py       │
-│  ROS2パブリッシャ + パラメータ読み込み                    │
+│  Node / Output Layer                                    │
+│  - slam_node.py / slam_offline_node.py (ROS2ノード)      │
+│  - SlamDataSaver (gnss_transform.yaml, pose_graph.json) │
+│  - slam_gnss_nav_bridge_node.py (変換パラメータの読込)     │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -100,7 +110,7 @@ ROS メッセージ型はInput Layer内でのみ使用し、Core Logic へは以
 | ------------- | ---------------------------------------------------- | ----------------------- |
 | `ScanData`    | timestamp, ranges, angle_min, angle_increment        | LiDARスキャン1フレーム  |
 | `OdomData`    | timestamp, x, y, yaw                                 | オドメトリ姿勢          |
-| `GnssData`    | timestamp, x, y, covariance[2,2]                     | GNSS測位（UTM変換済み） |
+| `GnssData`    | timestamp, x, y, covariance[2,2], fix_status         | GNSS測位（UTM変換済み） |
 | `PoseNode`    | index, timestamp, x, y, yaw, scan                    | ポーズグラフのノード    |
 | `PoseEdge`    | from_index, to_index, dx, dy, dyaw, information[3,3] | ノード間拘束            |
 | `GnssPrior`   | node_index, x, y, information[2,2]                   | GNSS絶対位置拘束        |
@@ -112,12 +122,53 @@ ROS メッセージ型はInput Layer内でのみ使用し、Core Logic へは以
 
 ## 処理フロー
 
-### オンラインSLAM
+### オンライン/オフライン共通SLAMフロー
+
+スキャンが入力されるたびに `GraphOrchestrator` を通じて以下の処理が行われる。
 
 ```
-/scan ─────► ROS2ScanSource ─────► ScanData
-                                        │
-/odom ─────► ROS2OdomSource ─── get_odom_at(t)
+/scan ────► ROS2ScanSource ───► ScanData ──┐
+                                           ├─► GraphOrchestrator.process_scan()
+/odom ────► ROS2OdomSource ───► OdomData ──┘         │
+                                           PoseGraphBuilder.add_scan()
+                                                     │
+                                           ┌─────────┴───────────┐
+                                      新ノードなし          新ノード追加
+                                      (移動量不足)          PoseNode
+                                           │                     │
+                                           │             [GNSS有効かつ逐次最適化時]
+                                           │             GnssAnchoredRunner.process()
+                                           │             (Anchor/Heading推定後、Prior挿入)
+                                           │                     │
+                                           │             loop_just_closed?
+                                           │               Yes   │   No
+                                           │          optimizer  │  インクリメンタル
+                                           │         .update()   │  マップ更新
+                                           │       (GTSAM/iSAM2) │
+                                           │         map_dirty   │
+                                           │         (要再描画)   │
+                                           │                     │
+                                           └─────────────────────┘
+                                                     │
+                                           map_publisher (1 Hz)
+                                           path_publisher (1 Hz)
+```
+
+**キーフレーム採択条件**: `min_translation = 1.0 m` または `min_rotation = 0.1 rad` （`slam_gnss_2d.yaml` で変更可能）
+いずれかを超えた移動でのみノードを追加する。
+
+### インクリメンタルGNSS統合
+
+GNSS拘束は、従来のような2パス（オフライン一括）処理ではなく、オンライン・オフラインを問わず以下のステップで逐次（インクリメンタル）に処理される。
+
+1. **アンカー設定 (`GnssAnchorManager`):**
+   最初の有効なGNSS fix（RTK-Fixed / RTK-Float 等、`anchor_min_fix_status` 以上）を基準アンカーとして採用し、そのUTM座標を保持する。以後のGNSS座標はこのアンカーを原点とするローカル平面座標に変換される。
+2. **初期方位の推定とグラフ初期化 (`GnssAnchoredRunner`):**
+   ロボットが基準アンカーから `init_distance_m` 以上移動するのを待ち、SLAMのローカル変位とGNSSのローカル座標変位の方向から初期方位（`theta0`）を算出する。この方位に基づいてオプティマイザ（iSAM2等）の最初のノードを初期化し、ポーズグラフ全体をアライメントする。
+3. **インクリメンタルな拘束追加:**
+   新ノードが追加されるたびに、対応する時刻のGNSS測位データを取得。測位精度（`sigma`）が `gnss_max_sigma_m` 以下の良好なデータである場合にのみ、オプティマイザに絶対位置拘束（PriorFactor）を逐次挿入し更新する。
+4. **マップの再描画判定:**
+   最適化によってロボット位置が前回レンダリング時より `gnss_rerender_threshold_m` 以上変動した場合にのみ、マップ全体の再描画をトリガーする。これにより不要な再描画コストを抑制しつつ、一貫性のあるマップを維持する。mSource ─── get_odom_at(t)
                                         │
                               PoseGraphBuilder.add_scan()
                                         │
@@ -241,58 +292,29 @@ MatchResult(converged, dx, dy, dyaw, information)
 
 詳細は [doc/slam_gnss_2d_gnss_algorithm.md](doc/slam_gnss_2d_gnss_algorithm.md) 参照。
 
-#### KinematicHeadingAligner — 座標系変換の推定
+### GNSS拘束
 
-GNSS（UTM座標系）とSLAM（ロボット起動基準ローカル座標系）の間の
-剛体変換 `SLAM_xy = R(θ) * GNSS_xy + (tx, ty)` を走行データから自動推定する。
+詳細は [doc/slam_gnss_2d_gnss_algorithm.md](doc/slam_gnss_2d_gnss_algorithm.md) 参照。
 
-**Step 1 — 回転角 θ の推定**
+#### 1. アンカー設定 (`GnssAnchorManager`)
 
-速度フィルタ（`kinematic_min_speed_ms`）を通過した連続GNSSペアについて
-GNSS方位とSLAM方位の差を計算し、**円形平均**で回転角を求める。
+最初の有効な GNSS fix（RTK-Fixed / RTK-Float 等、`anchor_min_fix_status` 以上）を基準アンカーとして採用し、その時の経度から自動的に UTM zone を決定して UTM 座標 (`anchor_utm_easting`, `anchor_utm_northing`) を取得します。
+以後はこのアンカー位置を基準としたローカル平面座標に GNSS 測位を変換して処理します。
 
-```
-θ_i = atan2(Δs_y, Δs_x) − atan2(Δg_y, Δg_x)     (各ペアのサンプル)
-θ   = atan2( Σ sin(θ_i),  Σ cos(θ_i) )             (円形平均)
-```
+#### 2. 初期方位の推定とグラフ初期化 (`GnssAnchoredRunner`)
 
-単純平均を避けるのは ±π 付近のラップアラウンド誤差を防ぐため。
+起動直後はロボットの絶対方位（ローカル座標系とGNSS座標系の回転ずれ）が不明なため、グラフは `INITIALIZING` 状態となります。
+ロボットが基準アンカーから `init_distance_m` (デフォルト: 2.0 m) 以上移動した時点で、これまでの SLAM の軌跡と GNSS 軌跡の移動方向を比較し、初期方位 `theta0` および回転オフセット `init_rotation` を算出します。これにより最初のノード位置および向きを初期化し、グラフ全体の絶対方位を確定させます。
 
-**Step 2 — 平行移動 (tx, ty) の推定**
+#### 3. インクリメンタルな Prior 拘束の追加
 
-全GNSS点を回転後、最近傍ノードとの差の平均を取る。
+状態が `RUNNING` に移行した後は、LiDAR キーフレーム（ノード）が追加されるたびに、最もタイムスタンプの近い GNSS 測位データを参照します。
+測位の共分散から導出される標準偏差 $\sigma_{xy}$ が `gnss_max_sigma_m` (デフォルト: 2.0 m) 以下の場合にのみ、オプティマイザに対して絶対位置の Prior 拘束 (`add_gnss_prior`) を追加します。yaw 方向は観測できないため、大きな分散を設定することで位置のみを拘束します。
 
-```
-(tx, ty) = mean( node_xy − R(θ) * gnss_xy  for all gnss points )
-```
+#### 4. iSAM2 / GTSAM による逐次最適化
 
-#### GnssConstraintInserter — GNSS拘束の生成
-
-推定変換で各GNSS測位をSLAM座標系に変換し、情報行列付きの `GnssPrior` を生成する。
-GTSAMへの依存を持たず、optimizer層との入出力インターフェースは `GnssPrior` dataclass のみ。
-
-```
-C_slam = R * C_GNSS * R^T     (共分散を回転変換)
-I      = C_slam^{-1}          (情報行列)
-```
-
-#### GTSAMOptimizer — GNSS拘束付きグラフ最適化
-
-LevenbergMarquardt法によるポーズグラフ最適化。
-GNSSは `PriorFactorPose2`（xy拘束のみ、yaw自由）として投入する。
-
-```
-I_3x3 = [[I_2x2,  0      ],      yaw 分散 = 1e6 rad²（実質自由）
-          [0,      1/σ_θ²]]
-```
-
-ファクターグラフの構成:
-
-| ファクター                     | 対象                   | 役割                    |
-| ------------------------------ | ---------------------- | ----------------------- |
-| `PriorFactorPose2`（アンカー） | `nodes[0]`             | ゲージ自由度の除去      |
-| `BetweenFactorPose2`           | 全 `PoseEdge`          | 連続辺 + ループ辺の拘束 |
-| `PriorFactorPose2`（GNSS）     | `GnssPrior` 対応ノード | グローバル絶対位置拘束  |
+オプティマイザ（`backend: isam2` または `gtsam`）によって、オドメトリ拘束、スキャンマッチング拘束、ループクロージャ拘束、および GNSS の絶対位置拘束を考慮したファクターグラフの最適化が逐次実行されます。
+最適化による姿勢の変動量が `gnss_rerender_threshold_m` 以上となった場合にのみ、マップの再描画を行います。
 
 ---
 
@@ -322,127 +344,84 @@ ros2 launch mg_slam bringup_slam_gnss_2d.launch.py simulation:=true rviz:=true
 ### rosbag 収録
 
 ```bash
-# GNSS付き収録（GNSS 2パス処理で後処理する場合は /gps/fix が必要）
+# トピックを収録 (GNSS 連携を行う場合は /gps/fix または /navpvt が必要)
 ros2 launch mg_slam record_bag.launch.py
-
-# 収録先: params/record_topic_list.txt に記載したトピック群
-# 出力先: 環境変数 ROSBAG_DIR またはデフォルトディレクトリ
 ```
 
 ### オフライン再処理
 
-#### GNSS なし（ループクロージャのみ）
+`params/slam_gnss_2d.yaml` において `gnss.enabled: true` が設定されていると、bag 再生中にオンライン同様のインクリメンタル GNSS 統合が適用されます。
 
 ```bash
 ROSBAG_FILE=/path/to/bag \
 ros2 launch mg_slam offline_slam_gnss_2d.launch.py rviz:=true
 ```
 
-#### GNSS あり（2パス処理）
+bag の再生終了時、最終のポーズグラフ最適化およびマップレンダリングが実行され、確定したマップおよびポーズグラフ、座標変換パラメータが自動保存されます。
 
-`params/slam_gnss_2d.yaml` の `slam_gnss_2d_offline_node` セクションで
-`use_gnss: true` を設定してから起動する。
+### マップ・パラメータの保存
 
-```bash
-ROSBAG_FILE=/path/to/bag \
-ros2 launch mg_slam offline_slam_gnss_2d.launch.py rviz:=true
-```
-
-処理の流れ:
-
-1. bag 全件をステップ駆動で読み込み、ループクロージャ付きポーズグラフを構築する
-2. bag 終端到達後、GNSS 2パス処理（Aligner → Inserter → 再最適化）を自動実行する
-3. マップを全ノード再描画して `/slam_gnss_2d/map` を再配信する
-
-ログで進行状況を確認できる:
-
-```
-[slam_gnss_2d_offline_node] GNSS align: tx=X.XXm ty=X.XXm rot=X.XXdeg (N fixes, M nodes)
-[slam_gnss_2d_offline_node] GNSS inserting N prior constraints
-[slam_gnss_2d_offline_node] GNSS phase complete: map re-rendered with GNSS constraints
-```
-
-#### パラメータをコマンドラインから上書き
+オンライン SLAM 実行中、またはオフライン再処理が終了した時点で、以下のサービスコールを実行することでマップと関連データを保存できます。
 
 ```bash
-# 最大速度で処理（RViz2可視化なし）
-ROSBAG_FILE=/path/to/bag \
-ros2 launch mg_slam offline_slam_gnss_2d.launch.py \
-  params_file:=/path/to/custom.yaml
+ros2 service call /slam_gnss_2d/save_slam_map mg_msgs/srv/SaveSlamMap "{map_dir: '/app/maps'}"
 ```
+
+このサービスコールによって、指定ディレクトリに以下のファイル群が出力されます。
+- `map.pgm` / `map.yaml` : 標準的な 2D 占有格子マップ（Map Server 用）
+- `gnss_transform.yaml` : マップ座標系と地球座標系 (UTM/WGS84) の座標変換パラメータ (基準アンカー、初期回転角)
+- `pose_graph.json` : 最適化されたポーズグラフ履歴（ノード、エッジ、および座標データ）
+
+### ナビゲーション時の連携（SlamGnssNavBridge）
+
+マップ生成完了後の自律移動（Navigation2）フェーズでは、`slam_gnss_nav_bridge_node` を起動します。
+本ノードは保存された `gnss_transform.yaml` を読み込み、ロボットが受信する生の GNSS 座標（`/gps/fix` または `/navpvt`）をマップ座標系に変換した上で、`/odom/gps` トピック (`nav_msgs/Odometry`) として配信します。これが `robot_localization` などのカルマンフィルタによるオドメトリフュージョンに入力されることで、マップ座標系と一致したグローバルナビゲーションが実現します。
 
 ---
 
 ## パラメータ一覧
 
-`params/slam_gnss_2d.yaml` で設定する。`/**:` セクションはオンライン/オフライン共通、
-`slam_gnss_2d_offline_node:` セクションはオフライン専用。
+`params/slam_gnss_2d.yaml` で設定する。
 
 ### 共通パラメータ
 
-| パラメータ             | デフォルト        | 説明                              |
-| ---------------------- | ----------------- | --------------------------------- |
-| `scan_topic`           | `/scan_top_lidar` | LiDARトピック名                   |
-| `odom_topic`           | `/odom`           | オドメトリトピック名              |
-| `map_resolution`       | `0.05`            | マップ解像度 [m/px]               |
-| `map_expansion_margin` | `100.0`           | マップ自動拡張マージン [m]        |
-| `min_translation`      | `0.3`             | キーフレーム採択 最小移動量 [m]   |
-| `min_rotation`         | `0.1`             | キーフレーム採択 最小回転量 [rad] |
-| `map_publish_hz`       | `1.0`             | マップ配信レート [Hz]             |
+| パラメータ | デフォルト | 説明 |
+| --- | --- | --- |
+| `topics.scan` | `/scan_top_lidar` | LiDARトピック名 |
+| `topics.odom` | `/odom` | オドメトリトピック名 |
+| `map.resolution` | `0.05` | マップ解像度 [m/px] |
+| `map.expansion_margin` | `100.0` | マップ自動拡張マージン [m] |
+| `map.publish_hz` | `1.0` | マップ配信レート [Hz] |
+| `keyframe.min_translation` | `1.0` | キーフレーム採択 最小移動量 [m] |
+| `keyframe.min_rotation` | `0.1` | キーフレーム採択 最小回転量 [rad] |
 
-### ポーズグラフ構築
+### スキャンマッチング / ループクロージャ / 最適化
 
-| パラメータ                   | デフォルト          | 説明                                           |
-| ---------------------------- | ------------------- | ---------------------------------------------- |
-| `pose_graph_builder`         | `loop_closure`      | `odom_only` / `scan_matching` / `loop_closure` |
-| `scan_matcher_type`          | `ndt`               | `icp` / `ndt`                                  |
-| `scan_reference`             | `scan_to_local_map` | `scan_to_scan` / `scan_to_local_map`           |
-| `matcher_max_failure_streak` | `5`                 | 連続失敗上限（超えるとodomフォールバック）     |
+| パラメータ | デフォルト | 説明 |
+| --- | --- | --- |
+| `scan_matching.enabled` | `true` | スキャンマッチングの有効化 |
+| `scan_matching.type` | `ndt` | マッチング種別 (`icp` / `ndt` / `csm`) |
+| `scan_matching.reference` | `scan_to_local_map` | 参照点群 (`scan_to_scan` / `scan_to_local_map`) |
+| `loop_closure.enabled` | `true` | ループクロージャ検出の有効化 |
+| `loop_closure.search_radius` | `2.0` | ループ候補検索半径 [m] |
+| `loop_closure.min_node_gap` | `50` | ループ候補の最小ノード間隔 |
+| `optimization.backend` | `gtsam` | 最適化バックエンド (`gtsam` / `isam2`) |
+| `optimization.incremental` | `true` | インクリメンタル最適化の有効化 |
+| `optimization.optimize_every_n_loops`| `3` | 最適化を実行するループ検出間隔 |
+| `optimization.rerender_threshold_m` | `0.1` | マップ再描画をトリガーする位置変動閾値 [m] |
 
-### ICP パラメータ
+### GNSS パラメータ (`gnss`)
 
-| パラメータ                    | デフォルト | 説明               |
-| ----------------------------- | ---------- | ------------------ |
-| `icp_max_iterations`          | `100`      | 最大反復回数       |
-| `icp_tolerance`               | `1e-5`     | 収束判定閾値       |
-| `icp_max_correspondence_dist` | `1.0`      | 対応点最大距離 [m] |
-
-### NDT パラメータ
-
-| パラメータ      | デフォルト | 説明                   |
-| --------------- | ---------- | ---------------------- |
-| `ndt_cell_size` | `1.0`      | グリッドセルサイズ [m] |
-
-### ローカルマップパラメータ
-
-| パラメータ         | デフォルト | 説明                                  |
-| ------------------ | ---------- | ------------------------------------- |
-| `local_map_window` | `30`       | スライディングウィンドウ幅 [ノード数] |
-| `local_map_radius` | `30.0`     | 参照点群抽出半径 [m]                  |
-
-### ループクロージャパラメータ
-
-| パラメータ                        | デフォルト | 説明                                 |
-| --------------------------------- | ---------- | ------------------------------------ |
-| `loop_closure_search_radius`      | `2.0`      | ループ候補検索半径 [m]               |
-| `loop_closure_min_node_gap`       | `50`       | ループ候補の最小ノード間隔           |
-| `loop_closure_max_failure_streak` | `3`        | ループ検証連続失敗上限               |
-| `optimize_every_n_loops`          | `3`        | N本ごとに最適化実行                  |
-| `loop_closure_matcher_type`       | `icp`      | ループ検証用マッチャー（`icp` 推奨） |
-| `loop_closure_max_dyaw_deg`       | `145.0`    | ループ辺 yaw差 上限 [deg]            |
-| `loop_closure_submap_radius`      | `5.0`      | ループ検証サブマップ合成半径 [m]     |
-
-> `loop_closure_matcher_type: ndt` は 180° 対称性による誤検出リスクがあるため非推奨。
-
-### オフライン専用パラメータ
-
-| パラメータ               | デフォルト | 説明                                               |
-| ------------------------ | ---------- | -------------------------------------------------- |
-| `offline_step_hz`        | `0.0`      | bag処理速度 [Hz]（0以下で最大速度）                |
-| `use_gnss`               | `true`     | GNSS 2パス処理を有効にする                         |
-| `gnss_topic`             | `/gps/fix` | NavSatFix トピック名                               |
-| `gnss_noise_xy_m`        | `3.0`      | position_covariance 不定時のフォールバック精度 [m] |
-| `kinematic_min_speed_ms` | `0.5`      | 回転推定に使う最低移動速度 [m/s]                   |
+| パラメータ | デフォルト | 説明 |
+| --- | --- | --- |
+| `gnss.enabled` | `true` | GNSS 拘束の有効化 |
+| `gnss.source` | `navpvt` | GNSS データソース (`navsat_fix` / `navpvt`) |
+| `gnss.topics.fix` | `/gps/fix` | `NavSatFix` トピック名 |
+| `gnss.topics.navpvt` | `/navpvt` | `NavPVT` トピック名 |
+| `gnss.validation.max_sigma_m` | `2.0` | 拘束追加を許容する最大位置標準偏差 $\sigma$ [m] |
+| `gnss.anchor.init_distance_m` | `2.0` | 初期方位算出に必要な最小移動距離 [m] |
+| `gnss.sigma.fix_m` | `0.02` | RTK-Fixed 時の位置標準偏差 $\sigma$ [m]（フォールバック用） |
+| `gnss.sigma.float_m` | `0.5` | RTK-Float 時の位置標準偏差 $\sigma$ [m]（フォールバック用） |
 
 ---
 
@@ -450,18 +429,21 @@ ros2 launch mg_slam offline_slam_gnss_2d.launch.py \
 
 ```
 scripts/slam_gnss_2d/
+├── __init__.py
 ├── data_types.py                       # 全dataclass定義（ROS非依存）
-├── config.py                           # SlamConfig frozen dataclass
-├── component_factory.py                # PoseGraphBuilder ファクトリ
+├── config.py                           # SlamConfig 定義（パラメータ構造体）
+├── component_factory.py                # コンポーネント生成ファクトリ
+├── graph_orchestrator.py               # ポーズグラフ更新とGNSSの統合制御
+├── slam_data_saver.py                  # マップ、ポーズグラフ、変換パラメータ保存
 ├── slam_node.py                        # オンラインROS2ノード
-├── slam_node_base.py                   # オンライン/オフライン共通基底
+├── slam_node_base.py                   # オンライン/オフライン共通基底ノード
 ├── slam_offline_node.py                # オフラインROS2ノード（bag再処理）
 │
 ├── input/
-│   ├── base.py                         # ABC: ScanSourceBase / OdomSourceBase / GnssSourceBase
+│   ├── base.py                         # 入力データソース基底クラス (ABC)
 │   └── ros2/
-│       ├── ros_adapter.py              # ROS2ScanSource / ROS2OdomSource / ROS2GnssSource
-│       └── bag_reader.py              # BagScanSource / BagOdomSource / BagGnssSource
+│       ├── ros_adapter.py              # ROS2トピック入力用ソース群
+│       └── bag_reader.py               # rosbag2入力用ソース群
 │
 ├── pose_graph/
 │   ├── base.py                         # PoseGraphBuilderBase (ABC)
@@ -473,30 +455,34 @@ scripts/slam_gnss_2d/
 │   ├── base.py                         # ScanMatcherBase (ABC)
 │   ├── icp_matcher.py                  # ICPMatcher（Point-to-Line ICP）
 │   ├── ndt_matcher.py                  # NDTMatcher
+│   ├── csm_matcher.py                  # CSMMatcher (Correlation Scan Matcher)
 │   └── reference_provider/
 │       ├── base.py                     # ReferenceProviderBase (ABC)
 │       ├── scan_to_scan.py             # ScanToScanProvider（前フレーム1枚）
 │       └── local_map.py                # LocalMapProvider（直近Nノード合成）
 │
 ├── gnss/
-│   ├── aligner_base.py                 # GnssAlignerBase (ABC)
-│   ├── kinematic_aligner.py            # KinematicHeadingAligner（運動ベクトル整合）
-│   └── constraint_inserter.py          # GnssConstraintInserter（GNSS→GnssPrior変換）
+│   ├── __init__.py
+│   ├── anchor_manager.py               # 基準アンカー管理 (WGS84 ↔ UTM)
+│   └── gnss_anchored_runner.py         # 初期方位推定・逐次 Prior 拘束追加制御
 │
 ├── optimizer/
-│   ├── base.py                         # GraphOptimizerBase (ABC)
-│   └── gtsam_optimizer.py              # GTSAMOptimizer（LevenbergMarquardt）
+│   ├── __init__.py
+│   ├── base.py                         # GraphOptimizerBase / IncrementalOptimizerBase (ABC)
+│   ├── gtsam_optimizer.py              # GTSAMOptimizer（一括最適化用）
+│   ├── isam2_optimizer.py              # ISAM2Optimizer（逐次最適化用）
+│   └── gtsam_incremental_adapter.py    # GTSAMを用いた逐次最適化アダプター
 │
 └── map_manager/
     ├── base.py                         # MapRendererBase (ABC)
-    └── opencv_renderer.py              # OpenCVRenderer（ray-casting）
+    └── opencv_renderer.py              # OpenCVRenderer（OccupancyGridレンダリング）
 ```
 
 ---
 
 ## 詳細ドキュメント
 
-| ドキュメント                                                             | 内容                                                    |
-| ------------------------------------------------------------------------ | ------------------------------------------------------- |
-| [doc/slam_gnss_2d_design.md](doc/slam_gnss_2d_design.md)                 | 全体アーキテクチャ・ABC定義・データフロー・設計決定事項 |
-| [doc/slam_gnss_2d_gnss_algorithm.md](doc/slam_gnss_2d_gnss_algorithm.md) | GNSS拘束の各ステップ詳細アルゴリズム                    |
+| ドキュメント | 内容 |
+| --- | --- |
+| [doc/slam_gnss_2d_design.md](doc/slam_gnss_2d_design.md) | 全体アーキテクチャ・ABC定義・データフロー・設計決定事項 |
+| [doc/slam_gnss_2d_gnss_algorithm.md](doc/slam_gnss_2d_gnss_algorithm.md) | GNSS 拘束の各ステップ詳細アルゴリズム |
