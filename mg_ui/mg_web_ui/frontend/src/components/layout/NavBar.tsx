@@ -3,7 +3,8 @@ import { NavLink } from "react-router-dom";
 const links = [
   { to: "/", label: "TOP" },
   { to: "/waypoint", label: "Waypoint Nav" },
-  { to: "/slam", label: "SLAM" },
+  { to: "/slam", label: "SLAM Toolbox" },
+  { to: "/slam-gnss-2d", label: "SLAM-GNSS-2D" },
   { to: "/system", label: "System" },
 ];
 

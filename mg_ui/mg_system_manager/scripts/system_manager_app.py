@@ -58,6 +58,7 @@ COMPOSE_SERVICES: dict[str, str] = {
     "foxglove-bridge": "foxglove-bridge",
     "diagnostics": "diagnostics",
     "scenario-test": "scenario-test",
+    "map-preview": "map-preview",
     "gazebo-simulation": "gazebo-simulation",
     "rviz2": "rviz2",
     "rviz2-navigation": "rviz2-navigation",
@@ -226,44 +227,126 @@ class DockerManager:
             stdout = result.stdout.strip()
             stderr = result.stderr.strip()
             if result.returncode == 0:
-                logger.info(
-                    "rosbag start succeeded stdout=%s", stdout)
+                logger.info("rosbag start succeeded stdout=%s", stdout)
                 return True, stdout
-            logger.error("rosbag start failed rc=%d stderr=%s",
-                         result.returncode, stderr)
+            logger.error("rosbag start failed rc=%d stderr=%s", result.returncode, stderr)
             return False, stderr
-        except subprocess.TimeoutExpired:
-            logger.error("rosbag start timed out")
-            return False, "command timed out"
         except Exception as e:
             logger.error("rosbag start exception: %s", e)
             return False, str(e)
 
-    def save_map(self, map_dir: str, map_name: str) -> tuple[bool, str]:
-        logger.info("save_map map_dir=%s map_name=%s", map_dir, map_name)
-        ok, output = self.exec_in_container(
-            "slam",
-            [
-                "bash", "-c",
-                f"if [ -f '{map_dir}/{map_name}.pgm' ] || [ -f '{map_dir}/{map_name}.yaml' ];"
-                " then echo EXISTS; else echo OK; fi",
-            ],
+    def start_slam_gnss_2d_preview(self, slam_map_path: str) -> tuple[bool, str]:
+        logger.info("start_slam_gnss_2d_preview slam_map_path=%s", slam_map_path)
+        env = os.environ.copy()
+        env["HOME"] = self._host_home
+        env["SLAM_MAP_DIR"] = slam_map_path
+        try:
+            result = subprocess.run(
+                ["docker", "compose", "up", "-d", "map-preview"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=self._host_project_dir,
+                env=env,
+            )
+            stdout = result.stdout.strip()
+            stderr = result.stderr.strip()
+            if result.returncode == 0:
+                logger.info("map-preview start succeeded stdout=%s", stdout)
+                return True, stdout
+            logger.error("map-preview start failed rc=%d stderr=%s", result.returncode, stderr)
+            return False, stderr
+        except Exception as e:
+            logger.error("map-preview start exception: %s", e)
+            return False, str(e)
+
+    def _run_local_ros2_cmd(self, cmd: str) -> tuple[bool, str]:
+        """system-managerコンテナ内でROS 2コマンドを実行する"""
+        full_cmd = (
+            "source /opt/ros/humble/setup.bash && "
+            "source /root/ros2_ws/install/setup.bash && "
+            f"{cmd}"
         )
-        if not ok:
-            return False, output
-        if "EXISTS" in output:
+        # 親プロセスの Python 環境変数をクリアして ROS 2 の Python 実行環境との衝突を防ぐ
+        env = os.environ.copy()
+        if "PYTHONPATH" in env:
+            del env["PYTHONPATH"]
+        if "PYTHONHOME" in env:
+            del env["PYTHONHOME"]
+            
+        try:
+            result = subprocess.run(
+                ["bash", "-c", full_cmd],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                env=env,
+            )
+            ok = result.returncode == 0
+            output = result.stdout.strip() + "\n" + result.stderr.strip()
+            return ok, output.strip()
+        except Exception as e:
+            return False, str(e)
+
+    def save_common_map(self, map_dir: str, map_name: str) -> tuple[bool, str]:
+        logger.info("save_common_map map_dir=%s map_name=%s", map_dir, map_name)
+        
+        pgm_path = Path(map_dir) / f"{map_name}.pgm"
+        yaml_path = Path(map_dir) / f"{map_name}.yaml"
+        if pgm_path.exists() or yaml_path.exists():
             return False, f"map already exists: {map_dir}/{map_name}"
-        return self.exec_in_container(
-            "slam",
-            [
-                "bash", "-c",
-                "source /opt/ros/humble/setup.bash && "
-                "source /root/ros2_ws/install/setup.bash && "
-                "ros2 service call /map_saver/save_map nav2_msgs/srv/SaveMap "
-                f'"{{map_topic: map, map_url: {map_dir}/{map_name}, image_format: pgm, '
-                'map_mode: trinary, free_thresh: 0.25, occupied_thresh: 0.65}}"',
-            ],
+            
+        try:
+            os.makedirs(map_dir, exist_ok=True)
+        except Exception as e:
+            return False, f"Failed to create directory: {e}"
+
+        # map_saver_cliを使用して、サービスに依存せず /map トピックから直接地図画像を書き出す
+        cmd = (
+            f"ros2 run nav2_map_server map_saver_cli -t map "
+            f"-f '{map_dir}/{map_name}' --occ 0.65 --free 0.25 --mode trinary"
         )
+        return self._run_local_ros2_cmd(cmd)
+
+    def save_slam_gnss_2d_map(self, slam_map_dir: str) -> tuple[bool, str]:
+        logger.info("save_slam_gnss_2d_map dir=%s", slam_map_dir)
+        
+        try:
+            os.makedirs(slam_map_dir, exist_ok=True)
+        except Exception as e:
+            return False, f"Failed to create directory: {e}"
+        
+        # 1. map_saver_cliを使用して、サービスに依存せず /map トピックから直接保存する（タイムアウト回避）
+        cmd_map_save = (
+            f"ros2 run nav2_map_server map_saver_cli -t map "
+            f"-f '{slam_map_dir}/map' --occ 0.65 --free 0.25 --mode trinary"
+        )
+        ok, out = self._run_local_ros2_cmd(cmd_map_save)
+        if not ok:
+            return False, f"Failed to save map via map_saver_cli: {out}"
+        
+        # 2. SLAMパラメータに save_dir をセット
+        for node in ["/slam_gnss_2d_node", "/slam_gnss_2d_offline_node"]:
+            self._run_local_ros2_cmd(f"ros2 param set {node} save_dir '{slam_map_dir}'")
+        
+        # 3. SLAMノードの保存サービス呼び出し
+        cmd_save_slam = "ros2 service call /slam_gnss_2d/save_slam_map std_srvs/srv/Trigger"
+        ok, out = self._run_local_ros2_cmd(cmd_save_slam)
+        if not ok:
+            return False, f"Failed to call /slam_gnss_2d/save_slam_map: {out}"
+        
+        return True, "SLAM map saved successfully"
+
+    def list_slam_gnss_2d_maps(self, base_dir: str) -> list[str]:
+        logger.info("list_slam_gnss_2d_maps base_dir=%s", base_dir)
+        path = Path(base_dir)
+        if not path.is_dir():
+            return []
+        try:
+            return [d.name for d in path.iterdir() if d.is_dir()]
+        except Exception as e:
+            logger.error("list_slam_gnss_2d_maps failed: %s", e)
+            return []
 
     def reset_sim_robot_pose(
         self, x: float, y: float, z: float, yaw: float
@@ -299,8 +382,10 @@ SETTINGS_DIR.mkdir(parents=True, exist_ok=True)
 
 def _result(ok: bool, msg: str) -> dict:
     level = logging.INFO if ok else logging.WARNING
+    # エラー時は詳細トレースバックをコンソールに全文出力できるように制限を外す
+    log_msg = msg if (not ok or not msg) else (msg if len(msg) <= 200 else msg[:200] + "...")
     logging.getLogger(__name__).log(
-        level, "response success=%s message=%s", ok, msg[:200] if msg else "")
+        level, "response success=%s message=%s", ok, log_msg)
     return {"success": ok, "message": msg}
 
 
@@ -379,20 +464,73 @@ _MAP_PATH_RE = re.compile(r"^[a-zA-Z0-9/_\-\.]+$")
 _MAP_NAME_RE = re.compile(r"^[a-zA-Z0-9_\-]+$")
 
 
-class SaveMapRequest(BaseModel):
+class SaveCommonMapRequest(BaseModel):
     map_dir: str = "/root/ros2_data"
     map_name: str = "map"
 
 
-@app.post("/map/save")
-async def save_map(body: SaveMapRequest):
+@app.post("/map/common/save")
+async def save_common_map(body: SaveCommonMapRequest):
     if not _MAP_PATH_RE.match(body.map_dir):
         return _result(False, "invalid map_dir")
     if not _MAP_NAME_RE.match(body.map_name):
         return _result(False, "invalid map_name")
     loop = asyncio.get_event_loop()
     ok, msg = await loop.run_in_executor(
-        None, manager.save_map, body.map_dir, body.map_name
+        None, manager.save_common_map, body.map_dir, body.map_name
+    )
+    return _result(ok, msg)
+
+
+class SaveSlamGnss2DMapRequest(BaseModel):
+    output_dir: str = "/root/ros2_data/slam_maps"
+
+
+@app.post("/slam_gnss_2d/map/save")
+async def save_slam_gnss_2d_map(body: SaveSlamGnss2DMapRequest):
+    if not _MAP_PATH_RE.match(body.output_dir):
+        return _result(False, "invalid output_dir")
+    
+    import datetime
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    slam_map_dir = os.path.join(body.output_dir, timestamp)
+
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(
+        None, manager.save_slam_gnss_2d_map, slam_map_dir
+    )
+    return _result(ok, msg)
+
+
+@app.get("/slam_gnss_2d/maps")
+async def list_slam_gnss_2d_maps(base_dir: str = "/root/ros2_data/slam_maps"):
+    if not _MAP_PATH_RE.match(base_dir):
+        return {"success": False, "message": "invalid base_dir", "maps": []}
+    loop = asyncio.get_event_loop()
+    maps = await loop.run_in_executor(None, manager.list_slam_gnss_2d_maps, base_dir)
+    return {"success": True, "maps": maps}
+
+
+class SlamGnss2DPreviewStartRequest(BaseModel):
+    slam_map_path: str
+
+
+@app.post("/slam_gnss_2d/preview/start")
+async def start_slam_gnss_2d_preview(body: SlamGnss2DPreviewStartRequest):
+    if not _MAP_PATH_RE.match(body.slam_map_path):
+        return _result(False, "invalid slam_map_path")
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(
+        None, manager.start_slam_gnss_2d_preview, body.slam_map_path
+    )
+    return _result(ok, msg)
+
+
+@app.post("/slam_gnss_2d/preview/stop")
+async def stop_slam_gnss_2d_preview():
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(
+        None, manager.stop, "map-preview"
     )
     return _result(ok, msg)
 

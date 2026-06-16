@@ -65,6 +65,15 @@ def generate_launch_description():
     use_gps_arg = launch_argument_creator.create(
         "use_gps", default="true")
 
+    use_slam_gnss_bridge_arg = launch_argument_creator.create(
+        "use_slam_gnss_bridge", default="true")
+    gnss_transform_file_arg = launch_argument_creator.create(
+        "gnss_transform_file", default=os.path.join(
+            os.environ.get("MAP_PATH", "/root/ros2_data/map"),
+            "gnss_transform.yaml"
+        )
+    )
+
     # Launch descriptions
     launch_common = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -104,6 +113,21 @@ def generate_launch_description():
             use_ekf_arg.launch_config),
     )
 
+    bridge_node = Node(
+        package='mg_slam',
+        executable='slam_gnss_nav_bridge_node.py',
+        name='slam_gnss_nav_bridge',
+        output='screen',
+        parameters=[{
+            'gnss_transform_file': gnss_transform_file_arg.launch_config,
+            'gnss_input': 'navpvt',
+            'gnss_topic': '/navpvt',
+            'heading_source': 'computed',
+        }],
+        condition=launch.conditions.IfCondition(
+            use_slam_gnss_bridge_arg.launch_config),
+    )
+
     # map_path = PathJoinSubstitution(
     #     ["/root/ros2_data", map_path_arg.launch_config, "map.yaml"])
     map_path = map_path_arg.launch_config
@@ -126,6 +150,7 @@ def generate_launch_description():
 
             launch_common,
             ekf_group,
+            bridge_node,
             launch_navigation,
         ]
     )

@@ -9,6 +9,7 @@ import { RosbagReplayProvider } from "./contexts/RosbagReplayContext";
 import TopPage from "./pages/TopPage";
 import WaypointNavPage from "./pages/WaypointNavPage";
 import SlamPage from "./pages/SlamPage";
+import SlamGnss2DPage from "./pages/SlamGnss2DPage";
 import SystemPage from "./pages/SystemPage";
 import SettingPage from "./pages/SettingPage";
 import NavBar from "./components/NavBar";
@@ -49,6 +50,12 @@ export default function App() {
                     path="/slam"
                     element={
                       <SlamPage client={client} sysManager={sysManager} />
+                    }
+                  />
+                  <Route
+                    path="/slam-gnss-2d"
+                    element={
+                      <SlamGnss2DPage client={client} sysManager={sysManager} />
                     }
                   />
                   <Route

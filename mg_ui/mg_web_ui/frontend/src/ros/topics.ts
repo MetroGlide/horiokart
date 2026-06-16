@@ -32,4 +32,10 @@ export const TOPICS = {
   CPU_USAGE: '/cpu_usage',
   MEMORY_USAGE: '/memory_usage',
   GPS_FIX: '/gps/fix',
+  SLAM_GNSS2D_MAP: '/map',
+  SLAM_GNSS2D_PATH: 'slam_gnss_2d/path',
+  SLAM_GNSS2D_POSE_GRAPH: 'slam_gnss_2d/pose_graph',
+  SLAM_GNSS2D_GNSS_RAW: 'slam_gnss_2d/gnss_raw_markers',
+  SLAM_GNSS2D_GNSS_PRIOR: 'slam_gnss_2d/gnss_prior_markers',
+  SLAM_GNSS2D_PATH_BEFORE: 'slam_gnss_2d/path_before_optimize',
 } as const
