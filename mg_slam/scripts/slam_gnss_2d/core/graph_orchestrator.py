@@ -52,7 +52,7 @@ class GraphOrchestrator:
         self._wire_shared_optimizer()
 
     def _wire_shared_optimizer(self) -> None:
-        from .pose_graph.loop_closure_builder import LoopClosureBuilder
+        from slam_gnss_2d.pose_graph.loop_closure_builder import LoopClosureBuilder
         if not isinstance(self._pose_graph, LoopClosureBuilder):
             return
         if self._gnss_runner is None:
