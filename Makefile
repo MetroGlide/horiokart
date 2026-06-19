@@ -116,17 +116,10 @@ down:
 	$(COMPOSE) down
 
 # --- 再最適化 ---
-# 実行例: make reoptimize INPUT_DIR=/app/maps/latest [OUTPUT_DIR=/app/maps/latest_opt] [CONFIG_FILE=/app/mg_slam/params/slam_gnss_2d.yaml] [BAG_PATH=/app/bags/my_bag]
+# 実行例: make reoptimize [INPUT_DIR=/app/maps/latest] [SAVE_DIR=/app/maps/latest_opt] [BAG_PATH=/app/bags/my_bag]
+# ※ .env に各環境変数を設定している場合は引数なしで実行可能
 reoptimize:
-	$(COMPOSE) run --rm develop bash -c \
-	  "source /opt/ros/humble/setup.bash && \
-	   source /root/ros2_ws/install/setup.bash && \
-	   export PYTHONPATH=/app/mg_slam/scripts:\$$PYTHONPATH && \
-	   python3 /app/mg_slam/scripts/slam_gnss_2d/reoptimize_pose_graph.py \
-	     --input_dir '$(INPUT_DIR)' \
-	     $(if $(OUTPUT_DIR),--output_dir '$(OUTPUT_DIR)',) \
-	     $(if $(CONFIG_FILE),--config_file '$(CONFIG_FILE)',) \
-	     $(if $(BAG_PATH),--bag_path '$(BAG_PATH)',)"
+	$(if $(INPUT_DIR),INPUT_DIR=$(INPUT_DIR) )$(if $(SAVE_DIR),SAVE_DIR=$(SAVE_DIR) )$(if $(BAG_PATH),BAG_PATH=$(BAG_PATH) )$(COMPOSE) run --rm reoptimize-slam
 
 # --- テスト ---
 # 全テスト: make test

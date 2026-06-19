@@ -63,6 +63,7 @@ COMPOSE_SERVICES: dict[str, str] = {
     "rviz2": "rviz2",
     "rviz2-navigation": "rviz2-navigation",
     "rviz2-slam": "rviz2-slam",
+    "reoptimize-slam": "reoptimize-slam",
 }
 
 
@@ -260,6 +261,33 @@ class DockerManager:
             logger.error("map-preview start exception: %s", e)
             return False, str(e)
 
+    def start_reoptimize(self, input_dir: str, bag_path: str, save_dir: str) -> tuple[bool, str]:
+        logger.info("start_reoptimize input_dir=%s bag_path=%s save_dir=%s", input_dir, bag_path, save_dir)
+        env = os.environ.copy()
+        env["HOME"] = self._host_home
+        env["INPUT_DIR"] = input_dir
+        env["BAG_PATH"] = bag_path or ""
+        env["SAVE_DIR"] = save_dir or ""
+        try:
+            result = subprocess.run(
+                ["docker", "compose", "up", "-d", "reoptimize-slam"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=self._host_project_dir,
+                env=env,
+            )
+            stdout = result.stdout.strip()
+            stderr = result.stderr.strip()
+            if result.returncode == 0:
+                logger.info("reoptimize-slam start succeeded stdout=%s", stdout)
+                return True, stdout
+            logger.error("reoptimize-slam start failed rc=%d stderr=%s", result.returncode, stderr)
+            return False, stderr
+        except Exception as e:
+            logger.error("reoptimize-slam start exception: %s", e)
+            return False, str(e)
+
     def _run_local_ros2_cmd(self, cmd: str) -> tuple[bool, str]:
         """system-managerコンテナ内でROS 2コマンドを実行する"""
         full_cmd = (
@@ -304,7 +332,7 @@ class DockerManager:
         # map_saver_cliを使用して、サービスに依存せず /map トピックから直接地図画像を書き出す
         cmd = (
             f"ros2 run nav2_map_server map_saver_cli -t map "
-            f"-f '{map_dir}/{map_name}' --occ 0.65 --free 0.25 --mode trinary"
+            f"-f '{map_dir}/{map_name}' --occ 0.65 --free 0.15 --mode trinary"
         )
         return self._run_local_ros2_cmd(cmd)
 
@@ -319,14 +347,14 @@ class DockerManager:
         # 1. map_saver_cliを使用して、サービスに依存せず /map トピックから直接保存する（タイムアウト回避）
         cmd_map_save = (
             f"ros2 run nav2_map_server map_saver_cli -t map "
-            f"-f '{slam_map_dir}/map' --occ 0.65 --free 0.25 --mode trinary"
+            f"-f '{slam_map_dir}/map' --occ 0.65 --free 0.15 --mode trinary"
         )
         ok, out = self._run_local_ros2_cmd(cmd_map_save)
         if not ok:
             return False, f"Failed to save map via map_saver_cli: {out}"
         
         # 2. SLAMパラメータに save_dir をセット
-        for node in ["/slam_gnss_2d_node", "/slam_gnss_2d_offline_node"]:
+        for node in ["/slam_gnss_2d_node", "/slam_gnss_2d_offline_node", "/reoptimize_node"]:
             self._run_local_ros2_cmd(f"ros2 param set {node} save_dir '{slam_map_dir}'")
         
         # 3. SLAMノードの保存サービス呼び出し
@@ -531,6 +559,36 @@ async def stop_slam_gnss_2d_preview():
     loop = asyncio.get_event_loop()
     ok, msg = await loop.run_in_executor(
         None, manager.stop, "map-preview"
+    )
+    return _result(ok, msg)
+
+
+class SlamGnss2DReoptimizeStartRequest(BaseModel):
+    input_dir: str
+    bag_path: str = ""
+    save_dir: str = ""
+
+
+@app.post("/slam_gnss_2d/reoptimize/start")
+async def start_slam_gnss_2d_reoptimize(body: SlamGnss2DReoptimizeStartRequest):
+    if not _MAP_PATH_RE.match(body.input_dir):
+        return _result(False, "invalid input_dir")
+    if body.bag_path and not _ROSBAG_FILE_RE.match(body.bag_path):
+        return _result(False, "invalid bag_path")
+    if body.save_dir and not _MAP_PATH_RE.match(body.save_dir):
+        return _result(False, "invalid save_dir")
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(
+        None, manager.start_reoptimize, body.input_dir, body.bag_path, body.save_dir
+    )
+    return _result(ok, msg)
+
+
+@app.post("/slam_gnss_2d/reoptimize/stop")
+async def stop_slam_gnss_2d_reoptimize():
+    loop = asyncio.get_event_loop()
+    ok, msg = await loop.run_in_executor(
+        None, manager.stop, "reoptimize-slam"
     )
     return _result(ok, msg)
 
