@@ -20,13 +20,13 @@ from std_msgs.msg import ColorRGBA
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
 
-from slam_gnss_2d.component_factory import build_pose_graph_builder
-from slam_gnss_2d.config import SlamConfig
-from slam_gnss_2d.data_types import PoseNode, ScanData
-from slam_gnss_2d.graph_orchestrator import GraphOrchestrator
+from slam_gnss_2d.core.component_factory import build_pose_graph_builder
+from slam_gnss_2d.core.config import SlamConfig
+from slam_gnss_2d.core.data_types import PoseNode, ScanData
+from slam_gnss_2d.core.graph_orchestrator import GraphOrchestrator
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from slam_gnss_2d.map_manager import OverwriteRenderer, CountingRenderer
-from slam_gnss_2d.slam_data_saver import SlamDataSaver
+from slam_gnss_2d.core.slam_data_saver import SlamDataSaver
 from std_srvs.srv import Trigger
 
 
@@ -226,7 +226,7 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('optimization.isam2.relinearize_threshold', 0.1)
 
     def _build_config(self) -> SlamConfig:
-        from slam_gnss_2d.config import (
+        from slam_gnss_2d.core.config import (
             TopicsConfig, MapConfig, KeyframeConfig, ScanMatchingConfig, IcpConfig, NdtConfig, LocalMapConfig,
             LoopClosureConfig, GnssConfig, GnssTopicsConfig, GnssValidationConfig, GnssAnchorConfig,
             GnssSigmaConfig, OptimizationConfig, Isam2Config

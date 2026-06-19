@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
-from ..data_types import MatchResult, OdomData, ScanData
+from slam_gnss_2d.core.data_types import MatchResult, OdomData, ScanData
 
 
 class ScanMatcherBase(ABC):

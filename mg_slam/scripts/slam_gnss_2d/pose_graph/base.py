@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from ..data_types import OdomData, PoseEdge, PoseNode, ScanData
+from slam_gnss_2d.core.data_types import OdomData, PoseEdge, PoseNode, ScanData
 
 
 class PoseGraphBuilderBase(ABC):

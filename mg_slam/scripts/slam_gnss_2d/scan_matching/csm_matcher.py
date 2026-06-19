@@ -6,8 +6,8 @@ import numpy as np
 from scipy.spatial import cKDTree
 from scipy.ndimage import gaussian_filter
 
-from .base import ScanMatcherBase
-from ..data_types import MatchResult, OdomData, ScanData
+from slam_gnss_2d.scan_matching.base import ScanMatcherBase
+from slam_gnss_2d.core.data_types import MatchResult, OdomData, ScanData
 
 _N_MIN_CORRESPONDENCES = 10
 

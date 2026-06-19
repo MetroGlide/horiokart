@@ -17,12 +17,12 @@ import rclpy
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import NavSatFix as NavSatFixMsg, NavSatStatus
 
-from slam_gnss_2d.config import SlamConfig
-from slam_gnss_2d.component_factory import build_gnss_source
-from slam_gnss_2d.data_types import ScanData
+from slam_gnss_2d.core.config import SlamConfig
+from slam_gnss_2d.core.component_factory import build_gnss_source
+from slam_gnss_2d.core.data_types import ScanData
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from slam_gnss_2d.input.ros2.bag_reader import BagOdomSource, BagScanSource
-from slam_gnss_2d.slam_node_base import SlamNodeBase
+from slam_gnss_2d.core.slam_node_base import SlamNodeBase
 
 
 class SlamOfflineNode(SlamNodeBase):

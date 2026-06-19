@@ -16,19 +16,20 @@ import cv2
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-from slam_gnss_2d.config import (
+from slam_gnss_2d.core.config import (
     SlamConfig, TopicsConfig, MapConfig, KeyframeConfig,
     IcpConfig, NdtConfig, LocalMapConfig, CsmConfig,
     ScanMatchingConfig, LoopClosureConfig, GnssTopicsConfig,
     GnssValidationConfig, GnssAnchorConfig, GnssSigmaConfig,
     GnssConfig, OptimizationConfig
 )
-from slam_gnss_2d.data_types import PoseNode, PoseEdge, GnssPrior, ScanData, OdomData, GnssData
-from slam_gnss_2d.component_factory import build_gnss_source, _build_matcher, _build_loop_matcher
+from slam_gnss_2d.core.data_types import PoseNode, PoseEdge, GnssPrior, ScanData, OdomData, GnssData
+from slam_gnss_2d.core.component_factory import build_gnss_source, _build_matcher, _build_loop_matcher
 from slam_gnss_2d.optimizer.gtsam_optimizer import GTSAMOptimizer
 from slam_gnss_2d.map_manager import OverwriteRenderer, CountingRenderer
-from slam_gnss_2d.slam_data_saver import SlamDataSaver
+from slam_gnss_2d.core.slam_data_saver import SlamDataSaver
 from slam_gnss_2d.input.ros2.bag_reader import BagScanSource
+from slam_gnss_2d.core.pose_graph_reoptimizer import PoseGraphReoptimizer
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(name)s: %(message)s')
 logger = logging.getLogger("reoptimize")
@@ -193,92 +194,6 @@ def load_config_from_yaml(yaml_path: str) -> SlamConfig:
     )
 
 
-def _scan_to_points(scan: ScanData) -> np.ndarray:
-    """有効レンジのみを2D点群 (N, 2) に変換する。"""
-    n = len(scan.ranges)
-    angles = scan.angle_min + np.arange(n) * scan.angle_increment
-    ranges = np.asarray(scan.ranges, dtype=np.float64)
-    valid = (ranges >= scan.range_min) & (ranges <= scan.range_max)
-    r = ranges[valid]
-    a = angles[valid]
-    return np.column_stack((r * np.cos(a), r * np.sin(a)))
-
-
-def build_submap_points(
-    center_node_idx: int,
-    nodes: List[PoseNode],
-    node_scans: Dict[int, ScanData],
-    radius: float
-) -> Optional[np.ndarray]:
-    """指定ノード周辺の点群を合成してサブマップを構築する"""
-    center_node = nodes[center_node_idx]
-    near_nodes = []
-    for n in nodes:
-        if n.index in node_scans:
-            dist = math.hypot(n.x - center_node.x, n.y - center_node.y)
-            if dist <= radius:
-                near_nodes.append((n, node_scans[n.index]))
-                
-    if not near_nodes:
-        return None
-        
-    world_pts_list = []
-    for n, scan in near_nodes:
-        local_pts = _scan_to_points(scan)
-        c = math.cos(n.yaw)
-        s = math.sin(n.yaw)
-        wx = c * local_pts[:, 0] - s * local_pts[:, 1] + n.x
-        wy = s * local_pts[:, 0] + c * local_pts[:, 1] + n.y
-        world_pts_list.append(np.column_stack((wx, wy)))
-        
-    world_pts = np.concatenate(world_pts_list, axis=0)
-    
-    # center_node のボディフレームに逆投影
-    c = math.cos(center_node.yaw)
-    s = math.sin(center_node.yaw)
-    R_inv = np.array([[c, s], [-s, c]])
-    
-    relative_pts = (R_inv @ (world_pts - np.array([center_node.x, center_node.y])).T).T
-    return relative_pts
-
-
-def find_nearest_scan(scans: List[ScanData], timestamp: float, max_diff: float = 0.1) -> Optional[ScanData]:
-    """タイムスタンプが最も近いスキャンデータを返す"""
-    if not scans:
-        return None
-    timestamps = [s.timestamp for s in scans]
-    idx = bisect.bisect_left(timestamps, timestamp)
-    if idx == 0:
-        candidate = scans[0]
-    elif idx >= len(scans):
-        candidate = scans[-1]
-    else:
-        prev = scans[idx - 1]
-        next_ = scans[idx]
-        if abs(timestamp - prev.timestamp) <= abs(next_.timestamp - timestamp):
-            candidate = prev
-        else:
-            candidate = next_
-            
-    if abs(candidate.timestamp - timestamp) <= max_diff:
-        return candidate
-    return None
-
-
-def sigma_from_covariance_or_status(gnss: GnssData, config: SlamConfig) -> float:
-    """GNSS データから位置の標準偏差を導出する"""
-    cov_xx = float(gnss.covariance[0, 0]) if gnss.covariance is not None else 0.0
-    if cov_xx > 0.0:
-        return math.sqrt(cov_xx)
-    
-    status = gnss.fix_status
-    if status >= 2:
-        return config.gnss.sigma.fix_m
-    if status >= 0:
-        return config.gnss.sigma.float_m
-    return -1.0
-
-
 def save_map_pgm_and_yaml(output_dir: str, renderer):
     """OccupancyGrid マップを PGM/YAML として保存する"""
     data, origin_x, origin_y, resolution = renderer.to_occupancy_array()
@@ -320,6 +235,7 @@ def main():
     parser.add_argument("--output_dir", help="最適化結果を保存するディレクトリ (デフォルトは input_dir/reoptimized)")
     parser.add_argument("--config_file", help="パラメータが記載された yaml ファイル (指定がなければデフォルト値を使用)")
     parser.add_argument("--bag_path", help="元の ROS Bag パス (指定があれば json 内のパスを上書き)")
+    parser.add_argument("--enable-re-scan-matching", action="store_true", help="エッジのスキャンマッチングを再実行するかどうか（デフォルトはオフで既存エッジを再利用）")
     args = parser.parse_args()
 
     # パス解決
@@ -371,243 +287,11 @@ def main():
         config = SlamConfig()
         logger.info("Using built-in default config parameters.")
 
-    # 2. ROS Bag からスキャンデータの抽出
-    logger.info("Extracting LiDAR scans from ROS Bag...")
-    scan_source = BagScanSource(bag_path, config.topics.scan)
-    scan_source.start()
-    
-    all_scans: List[ScanData] = []
-    def scan_callback(scan_data: ScanData):
-        all_scans.append(scan_data)
-        
-    scan_source.set_scan_callback(scan_callback)
-    
-    scan_count = 0
-    while scan_source.step():
-        scan_count += 1
-        if scan_count % 1000 == 0:
-            logger.info(f"Loaded {scan_count} scans...")
-    scan_source.stop()
-    logger.info(f"Loaded total {len(all_scans)} scans from Bag.")
-
-    # 3. 既存のノードにスキャンデータを紐付ける
-    logger.info("Matching nodes to nearest LiDAR scans...")
-    old_nodes: List[PoseNode] = []
-    node_scans: Dict[int, ScanData] = {}
-    
-    for n_data in pose_graph_data["nodes"]:
-        node_idx = n_data["index"]
-        ts = n_data["timestamp"]
-        
-        scan = find_nearest_scan(all_scans, ts, max_diff=0.05)
-        node = PoseNode(
-            index=node_idx,
-            timestamp=ts,
-            x=n_data["x"],
-            y=n_data["y"],
-            yaw=n_data["yaw"],
-            scan=scan
-        )
-        old_nodes.append(node)
-        if scan is not None:
-            node_scans[node_idx] = scan
-        else:
-            logger.warning(f"No matching scan found for node {node_idx} (ts={ts:.3f})")
-
-    # 4. GNSS データのロードと Prior 拘束構築
-    gnss_priors: List[GnssPrior] = []
-    anchor_utm = gnss_transform_data.get("anchor_utm", {})
-    anchor_easting = anchor_utm.get("easting")
-    anchor_northing = anchor_utm.get("northing")
-    
-    if config.gnss.enabled and anchor_easting is not None and anchor_northing is not None:
-        logger.info("Loading GNSS data from Bag...")
-        gnss_source = build_gnss_source(config, bag_path)
-        gnss_source.start()
-        
-        for node in old_nodes:
-            gnss = gnss_source.get_gnss_at(node.timestamp)
-            if gnss is None:
-                continue
-                
-            sigma_xy = sigma_from_covariance_or_status(gnss, config)
-            if sigma_xy <= 0.0 or sigma_xy > config.gnss.validation.max_sigma_m:
-                continue
-                
-            # アンカー基準のローカル平面座標に変換
-            gx = gnss.x - anchor_easting
-            gy = gnss.y - anchor_northing
-            
-            # 情報行列の構築 (位置のみ拘束、yawは極めて弱い情報にする)
-            pos_var = sigma_xy * sigma_xy
-            info_2x2 = np.diag([1.0 / pos_var, 1.0 / pos_var])
-            
-            gnss_priors.append(GnssPrior(
-                node_index=node.index,
-                x=gx,
-                y=gy,
-                information=info_2x2
-            ))
-        gnss_source.stop()
-        logger.info(f"Built {len(gnss_priors)} GNSS Prior constraints.")
-
-    # 5. エッジ (相対拘束) の再スキャンマッチング
-    logger.info("Re-running Scan Matching for edges...")
-    matcher = _build_matcher(config)
-    loop_matcher = _build_loop_matcher(config)
-    
-    new_edges: List[PoseEdge] = []
-    
-    # (A) 順次エッジ (Sequential Edges)
-    seq_edges_data = pose_graph_data.get("sequential_edges", [])
-    logger.info(f"Re-matching {len(seq_edges_data)} sequential edges...")
-    for idx, e_data in enumerate(seq_edges_data):
-        f_idx = e_data["from"]
-        t_idx = e_data["to"]
-        
-        node_f = old_nodes[f_idx]
-        node_t = old_nodes[t_idx]
-        
-        if f_idx not in node_scans or t_idx not in node_scans:
-            # スキャンがない場合は既存のエッジ情報をそのまま転写
-            new_edges.append(PoseEdge(
-                from_index=f_idx, to_index=t_idx,
-                dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"],
-                information=np.array(e_data["information"]).reshape(3, 3)
-            ))
-            continue
-            
-        # 大域的な姿勢からより正確な相対姿勢の初期推定値を計算
-        # f_idx からの局所座標に t_idx のポーズを投影
-        c = math.cos(node_f.yaw)
-        s = math.sin(node_f.yaw)
-        dx_w = node_t.x - node_f.x
-        dy_w = node_t.y - node_f.y
-        dx_local = c * dx_w + s * dy_w
-        dy_local = -s * dx_w + c * dy_w
-        dyaw_local = math.atan2(math.sin(node_t.yaw - node_f.yaw), math.cos(node_t.yaw - node_f.yaw))
-        
-        initial_guess = OdomData(
-            timestamp=node_t.timestamp,
-            x=dx_local, y=dy_local, yaw=dyaw_local
-        )
-        
-        # ターゲット点群（前フレーム）の設定
-        src_pts = _scan_to_points(node_scans[f_idx])
-        matcher.set_target_cloud(src_pts)
-        result = matcher.match(
-            dst=node_scans[t_idx],
-            initial_guess=initial_guess
-        )
-        
-        if result.converged:
-            new_edges.append(PoseEdge(
-                from_index=f_idx, to_index=t_idx,
-                dx=result.dx, dy=result.dy, dyaw=result.dyaw,
-                information=result.information
-            ))
-        else:
-            logger.warning(f"Sequential edge matching failed {f_idx} -> {t_idx}. Falling back to old edge.")
-            new_edges.append(PoseEdge(
-                from_index=f_idx, to_index=t_idx,
-                dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"],
-                information=np.array(e_data["information"]).reshape(3, 3)
-            ))
-
-    # (B) ループエッジ (Loop Edges)
-    loop_edges_data = pose_graph_data.get("loop_edges", [])
-    logger.info(f"Re-matching {len(loop_edges_data)} loop edges...")
-    for idx, e_data in enumerate(loop_edges_data):
-        f_idx = e_data["from"]
-        t_idx = e_data["to"]
-        
-        node_f = old_nodes[f_idx]
-        node_t = old_nodes[t_idx]
-        
-        if f_idx not in node_scans or t_idx not in node_scans:
-            new_edges.append(PoseEdge(
-                from_index=f_idx, to_index=t_idx,
-                dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"],
-                information=np.array(e_data["information"]).reshape(3, 3)
-            ))
-            continue
-            
-        c = math.cos(node_f.yaw)
-        s = math.sin(node_f.yaw)
-        dx_w = node_t.x - node_f.x
-        dy_w = node_t.y - node_f.y
-        dx_local = c * dx_w + s * dy_w
-        dy_local = -s * dx_w + c * dy_w
-        dyaw_local = math.atan2(math.sin(node_t.yaw - node_f.yaw), math.cos(node_t.yaw - node_f.yaw))
-        
-        initial_guess = OdomData(
-            timestamp=node_t.timestamp,
-            x=dx_local, y=dy_local, yaw=dyaw_local
-        )
-        
-        # サブマップ合成
-        submap_radius = config.loop_closure.submap_radius
-        if submap_radius > 0:
-            src_pts = build_submap_points(f_idx, old_nodes, node_scans, submap_radius)
-        else:
-            src_pts = _scan_to_points(node_scans[f_idx])
-            
-        if src_pts is None:
-            new_edges.append(PoseEdge(
-                from_index=f_idx, to_index=t_idx,
-                dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"],
-                information=np.array(e_data["information"]).reshape(3, 3)
-            ))
-            continue
-            
-        loop_matcher.set_target_cloud(src_pts)
-        result = loop_matcher.match(
-            dst=node_scans[t_idx],
-            initial_guess=initial_guess
-        )
-        
-        # ループクロージャ特有のスコア制限判定
-        score_ok = True
-        if config.loop_closure.max_score > 0.0 and result.score > config.loop_closure.max_score:
-            score_ok = False
-            logger.warning(f"Loop edge {f_idx} -> {t_idx} rejected: score {result.score:.3f} > max {config.loop_closure.max_score:.3f}")
-            
-        if result.converged and score_ok:
-            new_edges.append(PoseEdge(
-                from_index=f_idx, to_index=t_idx,
-                dx=result.dx, dy=result.dy, dyaw=result.dyaw,
-                information=result.information
-            ))
-        else:
-            logger.warning(f"Loop edge matching failed {f_idx} -> {t_idx}. Falling back to old edge.")
-            new_edges.append(PoseEdge(
-                from_index=f_idx, to_index=t_idx,
-                dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"],
-                information=np.array(e_data["information"]).reshape(3, 3)
-            ))
-
-    # 6. GTSAM フルバッチ一括最適化
-    logger.info("Executing GTSAM Batch optimization (Levenberg-Marquardt)...")
-    optimizer = GTSAMOptimizer()
-    
-    # 最初のノード姿勢をアライメントの基準（アンカー）として強く固定するために渡す
-    optimized_nodes = optimizer.optimize(old_nodes, new_edges, gnss_priors)
-
-    # 7. 最適化マップの再描画
-    logger.info("Re-rendering OccupancyGrid map...")
-    if config.map.renderer == 'counting':
-        renderer = CountingRenderer(
-            resolution=config.map.resolution,
-            expansion_margin=config.map.expansion_margin,
-            hit_threshold=config.map.hit_threshold,
-        )
-    else:
-        renderer = OverwriteRenderer(
-            resolution=config.map.resolution,
-            expansion_margin=config.map.expansion_margin,
-        )
-        
-    renderer.rerender_all(optimized_nodes)
+    reoptimizer = PoseGraphReoptimizer(config, logger)
+    optimized_nodes, new_edges, renderer = reoptimizer.reoptimize(
+        pose_graph_data, gnss_transform_data, bag_path,
+        enable_re_scan_matching=args.enable_re_scan_matching
+    )
 
     # 8. 保存処理
     logger.info(f"Saving optimized results to directory: {output_dir}")

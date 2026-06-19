@@ -15,8 +15,8 @@ from gtsam import (
     noiseModel,
 )
 
-from .base import GraphOptimizerBase
-from ..data_types import GnssPrior, PoseEdge, PoseNode
+from slam_gnss_2d.optimizer.base import GraphOptimizerBase
+from slam_gnss_2d.core.data_types import GnssPrior, PoseEdge, PoseNode
 
 _logger = logging.getLogger(__name__)
 

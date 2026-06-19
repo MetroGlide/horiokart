@@ -14,7 +14,7 @@ from gtsam import (
     noiseModel,
 )
 
-from .base import IncrementalOptimizerBase
+from slam_gnss_2d.optimizer.base import IncrementalOptimizerBase
 
 
 class ISAM2Optimizer(IncrementalOptimizerBase):

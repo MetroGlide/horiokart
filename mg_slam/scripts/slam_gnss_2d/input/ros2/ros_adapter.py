@@ -12,8 +12,8 @@ from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan, NavSatFix
 
-from ..base import GnssSourceBase, OdomSourceBase, ScanSourceBase
-from ...data_types import GnssData, OdomData, ScanData
+from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
+from slam_gnss_2d.core.data_types import GnssData, OdomData, ScanData
 
 _ODOM_BUFFER_SIZE = 200
 _GNSS_BUFFER_SIZE = 1000

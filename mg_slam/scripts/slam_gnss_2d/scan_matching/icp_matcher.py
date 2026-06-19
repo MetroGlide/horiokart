@@ -5,8 +5,8 @@ import math
 import numpy as np
 from scipy.spatial import KDTree
 
-from .base import ScanMatcherBase
-from ..data_types import MatchResult, OdomData, ScanData
+from slam_gnss_2d.scan_matching.base import ScanMatcherBase
+from slam_gnss_2d.core.data_types import MatchResult, OdomData, ScanData
 
 _N_MIN_CORRESPONDENCES = 10
 _N_NORMAL_NEIGHBORS = 5

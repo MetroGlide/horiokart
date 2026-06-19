@@ -5,8 +5,8 @@ from typing import Optional
 
 import numpy as np
 
-from .base import PoseGraphBuilderBase
-from ..data_types import OdomData, PoseEdge, PoseNode, ScanData
+from slam_gnss_2d.pose_graph.base import PoseGraphBuilderBase
+from slam_gnss_2d.core.data_types import OdomData, PoseEdge, PoseNode, ScanData
 
 _ODOM_INFORMATION = np.diag([100.0, 100.0, 50.0])
 

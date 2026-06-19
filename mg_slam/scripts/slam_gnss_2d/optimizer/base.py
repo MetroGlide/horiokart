@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Sequence
 
-from ..data_types import GnssPrior, PoseEdge, PoseNode
+from slam_gnss_2d.core.data_types import GnssPrior, PoseEdge, PoseNode
 
 
 class GraphOptimizerBase(ABC):

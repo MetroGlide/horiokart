@@ -3,7 +3,7 @@ import yaml
 import os
 from datetime import datetime
 from typing import Optional, List, Dict, Any
-from .data_types import PoseNode, PoseEdge
+from slam_gnss_2d.core.data_types import PoseNode, PoseEdge
 
 class SlamDataSaver:
     @staticmethod

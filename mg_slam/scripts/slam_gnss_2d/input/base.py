@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Callable, Optional
 
-from ..data_types import GnssData, OdomData, ScanData
+from slam_gnss_2d.core.data_types import GnssData, OdomData, ScanData
 
 
 class ScanSourceBase(ABC):

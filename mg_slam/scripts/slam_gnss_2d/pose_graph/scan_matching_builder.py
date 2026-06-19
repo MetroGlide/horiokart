@@ -6,10 +6,10 @@ from typing import Optional
 
 import numpy as np
 
-from .base import PoseGraphBuilderBase
-from ..data_types import OdomData, PoseEdge, PoseNode, ScanData
-from ..scan_matching.base import ScanMatcherBase
-from ..scan_matching.reference_provider.base import ReferenceProviderBase
+from slam_gnss_2d.pose_graph.base import PoseGraphBuilderBase
+from slam_gnss_2d.core.data_types import OdomData, PoseEdge, PoseNode, ScanData
+from slam_gnss_2d.scan_matching.base import ScanMatcherBase
+from slam_gnss_2d.scan_matching.reference_provider.base import ReferenceProviderBase
 
 _logger = logging.getLogger(__name__)
 
