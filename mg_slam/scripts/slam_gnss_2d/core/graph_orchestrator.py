@@ -207,7 +207,6 @@ class GraphOrchestrator:
         return None
 
     def _sigma_from_gnss(self, gnss: GnssData) -> float:
-        import math
         cov_xx = float(gnss.covariance[0, 0]) if gnss.covariance is not None else 0.0
         if cov_xx > 0.0:
             return math.sqrt(cov_xx)
