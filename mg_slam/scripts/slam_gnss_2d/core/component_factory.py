@@ -51,7 +51,6 @@ def build_pose_graph_builder(config: SlamConfig) -> PoseGraphBuilderBase:
             loop_closure_search_radius=config.loop_closure.search_radius,
             loop_closure_min_node_gap=config.loop_closure.min_node_gap,
             loop_closure_max_failure_streak=config.loop_closure.max_failure_streak,
-            optimize_every_n_loops=config.optimization.optimize_every_n_loops,
             max_loop_dyaw_deg=config.loop_closure.max_dyaw_deg,
             loop_closure_crossing_reject_deg=config.loop_closure.crossing_reject_deg,
             loop_closure_submap_radius=config.loop_closure.submap_radius,

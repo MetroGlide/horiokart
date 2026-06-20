@@ -100,7 +100,6 @@ class GnssTopicsConfig:
 @dataclass(frozen=True)
 class GnssValidationConfig:
     max_sigma_m: float = 5.0 # h_acc 導出のσ 上限 [m]。これを超える測位は拘束をスキップ。
-    missing_grace_frames: int = 30 # センサー欠測時降格ポリシー
 
 @dataclass(frozen=True)
 class GnssAnchorConfig:
@@ -133,10 +132,7 @@ class Isam2Config:
 @dataclass(frozen=True)
 class OptimizationConfig:
     """最適化設定"""
-    backend: str = 'gtsam' # "isam2" | "gtsam"
-    incremental: bool = True
-    optimize_every_n_loops: int = 3 # N本ループ辺追加ごとに最適化
-    rerender_threshold_m: float = 0.1
+    backend: str = 'isam2' # "isam2" | "gtsam" (バッチ用)
     isam2: Isam2Config = Isam2Config()
 
 @dataclass(frozen=True)

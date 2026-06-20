@@ -88,53 +88,23 @@ class SlamNodeBase(Node, ABC):
         self._enable_scan_matching = cfg.scan_matching.enabled
         self._enable_gnss = cfg.gnss.enabled
         self._enable_loop_closure = cfg.loop_closure.enabled
-        self._enable_incremental_optimizer = cfg.optimization.incremental
-
-        self._gnss_missing_grace_frames = cfg.gnss.validation.missing_grace_frames
-        self._gnss_missing_streak = 0
-        self._gnss_degraded = False
 
         self._use_gnss = cfg.gnss.enabled
         self._gnss_source = None
-        self._gnss_runner = None
         if self._use_gnss:
             self._gnss_source = self._setup_gnss_source(cfg)
             self._gnss_source.start()
-            if self._enable_incremental_optimizer:
-                from slam_gnss_2d.gnss.gnss_anchored_runner import GnssAnchoredParams, GnssAnchoredRunner
-
-                params = GnssAnchoredParams(
-                    init_distance_m=cfg.gnss.anchor.init_distance_m,
-                    anchor_min_fix_status=cfg.gnss.anchor.min_fix_status,
-                    anchor_sigma_m=cfg.gnss.anchor.sigma_m,
-                    init_yaw_sigma_rad=cfg.gnss.anchor.init_yaw_sigma_rad,
-                    gnss_fix_sigma_m=cfg.gnss.sigma.fix_m,
-                    gnss_float_sigma_m=cfg.gnss.sigma.float_m,
-                    gnss_factor_yaw_variance=cfg.gnss.sigma.factor_yaw_variance,
-                    gnss_max_sigma_m=cfg.gnss.validation.max_sigma_m,
-                    gnss_rerender_threshold_m=cfg.optimization.rerender_threshold_m,
-                )
-                if cfg.optimization.backend == 'gtsam':
-                    from slam_gnss_2d.optimizer.gtsam_incremental_adapter import GTSAMIncrementalAdapter
-                    opt = GTSAMIncrementalAdapter()
-                else:
-                    from slam_gnss_2d.optimizer.isam2_optimizer import ISAM2Optimizer
-                    opt = ISAM2Optimizer(
-                        relinearize_threshold=cfg.optimization.isam2.relinearize_threshold)
-
-                self._gnss_runner = GnssAnchoredRunner(
-                    params=params,
-                    optimizer=opt,
-                )
 
         self._orchestrator = GraphOrchestrator(
             logger=self.get_logger(),
             pose_graph=self._pose_graph,
             use_gnss=self._use_gnss,
-            enable_incremental_optimizer=self._enable_incremental_optimizer,
-            gnss_missing_grace_frames=self._gnss_missing_grace_frames,
-            gnss_source=self._gnss_source,
-            gnss_runner=self._gnss_runner,
+            isam2_relinearize_threshold=cfg.optimization.isam2.relinearize_threshold,
+            anchor_min_fix_status=cfg.gnss.anchor.min_fix_status,
+            gnss_fix_sigma_m=cfg.gnss.sigma.fix_m,
+            gnss_float_sigma_m=cfg.gnss.sigma.float_m,
+            gnss_factor_yaw_variance=cfg.gnss.sigma.factor_yaw_variance,
+            gnss_init_distance_m=cfg.gnss.anchor.init_distance_m,
         )
 
         self.create_timer(1.0 / cfg.map.publish_hz, self._publish_map_timer)
@@ -151,7 +121,6 @@ class SlamNodeBase(Node, ABC):
             f'matcher={cfg.scan_matching.type}, ref={cfg.scan_matching.reference})\n'
             f'  scan: {cfg.topics.scan}, odom: {cfg.topics.odom}\n'
             f'  map: dynamic @ {cfg.map.resolution}m/px, margin={cfg.map.expansion_margin}m\n'
-            f'  incremental={self._enable_incremental_optimizer}'
         )
 
     @abstractmethod
@@ -208,7 +177,6 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('gnss.topics.navpvt', '/navpvt')
         self.declare_parameter('gnss.navpvt_hacc_scale', 1.0)
         self.declare_parameter('gnss.validation.max_sigma_m', 5.0)
-        self.declare_parameter('gnss.validation.missing_grace_frames', 30)
         
         self.declare_parameter('save_dir', '')
         self.declare_parameter('gnss.anchor.min_fix_status', 0)
@@ -219,10 +187,7 @@ class SlamNodeBase(Node, ABC):
         self.declare_parameter('gnss.sigma.float_m', 0.5)
         self.declare_parameter('gnss.sigma.factor_yaw_variance', 1e8)
 
-        self.declare_parameter('optimization.backend', 'gtsam')
-        self.declare_parameter('optimization.incremental', True)
-        self.declare_parameter('optimization.optimize_every_n_loops', 3)
-        self.declare_parameter('optimization.rerender_threshold_m', 0.1)
+        self.declare_parameter('optimization.backend', 'isam2')
         self.declare_parameter('optimization.isam2.relinearize_threshold', 0.1)
 
     def _build_config(self) -> SlamConfig:
@@ -317,8 +282,6 @@ class SlamNodeBase(Node, ABC):
                 validation=GnssValidationConfig(
                     max_sigma_m=self.get_parameter(
                         'gnss.validation.max_sigma_m').value,
-                    missing_grace_frames=self.get_parameter(
-                        'gnss.validation.missing_grace_frames').value,
                 ),
                 anchor=GnssAnchorConfig(
                     min_fix_status=self.get_parameter(
@@ -338,12 +301,6 @@ class SlamNodeBase(Node, ABC):
             ),
             optimization=OptimizationConfig(
                 backend=self.get_parameter('optimization.backend').value,
-                incremental=self.get_parameter(
-                    'optimization.incremental').value,
-                optimize_every_n_loops=self.get_parameter(
-                    'optimization.optimize_every_n_loops').value,
-                rerender_threshold_m=self.get_parameter(
-                    'optimization.rerender_threshold_m').value,
                 isam2=Isam2Config(
                     relinearize_threshold=self.get_parameter(
                         'optimization.isam2.relinearize_threshold').value,
@@ -372,15 +329,15 @@ class SlamNodeBase(Node, ABC):
             msg_parts = [f"PoseGraph saved: {pg_path}"]
 
             # Save GNSS transform if available
-            if self._gnss_runner is not None and self._gnss_runner.anchor_latlon is not None:
-                anchor = self._gnss_runner.anchor  # [easting, northing]
-                lat, lon = self._gnss_runner.anchor_latlon
+            if self._orchestrator.anchor_latlon is not None:
+                anchor = self._orchestrator.anchor  # [easting, northing]
+                lat, lon = self._orchestrator.anchor_latlon
                 
                 import math
                 zone = int(math.floor((lon + 180.0) / 6.0)) + 1
                 hemisphere = "north" if lat >= 0 else "south"
                 
-                rotation_rad = self._gnss_runner.init_rotation if self._gnss_runner.init_rotation is not None else 0.0
+                rotation_rad = self._orchestrator.init_rotation if self._orchestrator.init_rotation is not None else 0.0
 
                 gnss_path = SlamDataSaver.save_gnss_transform(
                     output_dir=output_dir,
@@ -416,7 +373,14 @@ class SlamNodeBase(Node, ABC):
             )
             return
 
-        result = self._orchestrator.process_scan(scan, odom)
+        gnss = None
+        if self._use_gnss and self._gnss_source is not None:
+            gnss = self._gnss_source.get_gnss_at(scan.timestamp)
+
+        from slam_gnss_2d.core.data_types import SensorFrame
+        frame = SensorFrame(scan=scan, odom=odom, gnss=gnss)
+
+        result = self._orchestrator.process_frame(frame)
         node = result.node
         if node is None:
             self.get_logger().debug(
@@ -452,8 +416,8 @@ class SlamNodeBase(Node, ABC):
 
     def _publish_map_timer(self) -> None:
         # Publish anchor if available and not yet published
-        if self._use_gnss and self._gnss_runner is not None and not self._anchor_published:
-            latlon = self._gnss_runner.anchor_latlon
+        if self._use_gnss and not self._anchor_published:
+            latlon = self._orchestrator.anchor_latlon
             if latlon is not None:
                 lat, lon = latlon
                 msg = NavSatFix()

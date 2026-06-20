@@ -21,7 +21,8 @@ from slam_gnss_2d.core.config import (
     IcpConfig, NdtConfig, LocalMapConfig, CsmConfig,
     ScanMatchingConfig, LoopClosureConfig, GnssTopicsConfig,
     GnssValidationConfig, GnssAnchorConfig, GnssSigmaConfig,
-    GnssConfig, OptimizationConfig
+    GnssValidationConfig, GnssAnchorConfig, GnssSigmaConfig,
+    GnssConfig, OptimizationConfig, Isam2Config
 )
 from slam_gnss_2d.core.data_types import PoseNode, PoseEdge, GnssPrior, ScanData, OdomData, GnssData
 from slam_gnss_2d.core.component_factory import build_gnss_source, _build_matcher, _build_loop_matcher
@@ -151,8 +152,7 @@ def load_config_from_yaml(yaml_path: str) -> SlamConfig:
         navpvt=params.get('gnss.topics.navpvt', '/navpvt')
     )
     gnss_val = GnssValidationConfig(
-        max_sigma_m=float(params.get('gnss.validation.max_sigma_m', 5.0)),
-        missing_grace_frames=int(params.get('gnss.validation.missing_grace_frames', 30))
+        max_sigma_m=float(params.get('gnss.validation.max_sigma_m', 5.0))
     )
     gnss_anchor = GnssAnchorConfig(
         min_fix_status=int(params.get('gnss.anchor.min_fix_status', 0)),
@@ -177,10 +177,10 @@ def load_config_from_yaml(yaml_path: str) -> SlamConfig:
     
     # Optimization
     opt = OptimizationConfig(
-        backend=params.get('optimization.backend', 'gtsam'),
-        incremental=bool(params.get('optimization.incremental', True)),
-        optimize_every_n_loops=int(params.get('optimization.optimize_every_n_loops', 3)),
-        rerender_threshold_m=float(params.get('optimization.rerender_threshold_m', 0.1))
+        backend=params.get('optimization.backend', 'isam2'),
+        isam2=Isam2Config(
+            relinearize_threshold=float(params.get('optimization.isam2.relinearize_threshold', 0.1))
+        )
     )
     
     return SlamConfig(
