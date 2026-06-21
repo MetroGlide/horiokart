@@ -6,8 +6,8 @@ import numpy as np
 from scipy.spatial import cKDTree
 from scipy.ndimage import gaussian_filter
 
-from .base import ScanMatcherBase
-from ..data_types import MatchResult, OdomData, ScanData
+from slam_gnss_2d.scan_matching.base import ScanMatcherBase
+from slam_gnss_2d.core.data_types import MatchResult, OdomData, ScanData
 
 _N_MIN_CORRESPONDENCES = 10
 
@@ -31,11 +31,13 @@ class CSMMatcher(ScanMatcherBase):
         angular_search_window: float = 0.5,   # 探索幅 (±rad)
         linear_step: float = 0.05,            # 探索ステップ (m)
         angular_step: float = 0.02,           # 探索ステップ (rad)
+        yaw_information_multiplier: float = 1.0,
     ) -> None:
         self._linear_window = linear_search_window
         self._angular_window = angular_search_window
         self._linear_step = linear_step
         self._angular_step = angular_step
+        self._yaw_information_multiplier = yaw_information_multiplier
         
         self._src_pts: np.ndarray | None = None
         self._tree: cKDTree | None = None
@@ -111,6 +113,8 @@ class CSMMatcher(ScanMatcherBase):
         converged = best_score > 0.0
         # CSM自体の情報行列は形状から推定可能だが、簡易的に固定値とする
         information = np.eye(3) * (best_score / len(dst_pts)) * 100.0 if converged else np.zeros((3,3))
+        if converged:
+            information[2, 2] *= self._yaw_information_multiplier
         
         return MatchResult(
             dx=best_pose[0],

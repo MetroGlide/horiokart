@@ -14,10 +14,9 @@ from gtsam import (
     noiseModel,
 )
 
-from .base import IncrementalOptimizerBase
 
 
-class ISAM2Optimizer(IncrementalOptimizerBase):
+class ISAM2Optimizer:
     """iSAM2 を用いた 2D ポーズグラフのインクリメンタル最適化器。"""
 
     def __init__(self, relinearize_threshold: float = 0.1) -> None:

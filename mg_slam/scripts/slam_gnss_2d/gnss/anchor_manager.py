@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..data_types import GnssData
+from slam_gnss_2d.core.data_types import GnssData
 
 
 import logging

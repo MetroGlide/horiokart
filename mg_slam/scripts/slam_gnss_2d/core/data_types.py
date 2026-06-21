@@ -49,6 +49,15 @@ class GnssData:
 
 
 @dataclass
+class SensorFrame:
+    """1つのスキャン時刻に同期されたセンサデータ群のパケット"""
+
+    scan: ScanData
+    odom: OdomData
+    gnss: Optional[GnssData] = None
+
+
+@dataclass
 class PoseNode:
     """ポーズグラフの1ノード。推定姿勢とスキャンデータを保持する。"""
 
@@ -90,7 +99,7 @@ class PoseEdge:
 
 @dataclass
 class GnssPrior:
-    """GNSS絶対位置拘束。GraphOptimizerBase.optimize() の入力として使用する。
+    """GNSS絶対位置拘束。GTSAMOptimizer.optimize() の入力として使用する。
 
     GnssConstraintInserter.build_priors() が生成し、GTSAMOptimizer が
     PriorFactorPose2（yaw自由度を緩く固定）として投入する。

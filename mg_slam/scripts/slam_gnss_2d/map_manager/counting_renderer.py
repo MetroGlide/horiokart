@@ -6,8 +6,8 @@ import math
 import numpy as np
 import cv2
 
-from .base import MapRendererBase
-from ..data_types import PoseNode
+from slam_gnss_2d.map_manager.base import MapRendererBase
+from slam_gnss_2d.core.data_types import PoseNode
 
 _logger = logging.getLogger(__name__)
 

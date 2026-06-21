@@ -42,10 +42,12 @@ ament_python_install_package(slam_gnss_2d
 
 install(PROGRAMS
   scripts/actual_path_publisher.py
-  scripts/slam_gnss_2d/slam_node.py
-  scripts/slam_gnss_2d/slam_offline_node.py
-  scripts/slam_gnss_2d/slam_gnss_nav_bridge_node.py
-  scripts/slam_gnss_2d/anchor_publisher_node.py
+  scripts/slam_gnss_2d/nodes/slam_node.py
+  scripts/slam_gnss_2d/nodes/slam_offline_node.py
+  scripts/slam_gnss_2d/nodes/reoptimize_node.py
+  scripts/slam_gnss_2d/nodes/slam_gnss_nav_bridge_node.py
+  scripts/slam_gnss_2d/nodes/anchor_publisher_node.py
+  scripts/slam_gnss_2d/nodes/pose_graph_preview_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

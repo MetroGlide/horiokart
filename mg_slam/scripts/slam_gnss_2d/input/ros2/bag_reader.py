@@ -11,8 +11,8 @@ from rclpy.serialization import deserialize_message
 from sensor_msgs.msg import LaserScan
 from tf2_msgs.msg import TFMessage
 
-from ..base import GnssSourceBase, OdomSourceBase, ScanSourceBase
-from ...data_types import GnssData, OdomData, ScanData
+from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
+from slam_gnss_2d.core.data_types import GnssData, OdomData, ScanData
 
 import logging
 

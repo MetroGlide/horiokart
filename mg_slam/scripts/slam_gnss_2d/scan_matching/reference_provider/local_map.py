@@ -6,8 +6,8 @@ from typing import Optional
 
 import numpy as np
 
-from ...data_types import PoseNode, ScanData
-from .base import ReferenceProviderBase
+from slam_gnss_2d.core.data_types import PoseNode, ScanData
+from slam_gnss_2d.scan_matching.reference_provider.base import ReferenceProviderBase
 
 
 def _scan_to_points(scan: ScanData) -> np.ndarray:

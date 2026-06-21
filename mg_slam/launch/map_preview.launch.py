@@ -46,9 +46,20 @@ def generate_launch_description():
         parameters=[{'gnss_transform_file': gnss_yaml_file}]
     )
 
+    pose_graph_json_file = PathJoinSubstitution([LaunchConfiguration('slam_map_dir'), 'pose_graph.json'])
+
+    pose_graph_preview_cmd = Node(
+        package='mg_slam',
+        executable='pose_graph_preview_node.py',
+        name='pose_graph_preview',
+        output='screen',
+        parameters=[{'pose_graph_file': pose_graph_json_file}]
+    )
+
     return LaunchDescription([
         slam_map_dir_arg,
         map_server_cmd,
         lifecycle_manager_cmd,
         anchor_publisher_cmd,
+        pose_graph_preview_cmd,
     ])

@@ -17,12 +17,12 @@ import rclpy
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import NavSatFix as NavSatFixMsg, NavSatStatus
 
-from slam_gnss_2d.config import SlamConfig
-from slam_gnss_2d.component_factory import build_gnss_source
-from slam_gnss_2d.data_types import ScanData
+from slam_gnss_2d.core.config import SlamConfig
+from slam_gnss_2d.core.component_factory import build_gnss_source
+from slam_gnss_2d.core.data_types import ScanData, SensorFrame
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from slam_gnss_2d.input.ros2.bag_reader import BagOdomSource, BagScanSource
-from slam_gnss_2d.slam_node_base import SlamNodeBase
+from slam_gnss_2d.core.slam_node_base import SlamNodeBase
 
 
 class SlamOfflineNode(SlamNodeBase):
@@ -53,9 +53,9 @@ class SlamOfflineNode(SlamNodeBase):
         bag_path: str = self.get_parameter('bag_path').value
         return build_gnss_source(cfg, bag_path)
 
-    def _on_scan(self, scan: ScanData) -> None:
-        super()._on_scan(scan)
-        odom = self._odom_source.get_odom_at(scan.timestamp)
+    def _on_frame(self, frame: SensorFrame) -> None:
+        super()._on_frame(frame)
+        odom = frame.odom
         if odom is None:
             return
         msg = Odometry()
@@ -69,7 +69,7 @@ class SlamOfflineNode(SlamNodeBase):
         self._odom_pub.publish(msg)
 
         if self._use_gnss:
-            self._republish_gps_fix(scan.timestamp)
+            self._republish_gps_fix(frame.scan.timestamp)
 
     def _process_step(self) -> None:
         if not self._bag_scan_source.step():

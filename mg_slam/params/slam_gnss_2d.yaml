@@ -7,7 +7,7 @@
     map:
       resolution: 0.05
       expansion_margin: 100.0
-      publish_hz: 1.0
+      publish_hz: 0.3
       renderer: "counting" # "overwrite" | "counting"
       hit_threshold: 0.3
 
@@ -18,15 +18,16 @@
     # スキャンマッチング（フロントエンド）設定
     scan_matching:
       enabled: true
-      type: "ndt" # "icp" | "ndt"
-      reference: "scan_to_scan" # "scan_to_scan" | "scan_to_local_map"
+      type: "icp" # "icp" | "ndt"
+      reference: "scan_to_local_map" # "scan_to_scan" | "scan_to_local_map"
       max_failure_streak: 5
+      yaw_information_multiplier: 100.0 # バナナ状のたわみを防ぐため、スキャンマッチングの直進性(Yaw)を強調する倍率
       icp:
         max_iterations: 100
-        tolerance: 0.00001
-        max_correspondence_dist: 1.0
+        tolerance: 0.001
+        max_correspondence_dist: 2.0
         robust_kernel: "huber"
-        robust_kernel_scale: 0.1
+        robust_kernel_scale: 0.05 # 0.1から厳格化（角の歪みを防ぐため外れ値を弾きやすくする）
       ndt:
         cell_size: 1.0
         cell_sizes: [2.0, 1.0, 0.5]
@@ -37,8 +38,8 @@
         linear_step: 0.05
         angular_step: 0.02
       local_map:
-        window: 30
-        radius: 30.0
+        window: 100
+        radius: 50.0
 
     # ループクロージャ設定
     loop_closure:
@@ -47,12 +48,13 @@
       min_node_gap: 50
       max_failure_streak: 3
       matcher_type: "icp"
+      yaw_information_multiplier: 100.0 # ループクロージャの直進性強調倍率
       icp:
         max_iterations: 100
-        tolerance: 0.00001
+        tolerance: 0.001
         max_correspondence_dist: 1.0
         robust_kernel: "huber"
-        robust_kernel_scale: 0.1
+        robust_kernel_scale: 0.05 # 0.1から厳格化
       ndt:
         cell_size: 1.0
         cell_sizes: [2.0, 1.0, 0.5]
@@ -74,9 +76,9 @@
       topics:
         fix: "/gps/fix"
         navpvt: "/navpvt"
-      navpvt_hacc_scale: 1.0
+      navpvt_hacc_scale: 5.0
       validation:
-        max_sigma_m: 5.0
+        max_sigma_m: 30.0
         missing_grace_frames: 30
       anchor:
         min_fix_status: 0
@@ -84,8 +86,8 @@
         init_yaw_sigma_rad: 10.0
         init_distance_m: 2.0
       sigma:
-        fix_m: 0.02
-        float_m: 0.5
+        fix_m: 0.2 # 0.02から緩和（ガチガチのピン留めを防ぐ）
+        float_m: 1.0 # 0.5から緩和
         factor_yaw_variance: 100000000.0
 
     # バックエンド最適化設定
@@ -101,3 +103,26 @@ slam_gnss_2d_offline_node:
   ros__parameters:
     offline_step_hz: 0.0 # 可視化速度 [Hz]。0 以下で最大速度
 
+reoptimize_node:
+  ros__parameters:
+    enable_re_scan_matching: false # シーケンシャルエッジの再マッチングを行わない
+    enable_new_loop_search: true # 新規ループ探索のみ有効化
+    multi_guess_shift_m: 0.0
+    multi_guess_shift_deg: 0.0
+
+    # --- オフライン専用高精度設定（/**:の値を上書き）---
+    # シーケンシャルエッジ再マッチング用（高精度NDT）
+    scan_matching.type: "ndt"
+    scan_matching.reference: "scan_to_local_map"
+    scan_matching.icp.max_iterations: 500
+    scan_matching.icp.tolerance: 0.000001
+    scan_matching.ndt.cell_sizes: [0.5, 0.2]
+
+    # ループエッジ再マッチング用（高精度ICP）
+    loop_closure.icp.max_iterations: 500
+    loop_closure.icp.tolerance: 0.000001
+    loop_closure.icp.max_correspondence_dist: 0.5
+
+    # 新規ループ探索用（オンラインより広い探索範囲）
+    loop_closure.search_radius: 5.0
+    loop_closure.min_node_gap: 50

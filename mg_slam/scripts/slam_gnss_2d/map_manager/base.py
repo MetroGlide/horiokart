@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
-from ..data_types import PoseNode
+from slam_gnss_2d.core.data_types import PoseNode
 
 
 class MapRendererBase(ABC):

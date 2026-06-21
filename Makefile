@@ -115,6 +115,12 @@ endif
 down:
 	$(COMPOSE) down
 
+# --- 再最適化 ---
+# 実行例: make reoptimize [INPUT_DIR=/app/maps/latest] [SAVE_DIR=/app/maps/latest_opt] [BAG_PATH=/app/bags/my_bag]
+# ※ .env に各環境変数を設定している場合は引数なしで実行可能
+reoptimize:
+	$(if $(INPUT_DIR),INPUT_DIR=$(INPUT_DIR) )$(if $(SAVE_DIR),SAVE_DIR=$(SAVE_DIR) )$(if $(BAG_PATH),BAG_PATH=$(BAG_PATH) )$(COMPOSE) run --rm reoptimize-slam
+
 # --- テスト ---
 # 全テスト: make test
 # 特定パッケージ: make test pkg=mg_waypoint_navigation

@@ -15,8 +15,8 @@ from gtsam import (
     noiseModel,
 )
 
-from .base import GraphOptimizerBase
-from ..data_types import GnssPrior, PoseEdge, PoseNode
+
+from slam_gnss_2d.core.data_types import GnssPrior, PoseEdge, PoseNode
 
 _logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ _ANCHOR_VARIANCES = np.array([1e-6, 1e-6, 1e-8])
 _GNSS_YAW_VARIANCE = 1e6  # [rad^2]
 
 
-class GTSAMOptimizer(GraphOptimizerBase):
+class GTSAMOptimizer:
     """GTSAM LevenbergMarquardt による 2D ポーズグラフ最適化。"""
 
     def optimize(

@@ -10,7 +10,7 @@ import logging
 
 import rclpy
 
-from slam_gnss_2d.config import SlamConfig
+from slam_gnss_2d.core.config import SlamConfig
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from slam_gnss_2d.input.ros2.ros_adapter import (
     ROS2GnssUtmSource,
@@ -18,7 +18,7 @@ from slam_gnss_2d.input.ros2.ros_adapter import (
     ROS2OdomSource,
     ROS2ScanSource,
 )
-from slam_gnss_2d.slam_node_base import SlamNodeBase
+from slam_gnss_2d.core.slam_node_base import SlamNodeBase
 
 
 class SlamGnss2DNode(SlamNodeBase):

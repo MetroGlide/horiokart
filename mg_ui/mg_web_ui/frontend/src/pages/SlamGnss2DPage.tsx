@@ -98,6 +98,26 @@ export default function SlamGnss2DPage({
   const [targetDirectory, setTargetDirectory] = useState<string>("/root/ros2_data/slam_maps");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Re-optimization State
+  const [reoptBagPath, setReoptBagPath] = useState<string>("");
+  const [isReoptimizing, setIsReoptimizing] = useState(false);
+
+  // Fetch default bag path on mount
+  useEffect(() => {
+    const fetchDefaultBagPath = async () => {
+      try {
+        const res = await fetch(`${getSysManagerUrl()}/rosbag-replay/env`);
+        const data = await res.json();
+        if (data && data.file) {
+          setReoptBagPath(data.file);
+        }
+      } catch (e) {
+        console.error("Failed to fetch default bag path", e);
+      }
+    };
+    fetchDefaultBagPath();
+  }, []);
+
   const toggleLayer = (key: keyof LayerState) => (v: boolean) =>
     setLayers((prev) => ({ ...prev, [key]: v }));
 
@@ -165,6 +185,42 @@ export default function SlamGnss2DPage({
     setIsPreviewing(false);
   };
 
+  const startReoptimize = async () => {
+    if (!_sysManager || !selectedMap) return;
+    setIsReoptimizing(true);
+    const fullPath = targetDirectory.endsWith('/') 
+      ? `${targetDirectory}${selectedMap}` 
+      : `${targetDirectory}/${selectedMap}`;
+    try {
+      const res = await _sysManager.callApi('/slam_gnss_2d/reoptimize/start', {
+        input_dir: fullPath,
+        bag_path: reoptBagPath,
+        save_dir: fullPath,
+      });
+      if (!res.success) {
+        console.error("Failed to start re-optimization:", res.message);
+        setIsReoptimizing(false);
+      }
+    } catch (e) {
+      console.error("Error starting re-optimization:", e);
+      setIsReoptimizing(false);
+    }
+  };
+
+  const stopReoptimize = async () => {
+    if (!_sysManager) return;
+    try {
+      const res = await _sysManager.callApi('/slam_gnss_2d/reoptimize/stop', {});
+      if (res.success) {
+        setIsReoptimizing(false);
+      } else {
+        console.error("Failed to stop:", res.message);
+      }
+    } catch (e) {
+      console.error("Error stopping:", e);
+    }
+  };
+
   // -------------------------------------------------------------------
   // サイドバーアコーディオンアイテム
   // -------------------------------------------------------------------
@@ -226,7 +282,7 @@ export default function SlamGnss2DPage({
                 onChange={(e) => setTargetDirectory(e.target.value)}
                 className="w-full text-xs bg-gray-800 border border-gray-600 rounded p-1.5 focus:outline-none focus:border-blue-500 transition-colors font-mono"
                 placeholder="/root/ros2_data/slam_maps"
-                disabled={isPreviewing}
+                disabled={isPreviewing || isReoptimizing}
               />
             </div>
 
@@ -244,7 +300,7 @@ export default function SlamGnss2DPage({
               </button>
               <button
                 onClick={() => fetchSlamMaps()}
-                disabled={isPreviewing}
+                disabled={isPreviewing || isReoptimizing}
                 className="text-xs bg-gray-700 hover:bg-gray-600 px-2.5 py-1.5 rounded transition-colors"
               >
                 Reload
@@ -255,14 +311,14 @@ export default function SlamGnss2DPage({
 
             <div>
               <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">
-                Select Map for Preview
+                Select Map for Preview / Re-opt
               </label>
               {slamMaps.length > 0 ? (
                 <select
                   value={selectedMap}
                   onChange={(e) => setSelectedMap(e.target.value)}
                   className="w-full text-xs bg-gray-800 border border-gray-600 rounded p-1.5 focus:outline-none focus:border-blue-500 font-mono"
-                  disabled={isPreviewing}
+                  disabled={isPreviewing || isReoptimizing}
                 >
                   {slamMaps.map((m) => (
                     <option key={m} value={m}>
@@ -278,9 +334,9 @@ export default function SlamGnss2DPage({
             <div className="flex gap-2">
               <button
                 onClick={startPreview}
-                disabled={isPreviewing || !selectedMap}
+                disabled={isPreviewing || isReoptimizing || !selectedMap}
                 className={`flex-1 text-xs py-1.5 rounded transition-all font-semibold ${
-                  isPreviewing || !selectedMap
+                  isPreviewing || isReoptimizing || !selectedMap
                     ? "bg-gray-700 cursor-not-allowed text-gray-500"
                     : "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-950/20"
                 }`}
@@ -297,6 +353,47 @@ export default function SlamGnss2DPage({
                 }`}
               >
                 Stop Preview
+              </button>
+            </div>
+
+            <hr className="border-gray-700 my-2" />
+
+            <div>
+              <label className="text-[10px] uppercase tracking-wider text-gray-400 block mb-1">
+                Re-optimization ROS Bag Path
+              </label>
+              <input
+                type="text"
+                value={reoptBagPath}
+                onChange={(e) => setReoptBagPath(e.target.value)}
+                className="w-full text-xs bg-gray-800 border border-gray-600 rounded p-1.5 focus:outline-none focus:border-blue-500 transition-colors font-mono text-gray-200"
+                placeholder="/path/to/original_bag"
+                disabled={isReoptimizing || isPreviewing}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={startReoptimize}
+                disabled={isReoptimizing || isPreviewing || !selectedMap}
+                className={`flex-1 text-xs py-1.5 rounded transition-all font-semibold ${
+                  isReoptimizing || isPreviewing || !selectedMap
+                    ? "bg-gray-700 cursor-not-allowed text-gray-500"
+                    : "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white shadow-md shadow-purple-950/20"
+                }`}
+              >
+                Re-optimize Map
+              </button>
+              <button
+                onClick={stopReoptimize}
+                disabled={!isReoptimizing}
+                className={`flex-1 text-xs py-1.5 rounded transition-all font-semibold ${
+                  !isReoptimizing
+                    ? "bg-gray-700 cursor-not-allowed text-gray-500"
+                    : "bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white shadow-md shadow-red-950/20"
+                }`}
+              >
+                Stop Re-opt
               </button>
             </div>
           </div>
