@@ -20,6 +20,8 @@
    - 指示された内容と無関係な箇所の変更や、不要なコード整形、指示のないリンターエラーの修正は行わないでください。
 6. **後方互換性**
    - 特段の指示がない限り、後方互換性は考慮しません。
+7. **PEP8 / Google C++ Style Guide**
+   - PythonコードはPEP8、C++コードはGoogle C++ Style Guideに従ってください。
 
 ---
 
@@ -108,11 +110,11 @@ node_name:
 
 [mg_ui/README.md](./mg_ui/README.md) を参照。
 
-| サブパッケージ      | 技術                                             |
-| ------------------- | ------------------------------------------------ |
-| `mg_web_ui`         | React 18 + TypeScript + Vite + Tailwind CSS      |
+| サブパッケージ      | 技術                                            |
+| ------------------- | ----------------------------------------------- |
+| `mg_web_ui`         | React 18 + TypeScript + Vite + Tailwind CSS     |
 | `mg_tui`            | Python TUI ([README](./mg_ui/mg_tui/README.md)) |
-| `mg_system_manager` | FastAPI + Docker SDK（ROS2非依存）               |
+| `mg_system_manager` | FastAPI + Docker SDK（ROS2非依存）              |
 
 **mg_web_ui フロントエンド:**
 
