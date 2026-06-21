@@ -28,4 +28,4 @@ GNSS拘束処理は、ロボットの起動地点を基準としたSLAMのロー
 ## 初期方位とバッチ最適化（オフライン）
 
 現在のインクリメンタルパイプラインでは、初期方位（ロボットの起動時の向いている絶対方位）の推定など複雑な初期化処理は行わない。
-高精度なマップのアライメントは、収集した `pose_graph.json` を用いて、オフラインのバッチ最適化ツール（[reoptimize_pose_graph.py](file:///home/chuson/ros_workspace/mg_robot/mg_slam/scripts/slam_gnss_2d/tools/reoptimize_pose_graph.py)）にて実施する設計となっている。
+高精度なマップのアライメントは、収集した `pose_graph.json` を用いて、ROS2ノード（[reoptimize_node.py](file:///home/chuson/ros_workspace/mg_robot/mg_slam/scripts/slam_gnss_2d/nodes/reoptimize_node.py)）にて実施する設計となっている。
