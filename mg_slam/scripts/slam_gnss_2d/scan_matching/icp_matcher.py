@@ -52,12 +52,14 @@ class ICPMatcher(ScanMatcherBase):
         max_correspondence_dist: float = 0.5,
         robust_kernel: str = 'huber',  # 'none', 'huber', 'cauchy'
         robust_kernel_scale: float = 0.1,
+        yaw_information_multiplier: float = 1.0,
     ) -> None:
         self._max_iterations = max_iterations
         self._tolerance = tolerance
         self._max_correspondence_dist = max_correspondence_dist
         self._robust_kernel = robust_kernel.lower()
         self._robust_kernel_scale = robust_kernel_scale
+        self._yaw_information_multiplier = yaw_information_multiplier
         
         self._src_pts: np.ndarray | None = None
         self._src_tree: KDTree | None = None
@@ -138,8 +140,12 @@ class ICPMatcher(ScanMatcherBase):
             H = J_w.T @ J
             b = J_w.T @ r
 
+            # 直線廊下など一方向にしか拘束がない環境での特異行列（計算不能）エラーを防ぐため、
+            # 微小な正則化項（Tikhonov regularization / LM damping）を追加
+            H_reg = H + np.eye(3) * 1e-4
+
             try:
-                delta = np.linalg.solve(H, -b)
+                delta = np.linalg.solve(H_reg, -b)
             except np.linalg.LinAlgError:
                 return MatchResult(
                     dx=tx, dy=ty, dyaw=theta,
@@ -156,6 +162,11 @@ class ICPMatcher(ScanMatcherBase):
 
         n_valid = len(p_trans_v) if 'p_trans_v' in locals() else 0
         information = H / n_valid + 1e-6 * np.eye(3) if n_valid > 0 else np.zeros((3, 3))
+        
+        # 直進性（Yaw）を保持するため、Yawの確信度を意図的に高く（yaw_information_multiplier倍）設定
+        # これにより、GTSAMがGNSSのズレを吸収する際に「横滑り」は許容しても「曲がる」ことは許さなくなる
+        if n_valid > 0:
+            information[2, 2] *= self._yaw_information_multiplier
 
         # スコア計算
         score = 0.0

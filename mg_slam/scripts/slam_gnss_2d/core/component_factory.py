@@ -79,6 +79,7 @@ def _build_matcher(config: SlamConfig) -> ScanMatcherBase:
             max_correspondence_dist=config.scan_matching.icp.max_correspondence_dist,
             robust_kernel=config.scan_matching.icp.robust_kernel,
             robust_kernel_scale=config.scan_matching.icp.robust_kernel_scale,
+            yaw_information_multiplier=config.scan_matching.yaw_information_multiplier,
         )
     elif config.scan_matching.type == 'ndt':
         from slam_gnss_2d.scan_matching.ndt_matcher import NDTMatcher
@@ -87,6 +88,7 @@ def _build_matcher(config: SlamConfig) -> ScanMatcherBase:
             tolerance=config.scan_matching.icp.tolerance,
             cell_sizes=list(config.scan_matching.ndt.cell_sizes),
             use_bilinear=config.scan_matching.ndt.use_bilinear,
+            yaw_information_multiplier=config.scan_matching.yaw_information_multiplier,
         )
     elif config.scan_matching.type == 'csm':
         from slam_gnss_2d.scan_matching.csm_matcher import CSMMatcher
@@ -95,6 +97,7 @@ def _build_matcher(config: SlamConfig) -> ScanMatcherBase:
             angular_search_window=config.scan_matching.csm.angular_search_window,
             linear_step=config.scan_matching.csm.linear_step,
             angular_step=config.scan_matching.csm.angular_step,
+            yaw_information_multiplier=config.scan_matching.yaw_information_multiplier,
         )
     else:
         raise ValueError(
@@ -118,6 +121,7 @@ def _build_loop_matcher(config: SlamConfig) -> ScanMatcherBase:
             max_correspondence_dist=config.loop_closure.icp.max_correspondence_dist,
             robust_kernel=config.loop_closure.icp.robust_kernel,
             robust_kernel_scale=config.loop_closure.icp.robust_kernel_scale,
+            yaw_information_multiplier=config.loop_closure.yaw_information_multiplier,
         )
     elif config.loop_closure.matcher_type == 'ndt':
         from slam_gnss_2d.scan_matching.ndt_matcher import NDTMatcher
@@ -126,6 +130,7 @@ def _build_loop_matcher(config: SlamConfig) -> ScanMatcherBase:
             tolerance=config.loop_closure.icp.tolerance,
             cell_sizes=list(config.loop_closure.ndt.cell_sizes),
             use_bilinear=config.loop_closure.ndt.use_bilinear,
+            yaw_information_multiplier=config.loop_closure.yaw_information_multiplier,
         )
     elif config.loop_closure.matcher_type == 'csm':
         from slam_gnss_2d.scan_matching.csm_matcher import CSMMatcher
@@ -134,6 +139,7 @@ def _build_loop_matcher(config: SlamConfig) -> ScanMatcherBase:
             angular_search_window=config.loop_closure.csm.angular_search_window,
             linear_step=config.loop_closure.csm.linear_step,
             angular_step=config.loop_closure.csm.angular_step,
+            yaw_information_multiplier=config.loop_closure.yaw_information_multiplier,
         )
     else:
         raise ValueError(
@@ -157,9 +163,6 @@ def _build_reference_provider(config: SlamConfig) -> ReferenceProviderBase:
             f"Unknown scan_reference: '{config.scan_matching.reference}'. "
             "Valid options: 'scan_to_scan', 'scan_to_local_map'"
         )
-
-
-
 
 
 def build_gnss_source(config: SlamConfig, bag_path: str):
@@ -194,6 +197,7 @@ def build_gnss_source(config: SlamConfig, bag_path: str):
             "Valid options: 'navsat_fix', 'navpvt'"
         )
 
+
 def build_renderer(config: SlamConfig) -> MapRendererBase:
     """SlamConfig に基づいて MapRendererBase 実装を生成する。"""
     if config.map.renderer == 'counting':
@@ -209,4 +213,3 @@ def build_renderer(config: SlamConfig) -> MapRendererBase:
             resolution=config.map.resolution,
             expansion_margin=config.map.expansion_margin,
         )
-

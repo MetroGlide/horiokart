@@ -105,6 +105,7 @@ class NDTMatcher(ScanMatcherBase):
         tolerance: float = 1e-4,
         cell_sizes: list[float] | None = None,
         use_bilinear: bool = False,
+        yaw_information_multiplier: float = 1.0,
     ) -> None:
         self._max_iterations = max_iterations
         self._tolerance = tolerance
@@ -115,6 +116,7 @@ class NDTMatcher(ScanMatcherBase):
             self._cell_sizes = sorted(cell_sizes, reverse=True)  # 粗い順(大きい順)にソート
             
         self._use_bilinear = use_bilinear
+        self._yaw_information_multiplier = yaw_information_multiplier
         
         # 参照点群のキャッシュ
         self._src_pts: np.ndarray | None = None
@@ -217,6 +219,8 @@ class NDTMatcher(ScanMatcherBase):
                 break
 
         information = H_final / n_valid_final + 1e-6 * np.eye(3) if n_valid_final > 0 else np.zeros((3, 3))
+        if n_valid_final > 0:
+            information[2, 2] *= self._yaw_information_multiplier
 
         score = 0.0
         if converged:

@@ -24,6 +24,7 @@ from slam_gnss_2d.ros.slam_visualizer import SlamVisualizer
 from slam_gnss_2d.ros.tf_broadcaster import SlamTfBroadcaster
 from slam_gnss_2d.ros.map_save_service import MapSaveService
 
+
 class SlamNodeBase(Node, ABC):
     def __init__(self, node_name: str) -> None:
         super().__init__(node_name)
@@ -63,11 +64,13 @@ class SlamNodeBase(Node, ABC):
             gnss_float_sigma_m=cfg.gnss.sigma.float_m,
             gnss_factor_yaw_variance=cfg.gnss.sigma.factor_yaw_variance,
             gnss_init_distance_m=cfg.gnss.anchor.init_distance_m,
+            gnss_max_sigma_m=cfg.gnss.validation.max_sigma_m,
         )
 
         self._visualizer = SlamVisualizer(self, self._use_gnss)
         self._tf_broadcaster = SlamTfBroadcaster(self)
-        self._save_service = MapSaveService(self, self._pose_graph, self._orchestrator)
+        self._save_service = MapSaveService(
+            self, self._pose_graph, self._orchestrator)
 
         self._map_dirty = False
         self.create_timer(1.0 / cfg.map.publish_hz, self._publish_map_timer)
@@ -126,7 +129,7 @@ class SlamNodeBase(Node, ABC):
             if not self._renderer.add_node(node):
                 self._renderer.rerender_all(self._pose_graph.get_nodes())
             self._visualizer.publish_path_increment(node)
-            
+
         self._visualizer.publish_pose_graph_markers(self._pose_graph)
         self._map_dirty = True
 

@@ -37,26 +37,29 @@ class GraphOrchestrator:
         gnss_float_sigma_m: float = 0.5,
         gnss_factor_yaw_variance: float = 1e8,
         gnss_init_distance_m: float = 2.0,
+        gnss_max_sigma_m: float = 5.0,
     ) -> None:
         self._logger = logger
         self._pose_graph = pose_graph
         self._use_gnss = use_gnss
 
         # 常に稼働する単一インクリメンタルオプティマイザ
-        self._optimizer = ISAM2Optimizer(relinearize_threshold=isam2_relinearize_threshold)
-        
+        self._optimizer = ISAM2Optimizer(
+            relinearize_threshold=isam2_relinearize_threshold)
+
         self._anchor_manager = GnssAnchorManager() if use_gnss else None
-        
+
         self._anchor_min_fix_status = anchor_min_fix_status
         self._gnss_fix_sigma_m = gnss_fix_sigma_m
         self._gnss_float_sigma_m = gnss_float_sigma_m
         self._gnss_factor_yaw_variance = gnss_factor_yaw_variance
         self._gnss_init_distance_m = gnss_init_distance_m
+        self._gnss_max_sigma_m = gnss_max_sigma_m
 
         self._last_node_index = -1
         self._last_loop_edge_count = 0
         self._initialized = False
-        
+
         self._state = 'INITIALIZING' if use_gnss else 'RUNNING'
         self._init_rotation = 0.0
 
@@ -84,8 +87,9 @@ class GraphOrchestrator:
         # 1. INITIALIZING 時のアンカー設定と初期方位推定
         if self._use_gnss and self._state == 'INITIALIZING' and frame.gnss is not None and self._anchor_manager:
             if not self._anchor_manager.is_initialized:
-                self._anchor_manager.try_set_anchor(frame.gnss, self._anchor_min_fix_status)
-            
+                self._anchor_manager.try_set_anchor(
+                    frame.gnss, self._anchor_min_fix_status)
+
             if self._anchor_manager.is_initialized:
                 lx, ly = self._anchor_manager.to_local(frame.gnss)
                 dist = math.hypot(lx, ly)
@@ -95,11 +99,12 @@ class GraphOrchestrator:
                     node0 = nodes[0]
                     rot = theta0 - node0.yaw
                     self._init_rotation = rot
-                    
+
                     c = math.cos(rot)
                     s = math.sin(rot)
-                    
-                    self._optimizer.initialize(node0.index, 0.0, 0.0, theta0, 0.05, 10.0)
+
+                    self._optimizer.initialize(
+                        node0.index, 0.0, 0.0, theta0, 0.05, 10.0)
                     for n in nodes:
                         dx = n.x - node0.x
                         dy = n.y - node0.y
@@ -107,17 +112,20 @@ class GraphOrchestrator:
                         n.y = s * dx + c * dy
                         n.yaw = n.yaw + rot
                         if n.index != node0.index:
-                            self._optimizer.add_initial_estimate(n.index, n.x, n.y, n.yaw)
-                            
+                            self._optimizer.add_initial_estimate(
+                                n.index, n.x, n.y, n.yaw)
+
                     edges = self._pose_graph.get_edges()
                     for e in edges:
-                        self._optimizer.add_between_factor(e.from_index, e.to_index, e.dx, e.dy, e.dyaw, e.information)
-                        
+                        self._optimizer.add_between_factor(
+                            e.from_index, e.to_index, e.dx, e.dy, e.dyaw, e.information)
+
                     self._state = 'RUNNING'
                     self._last_node_index = nodes[-1].index
                     self._initialized = True
-                    self._logger.info(f"Graph initialized and aligned to UTM with rotation {rot:.3f} rad")
-        
+                    self._logger.info(
+                        f"Graph initialized and aligned to UTM with rotation {rot:.3f} rad")
+
         # 2. 状態による早期リターン
         if self._state == 'INITIALIZING':
             # まだ初期方位が確定していないためオプティマイザには入れず、ローカルに蓄積するのみ
@@ -126,10 +134,11 @@ class GraphOrchestrator:
         # 3. RUNNING ステートの処理
         if not self._initialized:
             # GNSS無効時の初回初期化
-            self._optimizer.initialize(node.index, node.x, node.y, node.yaw, 0.05, 10.0)
+            self._optimizer.initialize(
+                node.index, node.x, node.y, node.yaw, 0.05, 10.0)
             self._initialized = True
             self._last_node_index = node.index
-            
+
         latest_seq_edge = self._get_latest_seq_edge(node.index)
         if latest_seq_edge is not None and node.index > self._last_node_index:
             prev_pose = self._optimizer.get_pose(latest_seq_edge.from_index)
@@ -162,7 +171,7 @@ class GraphOrchestrator:
 
         if self._use_gnss and frame.gnss is not None and self._anchor_manager and self._anchor_manager.is_initialized:
             sigma_xy = self._sigma_from_gnss(frame.gnss)
-            if sigma_xy > 0:
+            if 0 < sigma_xy <= self._gnss_max_sigma_m:
                 gx, gy = self._anchor_manager.to_local(frame.gnss)
                 # グラフ全体がGNSSに合わせて回転・平行移動済みなので、gx, gy をそのまま投入する
                 self._optimizer.add_gnss_prior(
@@ -170,10 +179,10 @@ class GraphOrchestrator:
                 )
 
         self._optimizer.update()
-        
+
         all_poses = self._optimizer.get_all_poses()
         rerender_required = loop_closed
-        
+
         # オプティマイザの結果をノードに反映
         nodes = self._pose_graph.get_nodes()
         # 最新のポーズが INITIALIZING 後に大きく飛んだ場合（回転等）、
@@ -181,7 +190,7 @@ class GraphOrchestrator:
         if self._use_gnss and self._last_node_index == node.index and self._init_rotation != 0.0 and len(nodes) > 1 and not hasattr(self, '_first_render_done'):
             rerender_required = True
             self._first_render_done = True
-            
+
         for n in nodes:
             if n.index in all_poses:
                 n.x, n.y, n.yaw = all_poses[n.index]
@@ -195,8 +204,10 @@ class GraphOrchestrator:
     def _get_latest_seq_edge(self, node_index: int) -> Optional[PoseEdge]:
         all_edges = self._pose_graph.get_edges()
         if hasattr(self._pose_graph, 'get_loop_edges'):
-            loop_set = {(e.from_index, e.to_index) for e in self._pose_graph.get_loop_edges()}
-            seq_edges = [e for e in all_edges if (e.from_index, e.to_index) not in loop_set]
+            loop_set = {(e.from_index, e.to_index)
+                        for e in self._pose_graph.get_loop_edges()}
+            seq_edges = [e for e in all_edges if (
+                e.from_index, e.to_index) not in loop_set]
         else:
             seq_edges = all_edges
         if not seq_edges:
@@ -207,7 +218,8 @@ class GraphOrchestrator:
         return None
 
     def _sigma_from_gnss(self, gnss: GnssData) -> float:
-        cov_xx = float(gnss.covariance[0, 0]) if gnss.covariance is not None else 0.0
+        cov_xx = float(gnss.covariance[0, 0]
+                       ) if gnss.covariance is not None else 0.0
         if cov_xx > 0.0:
             return math.sqrt(cov_xx)
         if gnss.fix_status >= 2:
