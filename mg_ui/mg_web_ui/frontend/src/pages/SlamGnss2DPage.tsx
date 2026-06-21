@@ -289,9 +289,9 @@ export default function SlamGnss2DPage({
             <div className="flex gap-2">
               <button
                 onClick={saveSlamMap}
-                disabled={isSaving || isPreviewing || isReoptimizing}
+                disabled={isSaving || isPreviewing}
                 className={`flex-1 text-xs py-1.5 rounded transition-all font-semibold ${
-                  isSaving || isPreviewing || isReoptimizing
+                  isSaving || isPreviewing
                     ? "bg-gray-700 cursor-not-allowed text-gray-500"
                     : "bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-md shadow-emerald-950/20"
                 }`}
