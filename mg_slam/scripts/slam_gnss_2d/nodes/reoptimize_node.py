@@ -3,32 +3,124 @@ import os
 import sys
 import json
 import math
-import array
-import numpy as np
 import yaml
+import bisect
+import datetime
+import logging
+import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSHistoryPolicy
-from nav_msgs.msg import OccupancyGrid, Path
-from geometry_msgs.msg import PoseStamped, Point as RosPoint
-from sensor_msgs.msg import NavSatFix
-from std_msgs.msg import ColorRGBA
-from visualization_msgs.msg import Marker, MarkerArray
 from std_srvs.srv import Trigger
 
 # scripts/slam_gnss_2d 階層を python パスに通す
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 
-from slam_gnss_2d.core.config import SlamConfig
+from slam_gnss_2d.core.config_loader import ConfigLoader
+from slam_gnss_2d.core.component_factory import build_gnss_source, _build_matcher, _build_loop_matcher, build_renderer
 from slam_gnss_2d.core.data_types import PoseNode, PoseEdge, GnssPrior, ScanData, OdomData, GnssData
-from slam_gnss_2d.core.component_factory import build_gnss_source, _build_matcher, _build_loop_matcher
 from slam_gnss_2d.optimizer.gtsam_optimizer import GTSAMOptimizer
-from slam_gnss_2d.map_manager import OverwriteRenderer, CountingRenderer
 from slam_gnss_2d.core.slam_data_saver import SlamDataSaver
 from slam_gnss_2d.input.ros2.bag_reader import BagScanSource
-from slam_gnss_2d.core.pose_graph_reoptimizer import PoseGraphReoptimizer
+from slam_gnss_2d.ros.slam_visualizer import SlamVisualizer
 
+def _scan_to_points(scan: ScanData):
+    """有効レンジのみを2D点群 (N, 2) に変換する。"""
+    n = len(scan.ranges)
+    angles = scan.angle_min + np.arange(n) * scan.angle_increment
+    ranges = np.asarray(scan.ranges, dtype=np.float64)
+    valid = (ranges >= scan.range_min) & (ranges <= scan.range_max)
+    r = ranges[valid]
+    a = angles[valid]
+    return np.column_stack((r * np.cos(a), r * np.sin(a)))
+
+def build_submap_points(center_node_idx: int, nodes: list[PoseNode], node_scans: dict[int, ScanData], radius: float):
+    """指定ノード周辺の点群を合成してサブマップを構築する"""
+    center_node = nodes[center_node_idx]
+    near_nodes = []
+    for n in nodes:
+        if n.index in node_scans:
+            dist = math.hypot(n.x - center_node.x, n.y - center_node.y)
+            if dist <= radius:
+                near_nodes.append((n, node_scans[n.index]))
+                
+    if not near_nodes:
+        return None
+        
+    world_pts_list = []
+    for n, scan in near_nodes:
+        local_pts = _scan_to_points(scan)
+        c = math.cos(n.yaw)
+        s = math.sin(n.yaw)
+        wx = c * local_pts[:, 0] - s * local_pts[:, 1] + n.x
+        wy = s * local_pts[:, 0] + c * local_pts[:, 1] + n.y
+        world_pts_list.append(np.column_stack((wx, wy)))
+        
+    world_pts = np.concatenate(world_pts_list, axis=0)
+    
+    c = math.cos(center_node.yaw)
+    s = math.sin(center_node.yaw)
+    R_inv = np.array([[c, s], [-s, c]])
+    
+    relative_pts = (R_inv @ (world_pts - np.array([center_node.x, center_node.y])).T).T
+    return relative_pts
+
+def find_nearest_scan(scans: list[ScanData], timestamp: float, max_diff: float = 0.1) -> ScanData | None:
+    if not scans:
+        return None
+    timestamps = [s.timestamp for s in scans]
+    idx = bisect.bisect_left(timestamps, timestamp)
+    if idx == 0:
+        candidate = scans[0]
+    elif idx >= len(scans):
+        candidate = scans[-1]
+    else:
+        prev = scans[idx - 1]
+        next_ = scans[idx]
+        if abs(timestamp - prev.timestamp) <= abs(next_.timestamp - timestamp):
+            candidate = prev
+        else:
+            candidate = next_
+            
+    if abs(candidate.timestamp - timestamp) <= max_diff:
+        return candidate
+    return None
+
+def sigma_from_covariance_or_status(gnss: GnssData, config) -> float:
+    cov_xx = float(gnss.covariance[0, 0]) if gnss.covariance is not None else 0.0
+    if cov_xx > 0.0:
+        return math.sqrt(cov_xx)
+    
+    status = gnss.fix_status
+    if status >= 2:
+        return config.gnss.sigma.fix_m
+    if status >= 0:
+        return config.gnss.sigma.float_m
+    return -1.0
+
+
+class ReadOnlyPoseGraph:
+    """最適化済みノード・エッジを PoseGraphBuilderBase 互換インターフェースで提供するアダプタ。
+    ReoptimizeNode が SlamVisualizer を変更なしに再利用するために使用する。
+    """
+    def __init__(
+        self,
+        nodes: list[PoseNode],
+        seq_edges: list[PoseEdge],
+        loop_edges: list[PoseEdge],
+    ) -> None:
+        self._nodes = nodes
+        self._seq_edges = seq_edges
+        self._loop_edges = loop_edges
+
+    def get_nodes(self) -> list[PoseNode]:
+        return self._nodes
+
+    def get_edges(self) -> list[PoseEdge]:
+        return self._seq_edges + self._loop_edges
+
+    def get_loop_edges(self) -> list[PoseEdge]:
+        return self._loop_edges
 
 class ReoptimizeNode(Node):
     def __init__(self) -> None:
@@ -38,23 +130,14 @@ class ReoptimizeNode(Node):
         # Parameters
         self.declare_parameter('input_dir', '')
         self.declare_parameter('bag_path', '')
-        self.declare_parameter('save_dir', '')
         self.declare_parameter('enable_re_scan_matching', False)
-        self.declare_parameter('params_file', '')
+        
+        # 既存の ConfigLoader を利用して params を宣言・ロード
+        ConfigLoader.declare_params(self)
+        self._config = ConfigLoader.build_config(self)
 
-        # Setup publishers
-        map_qos = QoSProfile(
-            reliability=QoSReliabilityPolicy.RELIABLE,
-            durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
-            history=QoSHistoryPolicy.KEEP_LAST,
-            depth=1,
-        )
-        self._map_pub = self.create_publisher(OccupancyGrid, 'map', map_qos)
-        self._path_pub = self.create_publisher(Path, 'slam_gnss_2d/path', 1)
-        self._pg_marker_pub = self.create_publisher(MarkerArray, 'slam_gnss_2d/pose_graph', 1)
-        self._path_before_pub = self.create_publisher(Path, 'slam_gnss_2d/path_before_optimize', 1)
-        self._anchor_pub = self.create_publisher(NavSatFix, 'slam_gnss_2d/anchor', map_qos)
-
+        self._visualizer = SlamVisualizer(self, use_gnss=True) 
+        
         # Service
         self._save_srv = self.create_service(
             Trigger, 'slam_gnss_2d/save_slam_map', self._handle_save_slam_map)
@@ -65,7 +148,7 @@ class ReoptimizeNode(Node):
         self._gnss_transform_data = {}
         self._bag_path = ""
         self._renderer = None
-        self._config = None
+        self._orchestrator = None
 
         # Start optimization via a timer to run outside __init__
         self._timer = self.create_timer(0.5, self._run_optimization)
@@ -110,185 +193,223 @@ class ReoptimizeNode(Node):
         self._bag_path = bag_path
         self.get_logger().info(f"Using ROS Bag: {bag_path}")
 
-        # Resolve Config File
-        config_file = self.get_parameter('params_file').value
-        if not config_file:
-            # Fallback to default
-            # SCRIPT_DIR is mg_slam/scripts/slam_gnss_2d/nodes
-            default_yaml = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(SCRIPT_DIR))), "params", "slam_gnss_2d.yaml")
-            if os.path.exists(default_yaml):
-                config_file = default_yaml
-                self.get_logger().info(f"Using default config file: {config_file}")
+        config = self._config
+        self._renderer = build_renderer(config)
 
-        # Load config
-        if config_file and os.path.exists(config_file):
-            from slam_gnss_2d.tools.reoptimize_pose_graph import load_config_from_yaml
-            config = load_config_from_yaml(config_file)
-        else:
-            config = SlamConfig()
-            self.get_logger().info("Using built-in default config parameters.")
-        self._config = config
-
-        # Run Optimization using the core reoptimizer
-        reoptimizer = PoseGraphReoptimizer(config, self.get_logger())
+        # 1. Extract scans
+        self.get_logger().info("Extracting LiDAR scans from ROS Bag...")
+        scan_source = BagScanSource(bag_path, config.topics.scan)
+        scan_source.start()
         
-        def on_scans_extracted(old_nodes):
-            self._publish_path_before(old_nodes)
+        all_scans = []
+        def scan_callback(scan_data: ScanData):
+            all_scans.append(scan_data)
             
+        scan_source.set_scan_callback(scan_callback)
+        scan_count = 0
+        while scan_source.step():
+            scan_count += 1
+            if scan_count % 1000 == 0:
+                self.get_logger().info(f"Loaded {scan_count} scans...")
+        scan_source.stop()
+        self.get_logger().info(f"Loaded total {len(all_scans)} scans from Bag.")
+
+        # 2. Reconstruct old nodes
+        self.get_logger().info("Matching nodes to nearest LiDAR scans...")
+        old_nodes = []
+        node_scans = {}
+        for n_data in pose_graph_data["nodes"]:
+            node_idx = n_data["index"]
+            ts = n_data["timestamp"]
+            scan = find_nearest_scan(all_scans, ts, max_diff=0.1)
+            node = PoseNode(
+                index=node_idx, timestamp=ts,
+                x=n_data["x"], y=n_data["y"], yaw=n_data["yaw"],
+                scan=scan
+            )
+            old_nodes.append(node)
+            if scan is not None:
+                node_scans[node_idx] = scan
+            else:
+                self.get_logger().warning(f"No matching scan found for node {node_idx}")
+                
+        # Publish before optimize
+        self._visualizer.rebuild_path(old_nodes)
+        self._visualizer.publish_path_before_optimize()
+
+        # 3. GNSS Priors
+        gnss_priors = []
+        anchor_utm = self._gnss_transform_data.get("anchor_utm", {})
+        anchor_easting = anchor_utm.get("easting")
+        anchor_northing = anchor_utm.get("northing")
+        
+        # Setup dummy orchestrator for visualizer
+        anchor_data = self._gnss_transform_data.get("anchor", {})
+        lat = anchor_data.get('latitude', None)
+        lon = anchor_data.get('longitude', None)
+        rot = self._gnss_transform_data.get('rotation_rad', 0.0)
+        class DummyOrchestrator:
+            def __init__(self, lat, lon, rot):
+                self.anchor_latlon = (lat, lon) if lat is not None and lon is not None else None
+                self.init_rotation = rot
+                self.anchor = (anchor_easting, anchor_northing) if anchor_easting is not None and anchor_northing is not None else None
+        self._orchestrator = DummyOrchestrator(lat, lon, rot)
+
+        if config.gnss.enabled and anchor_easting is not None and anchor_northing is not None:
+            self.get_logger().info("Loading GNSS data from Bag...")
+            gnss_source = build_gnss_source(config, bag_path)
+            gnss_source.start()
+
+            for node in old_nodes:
+                gnss = gnss_source.get_gnss_at(node.timestamp)
+                if gnss is None: continue
+                sigma_xy = sigma_from_covariance_or_status(gnss, config)
+                if sigma_xy <= 0.0 or sigma_xy > config.gnss.validation.max_sigma_m:
+                    continue
+                    
+                gx = gnss.x - anchor_easting
+                gy = gnss.y - anchor_northing
+
+                pos_var = sigma_xy * sigma_xy
+                info_2x2 = np.diag([1.0 / pos_var, 1.0 / pos_var])
+                gnss_priors.append(GnssPrior(
+                    node_index=node.index, x=gx, y=gy, information=info_2x2
+                ))
+            gnss_source.stop()
+            self.get_logger().info(f"Built {len(gnss_priors)} GNSS Prior constraints.")
+
+        # 4. Edges Re-matching
+        new_edges = []
+        seq_edges_list = []
+        loop_edges_list = []
+        seq_edges_data = pose_graph_data.get("sequential_edges", [])
+        loop_edges_data = pose_graph_data.get("loop_edges", [])
+
         enable_re_scan_matching = self.get_parameter('enable_re_scan_matching').value
         self.get_logger().info(f"enable_re_scan_matching: {enable_re_scan_matching}")
-            
-        self._optimized_nodes, self._new_edges, self._renderer = reoptimizer.reoptimize(
-            pose_graph_data, self._gnss_transform_data, bag_path,
-            on_scans_extracted=on_scans_extracted,
-            enable_re_scan_matching=enable_re_scan_matching
-        )
+
+        if not enable_re_scan_matching:
+            self.get_logger().info("Skipping re-scan matching. Using existing edges from pose_graph.json...")
+            for e_data in seq_edges_data:
+                edge = PoseEdge(
+                    from_index=e_data["from"], to_index=e_data["to"],
+                    dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"],
+                    information=np.array(e_data["information"]).reshape(3, 3)
+                )
+                seq_edges_list.append(edge)
+                new_edges.append(edge)
+            for e_data in loop_edges_data:
+                edge = PoseEdge(
+                    from_index=e_data["from"], to_index=e_data["to"],
+                    dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"],
+                    information=np.array(e_data["information"]).reshape(3, 3)
+                )
+                loop_edges_list.append(edge)
+                new_edges.append(edge)
+        else:
+            self.get_logger().info("Re-running Scan Matching for edges...")
+            matcher = _build_matcher(config)
+            loop_matcher = _build_loop_matcher(config)
+
+            # Sequential Edges
+            self.get_logger().info(f"Re-matching {len(seq_edges_data)} sequential edges...")
+            for e_data in seq_edges_data:
+                f_idx = e_data["from"]
+                t_idx = e_data["to"]
+                node_f, node_t = old_nodes[f_idx], old_nodes[t_idx]
+
+                if f_idx not in node_scans or t_idx not in node_scans:
+                    edge = PoseEdge(from_index=f_idx, to_index=t_idx, dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"], information=np.array(e_data["information"]).reshape(3, 3))
+                    seq_edges_list.append(edge)
+                    new_edges.append(edge)
+                    continue
+
+                dx_local = e_data["dx"]
+                dy_local = e_data["dy"]
+                dyaw_local = e_data["dyaw"]
+                initial_guess = OdomData(timestamp=node_t.timestamp, x=dx_local, y=dy_local, yaw=dyaw_local)
+
+                src_pts = _scan_to_points(node_scans[f_idx])
+                matcher.set_target_cloud(src_pts)
+                result = matcher.match(dst=node_scans[t_idx], initial_guess=initial_guess)
+
+                if result.converged:
+                    edge = PoseEdge(from_index=f_idx, to_index=t_idx, dx=result.dx, dy=result.dy, dyaw=result.dyaw, information=result.information)
+                else:
+                    self.get_logger().warning(f"Sequential edge matching failed {f_idx} -> {t_idx}")
+                    edge = PoseEdge(from_index=f_idx, to_index=t_idx, dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"], information=np.array(e_data["information"]).reshape(3, 3))
+                seq_edges_list.append(edge)
+                new_edges.append(edge)
+
+            # Loop Edges
+            self.get_logger().info(f"Re-matching {len(loop_edges_data)} loop edges...")
+            for e_data in loop_edges_data:
+                f_idx = e_data["from"]
+                t_idx = e_data["to"]
+                node_f, node_t = old_nodes[f_idx], old_nodes[t_idx]
+
+                if f_idx not in node_scans or t_idx not in node_scans:
+                    edge = PoseEdge(from_index=f_idx, to_index=t_idx, dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"], information=np.array(e_data["information"]).reshape(3, 3))
+                    loop_edges_list.append(edge)
+                    new_edges.append(edge)
+                    continue
+
+                dx_local = e_data["dx"]
+                dy_local = e_data["dy"]
+                dyaw_local = e_data["dyaw"]
+                initial_guess = OdomData(timestamp=node_t.timestamp, x=dx_local, y=dy_local, yaw=dyaw_local)
+
+                submap_radius = config.loop_closure.submap_radius
+                if submap_radius > 0:
+                    src_pts = build_submap_points(f_idx, old_nodes, node_scans, submap_radius)
+                else:
+                    src_pts = _scan_to_points(node_scans[f_idx])
+
+                if src_pts is None:
+                    edge = PoseEdge(from_index=f_idx, to_index=t_idx, dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"], information=np.array(e_data["information"]).reshape(3, 3))
+                    loop_edges_list.append(edge)
+                    new_edges.append(edge)
+                    continue
+
+                loop_matcher.set_target_cloud(src_pts)
+                result = loop_matcher.match(dst=node_scans[t_idx], initial_guess=initial_guess)
+
+                score_ok = True
+                if config.loop_closure.max_score > 0.0 and result.score > config.loop_closure.max_score:
+                    score_ok = False
+                    self.get_logger().warning(f"Loop edge {f_idx} -> {t_idx} rejected: score {result.score:.3f}")
+
+                if result.converged and score_ok:
+                    edge = PoseEdge(from_index=f_idx, to_index=t_idx, dx=result.dx, dy=result.dy, dyaw=result.dyaw, information=result.information)
+                else:
+                    self.get_logger().warning(f"Loop edge matching failed {f_idx} -> {t_idx}")
+                    edge = PoseEdge(from_index=f_idx, to_index=t_idx, dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"], information=np.array(e_data["information"]).reshape(3, 3))
+                loop_edges_list.append(edge)
+                new_edges.append(edge)
+
+        # 5. GTSAM Batch Optimization
+        self.get_logger().info("Executing GTSAM Batch optimization (Levenberg-Marquardt)...")
+        optimizer = GTSAMOptimizer()
+        self._optimized_nodes = optimizer.optimize(old_nodes, new_edges, gnss_priors)
+        self._new_edges = new_edges
+
+        # 6. Render map
+        self.get_logger().info("Re-rendering OccupancyGrid map...")
+        self._renderer.rerender_all(self._optimized_nodes)
 
         # Publish results
-        self._publish_map()
-        self._publish_path(self._optimized_nodes)
-        loop_edges_data = pose_graph_data.get("loop_edges", [])
-        self._publish_pose_graph_markers(self._optimized_nodes, self._new_edges, loop_edges_data)
-        self._publish_anchor()
+        self._visualizer.publish_map(self._renderer)
+        self._visualizer.rebuild_path(self._optimized_nodes)
+        
+        self._pose_graph_view = ReadOnlyPoseGraph(self._optimized_nodes, seq_edges_list, loop_edges_list)
+        self._visualizer.publish_pose_graph_markers(self._pose_graph_view)
+        self._visualizer.publish_anchor(self._orchestrator)
 
         self.get_logger().info("Re-optimization complete. Waiting for save service call...")
-
-    def _publish_path(self, nodes):
-        now = self.get_clock().now().to_msg()
-        msg = Path()
-        msg.header.stamp = now
-        msg.header.frame_id = 'map'
-        for n in nodes:
-            pose = PoseStamped()
-            pose.header.stamp = now
-            pose.header.frame_id = 'map'
-            pose.pose.position.x = n.x
-            pose.pose.position.y = n.y
-            pose.pose.orientation.w = math.cos(n.yaw / 2.0)
-            pose.pose.orientation.z = math.sin(n.yaw / 2.0)
-            msg.poses.append(pose)
-        self._path_pub.publish(msg)
-
-    def _publish_path_before(self, nodes):
-        now = self.get_clock().now().to_msg()
-        msg = Path()
-        msg.header.stamp = now
-        msg.header.frame_id = 'map'
-        for n in nodes:
-            pose = PoseStamped()
-            pose.header.stamp = now
-            pose.header.frame_id = 'map'
-            pose.pose.position.x = n.x
-            pose.pose.position.y = n.y
-            pose.pose.orientation.w = math.cos(n.yaw / 2.0)
-            pose.pose.orientation.z = math.sin(n.yaw / 2.0)
-            msg.poses.append(pose)
-        self._path_before_pub.publish(msg)
-
-    def _publish_pose_graph_markers(self, nodes, edges, loop_edges_data):
-        if not nodes:
-            return
-        loop_edge_set = {(e["from"], e["to"]) for e in loop_edges_data}
-        node_by_idx = {n.index: n for n in nodes}
-        now = self.get_clock().now().to_msg()
-        array_msg = MarkerArray()
-
-        node_m = Marker()
-        node_m.header.stamp = now
-        node_m.header.frame_id = 'map'
-        node_m.ns = 'nodes'
-        node_m.id = 0
-        node_m.type = Marker.SPHERE_LIST
-        node_m.action = Marker.ADD
-        node_m.scale.x = node_m.scale.y = node_m.scale.z = 0.2
-        node_m.color.r = node_m.color.g = node_m.color.b = node_m.color.a = 1.0
-        latest_idx = nodes[-1].index
-        for n in nodes:
-            pt = RosPoint()
-            pt.x, pt.y, pt.z = n.x, n.y, 0.0
-            node_m.points.append(pt)
-            c = ColorRGBA()
-            if n.index == latest_idx:
-                c.r, c.g, c.b, c.a = 0.0, 1.0, 1.0, 1.0
-            else:
-                c.r, c.g, c.b, c.a = 1.0, 1.0, 1.0, 0.8
-            node_m.colors.append(c)
-        array_msg.markers.append(node_m)
-
-        seq_m = Marker()
-        seq_m.header.stamp = now
-        seq_m.header.frame_id = 'map'
-        seq_m.ns = 'seq_edges'
-        seq_m.id = 1
-        seq_m.type = Marker.LINE_LIST
-        seq_m.action = Marker.ADD
-        seq_m.scale.x = 0.05
-        seq_m.color.r, seq_m.color.g = 0.2, 0.5
-        seq_m.color.b, seq_m.color.a = 1.0, 0.9
-
-        loop_m = Marker()
-        loop_m.header.stamp = now
-        loop_m.header.frame_id = 'map'
-        loop_m.ns = 'loop_edges'
-        loop_m.id = 2
-        loop_m.type = Marker.LINE_LIST
-        loop_m.action = Marker.ADD
-        loop_m.scale.x = 0.08
-        loop_m.color.r, loop_m.color.g = 0.0, 1.0
-        loop_m.color.b, loop_m.color.a = 0.4, 1.0
-
-        for edge in edges:
-            p0 = node_by_idx.get(edge.from_index)
-            p1 = node_by_idx.get(edge.to_index)
-            if p0 is None or p1 is None:
-                continue
-            is_loop = (edge.from_index, edge.to_index) in loop_edge_set
-            target = loop_m if is_loop else seq_m
-            pt_a = RosPoint()
-            pt_a.x, pt_a.y, pt_a.z = p0.x, p0.y, 0.0
-            pt_b = RosPoint()
-            pt_b.x, pt_b.y, pt_b.z = p1.x, p1.y, 0.0
-            target.points.append(pt_a)
-            target.points.append(pt_b)
-        
-        array_msg.markers.append(seq_m)
-        array_msg.markers.append(loop_m)
-        self._pg_marker_pub.publish(array_msg)
-
-    def _publish_map(self):
-        if self._renderer is None:
-            return
-        data, origin_x, origin_y, resolution = self._renderer.to_occupancy_array()
-        msg = OccupancyGrid()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = 'map'
-        msg.info.resolution = resolution
-        msg.info.width = int(data.shape[1])
-        msg.info.height = int(data.shape[0])
-        msg.info.origin.position.x = origin_x
-        msg.info.origin.position.y = origin_y
-        msg.data = array.array('b', data.ravel().tobytes())
-        self._map_pub.publish(msg)
-
-    def _publish_anchor(self):
-        if 'anchor' not in self._gnss_transform_data:
-            return
-        lat = self._gnss_transform_data['anchor'].get('latitude', 0.0)
-        lon = self._gnss_transform_data['anchor'].get('longitude', 0.0)
-        
-        msg = NavSatFix()
-        msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = 'gps'
-        msg.latitude = lat
-        msg.longitude = lon
-        msg.altitude = 0.0
-        self._anchor_pub.publish(msg)
-        self.get_logger().info(f"Published anchor: lat={lat}, lon={lon}")
 
     def _handle_save_slam_map(self, request, response):
         output_dir = self.get_parameter('save_dir').value
         if not output_dir:
-            import datetime
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             output_dir = f"/root/ros2_data/slam_maps/{timestamp}_opt"
 
@@ -321,10 +442,8 @@ class ReoptimizeNode(Node):
                     backend_name="gtsam_batch"
                 )
 
-            # Save OccupancyGrid image
-            from slam_gnss_2d.tools.reoptimize_pose_graph import save_map_pgm_and_yaml
-            save_map_pgm_and_yaml(output_dir, self._renderer)
-            
+            # NOTE: PGM 保存は system-manager が map_saver_cli を使って行うため、ここから PGM 保存機能を削除。
+
             response.success = True
             response.message = f"Optimized map saved to {output_dir}"
             self.get_logger().info(response.message)
@@ -337,7 +456,6 @@ class ReoptimizeNode(Node):
 
 
 def main(args=None):
-    import logging
     logging.basicConfig(level=logging.INFO, format='%(name)s %(levelname)s: %(message)s')
     rclpy.init(args=args)
     node = ReoptimizeNode()

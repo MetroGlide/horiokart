@@ -5,6 +5,7 @@ from slam_gnss_2d.core.config import SlamConfig
 from slam_gnss_2d.pose_graph.base import PoseGraphBuilderBase
 from slam_gnss_2d.scan_matching.base import ScanMatcherBase
 from slam_gnss_2d.scan_matching.reference_provider.base import ReferenceProviderBase
+from slam_gnss_2d.map_manager.base import MapRendererBase
 
 
 def build_pose_graph_builder(config: SlamConfig) -> PoseGraphBuilderBase:
@@ -192,3 +193,20 @@ def build_gnss_source(config: SlamConfig, bag_path: str):
             f"Unknown gnss_source_type: '{config.gnss.source}'. "
             "Valid options: 'navsat_fix', 'navpvt'"
         )
+
+def build_renderer(config: SlamConfig) -> MapRendererBase:
+    """SlamConfig に基づいて MapRendererBase 実装を生成する。"""
+    if config.map.renderer == 'counting':
+        from slam_gnss_2d.map_manager.counting_renderer import CountingRenderer
+        return CountingRenderer(
+            resolution=config.map.resolution,
+            expansion_margin=config.map.expansion_margin,
+            hit_threshold=config.map.hit_threshold,
+        )
+    else:
+        from slam_gnss_2d.map_manager.overwrite_renderer import OverwriteRenderer
+        return OverwriteRenderer(
+            resolution=config.map.resolution,
+            expansion_margin=config.map.expansion_margin,
+        )
+

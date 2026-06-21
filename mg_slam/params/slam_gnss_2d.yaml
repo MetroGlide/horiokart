@@ -101,3 +101,6 @@ slam_gnss_2d_offline_node:
   ros__parameters:
     offline_step_hz: 0.0 # 可視化速度 [Hz]。0 以下で最大速度
 
+reoptimize_node:
+  ros__parameters:
+    enable_re_scan_matching: true

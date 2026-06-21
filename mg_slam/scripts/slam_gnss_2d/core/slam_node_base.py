@@ -13,12 +13,11 @@ from abc import ABC, abstractmethod
 
 from rclpy.node import Node
 
-from slam_gnss_2d.core.component_factory import build_pose_graph_builder
+from slam_gnss_2d.core.component_factory import build_pose_graph_builder, build_renderer
 from slam_gnss_2d.core.config import SlamConfig
 from slam_gnss_2d.core.data_types import PoseNode, ScanData, SensorFrame
 from slam_gnss_2d.core.graph_orchestrator import GraphOrchestrator
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
-from slam_gnss_2d.map_manager import OverwriteRenderer, CountingRenderer
 from slam_gnss_2d.core.sensor_synchronizer import SensorSynchronizer
 from slam_gnss_2d.core.config_loader import ConfigLoader
 from slam_gnss_2d.ros.slam_visualizer import SlamVisualizer
@@ -34,17 +33,7 @@ class SlamNodeBase(Node, ABC):
         self._scan_source, self._odom_source = self._setup_io(cfg)
 
         self._pose_graph = build_pose_graph_builder(cfg)
-        if cfg.map.renderer == 'counting':
-            self._renderer = CountingRenderer(
-                resolution=cfg.map.resolution,
-                expansion_margin=cfg.map.expansion_margin,
-                hit_threshold=cfg.map.hit_threshold,
-            )
-        else:
-            self._renderer = OverwriteRenderer(
-                resolution=cfg.map.resolution,
-                expansion_margin=cfg.map.expansion_margin,
-            )
+        self._renderer = build_renderer(cfg)
 
         self._enable_scan_matching = cfg.scan_matching.enabled
         self._enable_gnss = cfg.gnss.enabled
