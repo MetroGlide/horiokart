@@ -128,8 +128,13 @@ class CountingRenderer(MapRendererBase):
             self._hit_map[mask_bool] = 0
             self._miss_map[mask_bool] += 1
         elif filter_type == 'attenuate':
-            # ヒットカウントを半分に減衰させる
+            # ヒットカウントを減衰させる（微小なヒットは0にする）
+            self._hit_map[mask_bool] = np.maximum(0, self._hit_map[mask_bool] - 2)
             self._hit_map[mask_bool] //= 2
+            
+            # hitが減っても、missが0のままだと hit/(hit+miss) = 1.0 となり占有判定されてしまう。
+            # ロボットの軌跡上である以上「空間が空いていた」という証拠でもあるため、missを追加する。
+            self._miss_map[mask_bool] += 2
 
     def _world_to_pixel(self, wx: float, wy: float) -> tuple[int, int]:
         px = int((wx - self._origin_x) / self._resolution)
