@@ -2,7 +2,7 @@ from rclpy.node import Node
 from slam_gnss_2d.core.config import (
     TopicsConfig, MapConfig, KeyframeConfig, ScanMatchingConfig, IcpConfig, NdtConfig, LocalMapConfig,
     LoopClosureConfig, GnssConfig, GnssTopicsConfig, GnssValidationConfig, GnssAnchorConfig,
-    GnssSigmaConfig, OptimizationConfig, Isam2Config, SlamConfig
+    GnssSigmaConfig, OptimizationConfig, Isam2Config, TrajectoryNoiseFilterConfig, SlamConfig
 )
 
 
@@ -64,6 +64,9 @@ class ConfigLoader:
         node.declare_parameter('gnss.sigma.factor_yaw_variance', 1e8)
         node.declare_parameter('optimization.backend', 'isam2')
         node.declare_parameter('optimization.isam2.relinearize_threshold', 0.1)
+        node.declare_parameter('trajectory_noise_filter.enabled', False)
+        node.declare_parameter('trajectory_noise_filter.type', 'clear')
+        node.declare_parameter('trajectory_noise_filter.radius_m', 0.5)
 
     @staticmethod
     def build_config(node: Node) -> SlamConfig:
@@ -179,5 +182,10 @@ class ConfigLoader:
                     relinearize_threshold=node.get_parameter(
                         'optimization.isam2.relinearize_threshold').value,
                 )
+            ),
+            trajectory_noise_filter=TrajectoryNoiseFilterConfig(
+                enabled=node.get_parameter('trajectory_noise_filter.enabled').value,
+                type=node.get_parameter('trajectory_noise_filter.type').value,
+                radius_m=node.get_parameter('trajectory_noise_filter.radius_m').value,
             ),
         )

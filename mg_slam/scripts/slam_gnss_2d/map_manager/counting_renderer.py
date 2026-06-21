@@ -103,6 +103,39 @@ class CountingRenderer(MapRendererBase):
 
         return data, self._origin_x, self._origin_y, self._resolution
 
+    def apply_trajectory_mask(self, nodes: list[PoseNode], radius_m: float, filter_type: str = 'clear') -> None:
+        if not nodes:
+            return
+
+        radius_px = max(1, int(radius_m / self._resolution))
+        pts = np.empty((1, len(nodes), 2), dtype=np.int32)
+        for i, node in enumerate(nodes):
+            px, py = self._world_to_pixel(node.x, node.y)
+            pts[0, i, 0] = px
+            pts[0, i, 1] = py
+
+        mask = np.zeros(self._hit_map.shape, dtype=np.uint8)
+        # 軌跡を描画。lineType=cv2.LINE_8
+        cv2.polylines(mask, pts, isClosed=False, color=1, thickness=radius_px * 2)
+
+        # 頂点の丸めのために各ノードに円も描画する（厚い線分では角が欠ける場合があるため）
+        for i in range(len(nodes)):
+            cv2.circle(mask, (int(pts[0, i, 0]), int(pts[0, i, 1])), radius_px, color=1, thickness=-1)
+
+        mask_bool = mask > 0
+
+        if filter_type == 'clear':
+            self._hit_map[mask_bool] = 0
+            self._miss_map[mask_bool] += 1
+        elif filter_type == 'attenuate':
+            # ヒットカウントを減衰させる（微小なヒットは0にする）
+            self._hit_map[mask_bool] = np.maximum(0, self._hit_map[mask_bool] - 2)
+            self._hit_map[mask_bool] //= 2
+            
+            # hitが減っても、missが0のままだと hit/(hit+miss) = 1.0 となり占有判定されてしまう。
+            # ロボットの軌跡上である以上「空間が空いていた」という証拠でもあるため、missを追加する。
+            self._miss_map[mask_bool] += 2
+
     def _world_to_pixel(self, wx: float, wy: float) -> tuple[int, int]:
         px = int((wx - self._origin_x) / self._resolution)
         py = int((wy - self._origin_y) / self._resolution)

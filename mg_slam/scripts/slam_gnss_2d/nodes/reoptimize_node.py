@@ -7,6 +7,7 @@ from slam_gnss_2d.scan_matching.base import ScanMatcherBase
 from slam_gnss_2d.core.data_types import PoseNode, PoseEdge, GnssPrior, ScanData, OdomData, GnssData, MatchResult
 from slam_gnss_2d.core.component_factory import build_gnss_source, _build_matcher, _build_loop_matcher, build_renderer
 from slam_gnss_2d.core.config_loader import ConfigLoader
+from slam_gnss_2d.map_manager.trajectory_noise_filter import TrajectoryNoiseFilter
 import os
 import sys
 import json
@@ -632,6 +633,10 @@ class ReoptimizeNode(Node):
         # 6. Render map
         self.get_logger().info("Re-rendering OccupancyGrid map...")
         self._renderer.rerender_all(self._optimized_nodes)
+
+        if config.trajectory_noise_filter.enabled:
+            noise_filter = TrajectoryNoiseFilter(config.trajectory_noise_filter)
+            noise_filter.apply(self._renderer, self._optimized_nodes)
 
         # Publish results
         self._visualizer.publish_map(self._renderer)

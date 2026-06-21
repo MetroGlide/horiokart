@@ -154,6 +154,14 @@ class OptimizationConfig:
 
 
 @dataclass(frozen=True)
+class TrajectoryNoiseFilterConfig:
+    """軌跡ベースのノイズ除去設定"""
+    enabled: bool = False
+    type: str = 'clear'        # "clear" | "attenuate"
+    radius_m: float = 0.5      # クリア/減衰させる半径 [m]
+
+
+@dataclass(frozen=True)
 class SlamConfig:
     """slam_gnss_2d の全パラメータ集約オブジェクト（ROS 非依存）。
 
@@ -167,3 +175,4 @@ class SlamConfig:
     loop_closure: LoopClosureConfig = LoopClosureConfig()
     gnss: GnssConfig = GnssConfig()
     optimization: OptimizationConfig = OptimizationConfig()
+    trajectory_noise_filter: TrajectoryNoiseFilterConfig = TrajectoryNoiseFilterConfig()
