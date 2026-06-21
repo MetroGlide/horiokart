@@ -87,6 +87,32 @@ class OverwriteRenderer(MapRendererBase):
         ).astype(np.int8)
         return data, self._origin_x, self._origin_y, self._resolution
 
+    def apply_trajectory_mask(self, nodes: list[PoseNode], radius_m: float, filter_type: str = 'clear') -> None:
+        if not nodes:
+            return
+
+        radius_px = max(1, int(radius_m / self._resolution))
+        pts = np.empty((1, len(nodes), 2), dtype=np.int32)
+        for i, node in enumerate(nodes):
+            px, py = self._world_to_pixel(node.x, node.y)
+            pts[0, i, 0] = px
+            pts[0, i, 1] = py
+
+        mask = np.zeros(self._map.shape, dtype=np.uint8)
+        cv2.polylines(mask, pts, isClosed=False, color=1, thickness=radius_px * 2)
+
+        for i in range(len(nodes)):
+            cv2.circle(mask, (int(pts[0, i, 0]), int(pts[0, i, 1])), radius_px, color=1, thickness=-1)
+
+        mask_bool = mask > 0
+
+        if filter_type == 'clear':
+            self._map[mask_bool] = 255
+        elif filter_type == 'attenuate':
+            _logger.warning("filter_type='attenuate' is not fully supported in OverwriteRenderer.")
+            # 上書き方式では確率の減衰ができないため、暫定的にクリアする
+            self._map[mask_bool] = 255
+
     def _world_to_pixel(self, wx: float, wy: float) -> tuple[int, int]:
         px = int((wx - self._origin_x) / self._resolution)
         py = int((wy - self._origin_y) / self._resolution)

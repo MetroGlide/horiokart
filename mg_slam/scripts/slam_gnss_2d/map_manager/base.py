@@ -37,3 +37,14 @@ class MapRendererBase(ABC):
             data: int8 の 2D 配列、値は -1(unknown) / 0(free) / 100(occupied)
         """
         raise NotImplementedError
+
+    @abstractmethod
+    def apply_trajectory_mask(self, nodes: list[PoseNode], radius_m: float, filter_type: str = 'clear') -> None:
+        """ポーズグラフの軌跡周辺に対してノイズ除去処理を適用する。
+
+        Args:
+            nodes: ポーズグラフの全ノード
+            radius_m: 軌跡からノイズ除去を適用する半径 [m]
+            filter_type: 'clear' の場合は強制的に空き(Free)にする。'attenuate'の場合はヒットカウントを減衰させるなど。
+        """
+        raise NotImplementedError

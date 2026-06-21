@@ -99,6 +99,12 @@
       isam2:
         relinearize_threshold: 0.1
 
+    # 軌跡ベースノイズ除去設定
+    trajectory_noise_filter:
+      enabled: false
+      type: "clear" # "clear" | "attenuate"
+      radius_m: 0.6
+
 slam_gnss_2d_offline_node:
   ros__parameters:
     offline_step_hz: 0.0 # 可視化速度 [Hz]。0 以下で最大速度
@@ -106,7 +112,7 @@ slam_gnss_2d_offline_node:
 reoptimize_node:
   ros__parameters:
     enable_re_scan_matching: false # シーケンシャルエッジの再マッチングを行わない
-    enable_new_loop_search: true # 新規ループ探索のみ有効化
+    enable_new_loop_search: false # 新規ループ探索のみ有効化
     multi_guess_shift_m: 0.0
     multi_guess_shift_deg: 0.0
 
@@ -126,3 +132,5 @@ reoptimize_node:
     # 新規ループ探索用（オンラインより広い探索範囲）
     loop_closure.search_radius: 5.0
     loop_closure.min_node_gap: 50
+
+    trajectory_noise_filter.enabled: true

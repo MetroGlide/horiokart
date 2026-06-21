@@ -23,6 +23,7 @@ from slam_gnss_2d.core.config_loader import ConfigLoader
 from slam_gnss_2d.ros.slam_visualizer import SlamVisualizer
 from slam_gnss_2d.ros.tf_broadcaster import SlamTfBroadcaster
 from slam_gnss_2d.ros.map_save_service import MapSaveService
+from slam_gnss_2d.map_manager.trajectory_noise_filter import TrajectoryNoiseFilter
 
 
 class SlamNodeBase(Node, ABC):
@@ -53,6 +54,8 @@ class SlamNodeBase(Node, ABC):
         )
         self._synchronizer.set_frame_callback(self._on_frame)
         self._synchronizer.start()
+
+        self._trajectory_noise_filter_config = cfg.trajectory_noise_filter
 
         self._orchestrator = GraphOrchestrator(
             logger=self.get_logger(),
@@ -183,6 +186,11 @@ class SlamNodeBase(Node, ABC):
         if finalize_result.rerender_required:
             nodes = self._pose_graph.get_nodes()
             self._renderer.rerender_all(nodes)
+
+            if self._trajectory_noise_filter_config.enabled:
+                noise_filter = TrajectoryNoiseFilter(self._trajectory_noise_filter_config)
+                noise_filter.apply(self._renderer, nodes)
+
             self._visualizer.rebuild_path(nodes)
             self._map_dirty = True
             self._publish_map_timer()
