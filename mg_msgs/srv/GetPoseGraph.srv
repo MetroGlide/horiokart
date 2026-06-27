@@ -1,0 +1,13 @@
+# GetPoseGraph.srv
+# Request: 空（引数なし）
+---
+# Response: 現在の全グラフ状態
+mg_msgs/PoseGraphDiff graph
+int32 total_nodes
+int32 total_seq_edges
+int32 total_loop_edges
+int32 icp_attempt_count
+int32 icp_success_count
+int32 odom_fallback_count
+int32 loop_attempt_count
+int32 loop_success_count

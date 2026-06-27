@@ -58,6 +58,18 @@ class SensorFrame:
 
 
 @dataclass
+class ScanProcessResult:
+    """1フレームの処理結果を格納するコンテナ"""
+
+    node: Optional[PoseNode]
+    loop_closed: bool = False
+    rerender_required: bool = False
+    new_seq_edge: Optional[PoseEdge] = None
+    new_loop_edges: list[PoseEdge] = None
+    new_gnss_prior: Optional[GnssPrior] = None
+
+
+@dataclass
 class PoseNode:
     """ポーズグラフの1ノード。推定姿勢とスキャンデータを保持する。"""
 
@@ -95,6 +107,8 @@ class PoseEdge:
     dy: float
     dyaw: float
     information: np.ndarray  # shape (3, 3)
+    score: float = 0.0
+    is_odom_fallback: bool = False
 
 
 @dataclass

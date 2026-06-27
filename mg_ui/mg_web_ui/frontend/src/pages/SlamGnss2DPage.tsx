@@ -12,15 +12,19 @@ import MapLayer from "../components/ros-viewer/layers/MapLayer";
 import PathLine from "../components/ros-viewer/layers/PathLine";
 import MarkerArrayLayer from "../components/ros-viewer/layers/MarkerArrayLayer";
 import { getSysManagerUrl } from "../utils/systemManagerConfig";
+import { usePoseGraph } from "../hooks/usePoseGraph";
+import { PoseGraphLayer } from "../components/ros-viewer/layers/PoseGraphLayer";
+import { PoseGraphDetailPanel } from "../components/panels/PoseGraphDetailPanel";
 
 // -------------------------------------------------------------------
 // SLAM-GNSS-2D 固有のレイヤー状態
 // -------------------------------------------------------------------
 
 interface LayerState {
-  poseGraph: boolean;
-  gnssRaw: boolean;
-  gnssPrior: boolean;
+  poseGraphNodes: boolean;
+  poseGraphSeqEdges: boolean;
+  poseGraphLoopEdges: boolean;
+  poseGraphGnssPrior: boolean;
   pathBefore: boolean;
 }
 
@@ -80,9 +84,10 @@ export default function SlamGnss2DPage({
 }) {
   // SLAM-GNSS-2D 固有レイヤー表示状態
   const [layers, setLayers] = useState<LayerState>({
-    poseGraph: true,
-    gnssRaw: true,
-    gnssPrior: true,
+    poseGraphNodes: true,
+    poseGraphSeqEdges: true,
+    poseGraphLoopEdges: true,
+    poseGraphGnssPrior: true,
     pathBefore: true,
   });
 
@@ -101,6 +106,10 @@ export default function SlamGnss2DPage({
   // Re-optimization State
   const [reoptBagPath, setReoptBagPath] = useState<string>("");
   const [isReoptimizing, setIsReoptimizing] = useState(false);
+
+  // PoseGraph State
+  const { state: poseGraphState } = usePoseGraph(client);
+  const [selectedNodeIndex, setSelectedNodeIndex] = useState<number | null>(null);
 
   // Fetch default bag path on mount
   useEffect(() => {
@@ -172,7 +181,6 @@ export default function SlamGnss2DPage({
   const startPreview = async () => {
     if (!_sysManager || !selectedMap) return;
     setIsPreviewing(true);
-    setSatelliteMode(true); // プレビュー時は自動で衛星モードON
     const fullPath = targetDirectory.endsWith('/') 
       ? `${targetDirectory}${selectedMap}` 
       : `${targetDirectory}/${selectedMap}`;
@@ -234,22 +242,28 @@ export default function SlamGnss2DPage({
         <SectionCard title="SLAM-GNSS-2D Layers">
           <div className="space-y-1">
             <LayerToggle
-              label="Pose Graph"
-              checked={layers.poseGraph}
-              onChange={toggleLayer("poseGraph")}
-              color="#60a5fa"
+              label="Graph Nodes"
+              checked={layers.poseGraphNodes}
+              onChange={toggleLayer("poseGraphNodes")}
+              color="#00ffff"
             />
             <LayerToggle
-              label="GNSS Points"
-              checked={layers.gnssRaw}
-              onChange={toggleLayer("gnssRaw")}
-              color="#e879f9"
+              label="Graph Seq Edges"
+              checked={layers.poseGraphSeqEdges}
+              onChange={toggleLayer("poseGraphSeqEdges")}
+              color="#00ff00"
             />
             <LayerToggle
-              label="GNSS Constraints"
-              checked={layers.gnssPrior}
-              onChange={toggleLayer("gnssPrior")}
-              color="#c084fc"
+              label="Graph Loop Edges"
+              checked={layers.poseGraphLoopEdges}
+              onChange={toggleLayer("poseGraphLoopEdges")}
+              color="#ff00ff"
+            />
+            <LayerToggle
+              label="Graph GNSS Prior"
+              checked={layers.poseGraphGnssPrior}
+              onChange={toggleLayer("poseGraphGnssPrior")}
+              color="#ffaa00"
             />
             <LayerToggle
               label="Pre-optimize Path"
@@ -519,38 +533,35 @@ export default function SlamGnss2DPage({
           lineWidth={1}
         />
       )}
-      {/* ポーズグラフ */}
-      {layers.poseGraph && (
-        <MarkerArrayLayer
-          client={client}
-          topic={TOPICS.SLAM_GNSS2D_POSE_GRAPH}
-        />
-      )}
-      {/* GNSS 生点群 */}
-      {layers.gnssRaw && (
-        <MarkerArrayLayer
-          client={client}
-          topic={TOPICS.SLAM_GNSS2D_GNSS_RAW}
-        />
-      )}
-      {/* GNSS 制約 */}
-      {layers.gnssPrior && (
-        <MarkerArrayLayer
-          client={client}
-          topic={TOPICS.SLAM_GNSS2D_GNSS_PRIOR}
-        />
-      )}
+      {/* ポーズグラフ (内部で各種表示を切り替え) */}
+      <PoseGraphLayer
+        state={poseGraphState}
+        showNodes={layers.poseGraphNodes}
+        showSeqEdges={layers.poseGraphSeqEdges}
+        showLoopEdges={layers.poseGraphLoopEdges}
+        showGnssPriors={layers.poseGraphGnssPrior}
+        onNodeClick={setSelectedNodeIndex}
+      />
     </>
   );
 
   return (
-    <RobotPageLayout
-      client={client}
-      accordionItems={accordionItems}
-      defaultOpen={["layers", "satellite", "saved-map"]}
-      viewerMode="2d"
-      viewerOverride={viewerOverride}
-      extraSceneChildren={satelliteMode ? undefined : extraSceneChildren}
-    />
+    <>
+      <RobotPageLayout
+        client={client}
+        accordionItems={accordionItems}
+        defaultOpen={["layers", "satellite", "saved-map"]}
+        viewerMode="2d"
+        viewerOverride={viewerOverride}
+        extraSceneChildren={satelliteMode ? undefined : extraSceneChildren}
+      />
+      {layers.poseGraphNodes && (
+        <PoseGraphDetailPanel
+          state={poseGraphState}
+          selectedNodeIndex={selectedNodeIndex}
+          onClose={() => setSelectedNodeIndex(null)}
+        />
+      )}
+    </>
   );
 }

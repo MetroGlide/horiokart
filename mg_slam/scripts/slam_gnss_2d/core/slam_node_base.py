@@ -23,6 +23,7 @@ from slam_gnss_2d.core.config_loader import ConfigLoader
 from slam_gnss_2d.ros.slam_visualizer import SlamVisualizer
 from slam_gnss_2d.ros.tf_broadcaster import SlamTfBroadcaster
 from slam_gnss_2d.ros.map_save_service import MapSaveService
+from slam_gnss_2d.ros.pose_graph_service import PoseGraphService
 from slam_gnss_2d.map_manager.trajectory_noise_filter import TrajectoryNoiseFilter
 
 
@@ -74,6 +75,7 @@ class SlamNodeBase(Node, ABC):
         self._tf_broadcaster = SlamTfBroadcaster(self)
         self._save_service = MapSaveService(
             self, self._pose_graph, self._orchestrator)
+        self._pose_graph_service = PoseGraphService(self, self._pose_graph, self._orchestrator)
 
         self._map_dirty = False
         self.create_timer(1.0 / cfg.map.publish_hz, self._publish_map_timer)
@@ -134,6 +136,20 @@ class SlamNodeBase(Node, ABC):
             self._visualizer.publish_path_increment(node)
 
         self._visualizer.publish_pose_graph_markers(self._pose_graph)
+
+        new_nodes = [node]
+        new_seq_edges = [result.new_seq_edge] if result.new_seq_edge else []
+        new_priors = [result.new_gnss_prior] if result.new_gnss_prior else []
+        full_refresh_needed = result.rerender_required
+        
+        self._visualizer.publish_pose_graph_diff(
+            new_nodes=new_nodes,
+            new_seq_edges=new_seq_edges,
+            new_priors=new_priors,
+            new_loop_edges=result.new_loop_edges,
+            loop_closed=result.loop_closed,
+            full_refresh_needed=full_refresh_needed
+        )
         self._map_dirty = True
 
     def _publish_map_timer(self) -> None:

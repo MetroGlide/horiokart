@@ -9,4 +9,5 @@ export const SERVICES = {
   ROSBAG_PAUSE: '/rosbag2_player/pause',
   ROSBAG_RESUME: '/rosbag2_player/resume',
   ROSBAG_SET_RATE: '/rosbag2_player/set_rate',
+  SLAM_GNSS2D_GET_POSE_GRAPH: '/slam_gnss_2d/get_pose_graph',
 } as const
