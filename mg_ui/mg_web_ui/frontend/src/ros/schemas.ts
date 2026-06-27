@@ -93,4 +93,27 @@ float64 y
 float64 z
 float64 w`,
   },
+  'mg_msgs/msg/PoseGraphDiff': {
+    encoding: 'cdr',
+    schemaName: 'mg_msgs/msg/PoseGraphDiff',
+    schema: `int32[] new_node_indices
+float64[] new_node_x
+float64[] new_node_y
+float64[] new_node_yaw
+float64[] new_node_timestamps
+int32[] seq_edge_from
+int32[] seq_edge_to
+float64[] seq_edge_score
+int32[] seq_edge_type
+float64[] seq_edge_info_diag
+int32[] prior_node_indices
+float64[] prior_sigma_m
+int32[] prior_gnss_status
+int32[] loop_edge_from
+int32[] loop_edge_to
+float64[] loop_edge_score
+float64[] loop_edge_info_diag
+bool loop_closed
+bool full_refresh_needed`,
+  },
 }

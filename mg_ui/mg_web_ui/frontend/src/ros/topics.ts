@@ -37,5 +37,6 @@ export const TOPICS = {
   SLAM_GNSS2D_POSE_GRAPH: 'slam_gnss_2d/pose_graph',
   SLAM_GNSS2D_GNSS_RAW: 'slam_gnss_2d/gnss_raw_markers',
   SLAM_GNSS2D_GNSS_PRIOR: 'slam_gnss_2d/gnss_prior_markers',
+  SLAM_GNSS2D_POSE_GRAPH_DIFF: 'slam_gnss_2d/pose_graph_diff',
   SLAM_GNSS2D_PATH_BEFORE: 'slam_gnss_2d/path_before_optimize',
 } as const

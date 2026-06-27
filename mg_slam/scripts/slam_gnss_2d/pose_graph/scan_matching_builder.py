@@ -122,14 +122,20 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
                 edge_info = _ODOM_FALLBACK_INFORMATION.copy()
                 self._failure_streak = 0
                 self.odom_fallback_count += 1
+                is_odom_fallback = True
+                score = 0.0
             else:
                 self._failure_streak = 0
                 self.icp_success_count += 1
                 dx_icp, dy_icp, dyaw_icp = result.dx, result.dy, result.dyaw
                 edge_info = result.information
+                is_odom_fallback = False
+                score = result.score
         else:
             dx_icp, dy_icp, dyaw_icp = dx_local, dy_local, dyaw_delta
             edge_info = _ODOM_INFORMATION.copy()
+            is_odom_fallback = True
+            score = 0.0
 
         # ICP 結果（prev_node ローカルフレーム）をワールド座標に変換して絶対ポーズを計算
         c_p = math.cos(prev_node.yaw)
@@ -159,6 +165,8 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
             dy=dy_icp,
             dyaw=dyaw_icp,
             information=edge_info,
+            score=score,
+            is_odom_fallback=is_odom_fallback,
         ))
         self._last_odom = odom
         return node

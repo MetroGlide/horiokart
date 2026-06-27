@@ -239,6 +239,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
             dy=result.dy,
             dyaw=result.dyaw,
             information=result.information,
+            score=result.score,
         ))
         _logger.info(
             f'Loop edge added: {candidate.index} -> {node.index} '

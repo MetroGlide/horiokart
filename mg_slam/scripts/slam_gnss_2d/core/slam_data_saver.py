@@ -75,6 +75,8 @@ class SlamDataSaver:
                 "dx": float(e.dx),
                 "dy": float(e.dy),
                 "dyaw": float(e.dyaw),
+                "score": float(e.score),
+                "is_odom_fallback": bool(e.is_odom_fallback),
                 "information": [float(x) for x in e.information.flatten().tolist()] if hasattr(e.information, 'flatten') else e.information
             }
             if abs(e.to_index - e.from_index) == 1:

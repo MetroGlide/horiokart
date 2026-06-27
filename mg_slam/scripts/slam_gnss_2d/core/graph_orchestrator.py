@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import math
+import numpy as np
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from slam_gnss_2d.core.data_types import GnssData, OdomData, PoseEdge, PoseNode, ScanData, SensorFrame
+from slam_gnss_2d.core.data_types import GnssData, OdomData, PoseEdge, PoseNode, ScanData, SensorFrame, GnssPrior
 from slam_gnss_2d.pose_graph.base import PoseGraphBuilderBase
 from slam_gnss_2d.optimizer.isam2_optimizer import ISAM2Optimizer
 from slam_gnss_2d.gnss.anchor_manager import GnssAnchorManager
@@ -15,6 +16,9 @@ class ScanProcessResult:
     node: Optional[PoseNode]
     loop_closed: bool
     rerender_required: bool
+    new_seq_edge: Optional[PoseEdge] = None
+    new_loop_edges: list[PoseEdge] = None
+    new_gnss_prior: Optional[GnssPrior] = None
 
 
 @dataclass
@@ -80,9 +84,13 @@ class GraphOrchestrator:
         return self._init_rotation
 
     def process_frame(self, frame: SensorFrame) -> ScanProcessResult:
+        new_seq_edge: Optional[PoseEdge] = None
+        new_loop_edges: list[PoseEdge] = []
+        new_gnss_prior: Optional[GnssPrior] = None
+
         node = self._pose_graph.add_scan(frame.scan, frame.odom)
         if node is None:
-            return ScanProcessResult(node=None, loop_closed=False, rerender_required=False)
+            return ScanProcessResult(node=None, loop_closed=False, rerender_required=False, new_loop_edges=[])
 
         # 1. INITIALIZING 時のアンカー設定と初期方位推定
         if self._use_gnss and self._state == 'INITIALIZING' and frame.gnss is not None and self._anchor_manager:
@@ -129,7 +137,7 @@ class GraphOrchestrator:
         # 2. 状態による早期リターン
         if self._state == 'INITIALIZING':
             # まだ初期方位が確定していないためオプティマイザには入れず、ローカルに蓄積するのみ
-            return ScanProcessResult(node=node, loop_closed=False, rerender_required=False)
+            return ScanProcessResult(node=node, loop_closed=False, rerender_required=False, new_seq_edge=self._get_latest_seq_edge(node.index), new_loop_edges=[])
 
         # 3. RUNNING ステートの処理
         if not self._initialized:
@@ -154,6 +162,7 @@ class GraphOrchestrator:
                     latest_seq_edge.from_index, latest_seq_edge.to_index,
                     latest_seq_edge.dx, latest_seq_edge.dy, latest_seq_edge.dyaw, latest_seq_edge.information
                 )
+                new_seq_edge = latest_seq_edge
             self._last_node_index = node.index
 
         loop_closed = False
@@ -166,28 +175,32 @@ class GraphOrchestrator:
                         edge.from_index, edge.to_index,
                         edge.dx, edge.dy, edge.dyaw, edge.information
                     )
+                    new_loop_edges.append(edge)
                 self._last_loop_edge_count = len(loops)
                 loop_closed = True
 
         if self._use_gnss and frame.gnss is not None and self._anchor_manager and self._anchor_manager.is_initialized:
             sigma_xy = self._sigma_from_gnss(frame.gnss)
-            if 0 < sigma_xy <= self._gnss_max_sigma_m:
+            if node is not None and 0 < sigma_xy <= self._gnss_max_sigma_m:
                 gx, gy = self._anchor_manager.to_local(frame.gnss)
-                # グラフ全体がGNSSに合わせて回転・平行移動済みなので、gx, gy をそのまま投入する
                 self._optimizer.add_gnss_prior(
                     node.index, gx, gy, sigma_xy, self._gnss_factor_yaw_variance
                 )
+                info_3x3 = np.zeros((2, 2), dtype=np.float64)
+                inv_var = 1.0 / max(sigma_xy * sigma_xy, 1e-12)
+                info_3x3[0, 0] = inv_var
+                info_3x3[1, 1] = inv_var
+                new_gnss_prior = GnssPrior(node_index=node.index, x=gx, y=gy, information=info_3x3)
 
-        self._optimizer.update()
+        if node is not None:
+            self._optimizer.update()
 
         all_poses = self._optimizer.get_all_poses()
         rerender_required = loop_closed
 
         # オプティマイザの結果をノードに反映
         nodes = self._pose_graph.get_nodes()
-        # 最新のポーズが INITIALIZING 後に大きく飛んだ場合（回転等）、
-        # マップ全体を再描画する必要があるため、rerender_required を True にする
-        if self._use_gnss and self._last_node_index == node.index and self._init_rotation != 0.0 and len(nodes) > 1 and not hasattr(self, '_first_render_done'):
+        if node is not None and self._use_gnss and self._last_node_index == node.index and self._init_rotation != 0.0 and len(nodes) > 1 and not hasattr(self, '_first_render_done'):
             rerender_required = True
             self._first_render_done = True
 
@@ -199,6 +212,9 @@ class GraphOrchestrator:
             node=node,
             loop_closed=loop_closed,
             rerender_required=rerender_required,
+            new_seq_edge=new_seq_edge,
+            new_loop_edges=new_loop_edges,
+            new_gnss_prior=new_gnss_prior,
         )
 
     def _get_latest_seq_edge(self, node_index: int) -> Optional[PoseEdge]:
