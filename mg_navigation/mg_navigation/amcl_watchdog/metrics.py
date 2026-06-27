@@ -3,16 +3,12 @@ from typing import Sequence
 import math
 
 
-def _cov_index(i: int, j: int) -> int:
-    return i * 6 + j
-
-
 def compute_trace_xy(cov: Sequence[float]) -> float:
     """Return trace over x and y (var_x + var_y)."""
     if cov is None or len(cov) < 36:
         raise ValueError("covariance must be a 36-length sequence")
-    var_x = cov[_cov_index(0, 0)]
-    var_y = cov[_cov_index(1, 1)]
+    var_x = cov[0]   # cov[0*6+0]
+    var_y = cov[7]   # cov[1*6+1]
     return float(var_x + var_y)
 
 
@@ -20,10 +16,10 @@ def compute_determinant_xy(cov: Sequence[float]) -> float:
     """Return determinant of the 2x2 xy covariance matrix."""
     if cov is None or len(cov) < 36:
         raise ValueError("covariance must be a 36-length sequence")
-    a = cov[_cov_index(0, 0)]
-    b = cov[_cov_index(0, 1)]
-    c = cov[_cov_index(1, 0)]
-    d = cov[_cov_index(1, 1)]
+    a = cov[0]   # cov[0*6+0]
+    b = cov[1]   # cov[0*6+1]
+    c = cov[6]   # cov[1*6+0]
+    d = cov[7]   # cov[1*6+1]
     # determinant of [[a,b],[c,d]]
     return float(a * d - b * c)
 
@@ -32,10 +28,10 @@ def compute_max_eigenvalue_xy(cov: Sequence[float]) -> float:
     """Compute the maximum eigenvalue of the 2x2 xy covariance matrix."""
     if cov is None or len(cov) < 36:
         raise ValueError("covariance must be a 36-length sequence")
-    a = cov[_cov_index(0, 0)]
-    b = cov[_cov_index(0, 1)]
-    c = cov[_cov_index(1, 0)]
-    d = cov[_cov_index(1, 1)]
+    a = cov[0]
+    b = cov[1]
+    c = cov[6]
+    d = cov[7]
     # eigenvalues of 2x2 matrix: lambda = (trace +/- sqrt(trace^2 - 4 det))/2
     tr = a + d
     det = a * d - b * c

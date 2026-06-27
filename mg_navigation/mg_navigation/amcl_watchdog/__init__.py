@@ -3,6 +3,4 @@
 __all__ = [
     'node',
     'metrics',
-    'detector',
-    'handlers',
 ]
