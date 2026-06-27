@@ -183,7 +183,7 @@ class SlamGnssNavBridgeNode(Node):
         return self._last_heading
 
     def _navpvt_callback(self, msg: NavPVT):
-        self.get_logger().info(
+        self.get_logger().debug(
             f"Received NavPVT: lat={msg.lat * 1e-7:.7f}, lon={msg.lon * 1e-7:.7f}, hAcc={msg.h_acc}mm, flags={msg.flags}")
         # basic validation
         if msg.flags & 1 == 0:  # gnssFixOK is bit 0
