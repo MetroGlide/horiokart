@@ -9,7 +9,13 @@ import numpy as np
 from slam_gnss_2d.pose_graph.base import PoseGraphBuilderBase
 from slam_gnss_2d.pose_graph.scan_matching_builder import ScanMatchingBuilder
 from slam_gnss_2d.core.data_types import OdomData, PoseEdge, PoseNode, ScanData
-from slam_gnss_2d.core.geometry import angle_diff, scan_to_points
+from slam_gnss_2d.core.geometry import (
+    angle_diff,
+    points_local_to_world,
+    points_world_to_local,
+    scan_to_points,
+    world_delta_to_local,
+)
 from slam_gnss_2d.scan_matching.base import ScanMatcherBase
 
 _logger = logging.getLogger(__name__)
@@ -114,11 +120,9 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
             pts = scan_to_points(node.scan)
             if len(pts) == 0:
                 continue
-            c = math.cos(node.yaw)
-            s = math.sin(node.yaw)
-            wx = c * pts[:, 0] - s * pts[:, 1] + node.x
-            wy = s * pts[:, 0] + c * pts[:, 1] + node.y
-            world_pts_list.append(np.column_stack((wx, wy)))
+            world_pts_list.append(
+                points_local_to_world(pts, node.x, node.y, node.yaw)
+            )
 
         if not world_pts_list:
             return scan_to_points(candidate.scan) if candidate.scan is not None else np.empty((0, 2))
@@ -126,10 +130,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         world_pts = np.concatenate(world_pts_list, axis=0)
 
         # 候補ノードのボディフレームに変換
-        c = math.cos(candidate.yaw)
-        s = math.sin(candidate.yaw)
-        R_inv = np.array([[c, s], [-s, c]])
-        return (R_inv @ (world_pts - np.array([candidate.x, candidate.y])).T).T
+        return points_world_to_local(world_pts, candidate.x, candidate.y, candidate.yaw)
 
     def _try_add_loop_edge(self, node: PoseNode, candidate: PoseNode) -> bool:
         """候補ノードとのループ辺を検証して追加する。
@@ -155,14 +156,13 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
             return False
 
         # 初期値: candidate ボディフレームから見た node の相対ポーズ
-        c = math.cos(-candidate.yaw)
-        s = math.sin(-candidate.yaw)
         dx_w = node.x - candidate.x
         dy_w = node.y - candidate.y
+        dx_local, dy_local = world_delta_to_local(dx_w, dy_w, candidate.yaw)
         initial_guess = OdomData(
             timestamp=node.timestamp,
-            x=c * dx_w - s * dy_w,
-            y=s * dx_w + c * dy_w,
+            x=dx_local,
+            y=dy_local,
             yaw=angle_diff(node.yaw, candidate.yaw),
         )
 

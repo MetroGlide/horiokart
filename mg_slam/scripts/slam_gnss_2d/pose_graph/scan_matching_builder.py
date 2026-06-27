@@ -8,7 +8,12 @@ import numpy as np
 
 from slam_gnss_2d.pose_graph.base import PoseGraphBuilderBase
 from slam_gnss_2d.core.data_types import OdomData, PoseEdge, PoseNode, ScanData
-from slam_gnss_2d.core.geometry import angle_diff, normalize_angle
+from slam_gnss_2d.core.geometry import (
+    angle_diff,
+    local_delta_to_world,
+    normalize_angle,
+    world_delta_to_local,
+)
 from slam_gnss_2d.scan_matching.base import ScanMatcherBase
 from slam_gnss_2d.scan_matching.reference_provider.base import ReferenceProviderBase
 
@@ -63,6 +68,9 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
             self._last_odom = odom
             return node
 
+        if self._last_odom is None:
+            return None
+
         # キーフレーム判定
         dx_w = odom.x - self._last_odom.x
         dy_w = odom.y - self._last_odom.y
@@ -77,10 +85,8 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
         # dx_w/dy_w は odom ワールドフレームのベクトルなので、
         # odom フレームでの prev_node の方向角 (_last_odom.yaw) で回転する。
         # prev_node.yaw (SLAM フレーム) を使うと ICP 補正量がずれ込み初期値が劣化する。
-        c = math.cos(-self._last_odom.yaw)
-        s = math.sin(-self._last_odom.yaw)
-        dx_local = c * dx_w - s * dy_w
-        dy_local = s * dx_w + c * dy_w
+        dx_local, dy_local = world_delta_to_local(
+            dx_w, dy_w, self._last_odom.yaw)
         dyaw_delta = angle_diff(odom.yaw, self._last_odom.yaw)
 
         initial_guess = OdomData(
@@ -135,10 +141,10 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
             score = 0.0
 
         # ICP 結果（prev_node ローカルフレーム）をワールド座標に変換して絶対ポーズを計算
-        c_p = math.cos(prev_node.yaw)
-        s_p = math.sin(prev_node.yaw)
-        new_x = prev_node.x + c_p * dx_icp - s_p * dy_icp
-        new_y = prev_node.y + s_p * dx_icp + c_p * dy_icp
+        dx_world, dy_world = local_delta_to_world(
+            dx_icp, dy_icp, prev_node.yaw)
+        new_x = prev_node.x + dx_world
+        new_y = prev_node.y + dy_world
         new_yaw = normalize_angle(prev_node.yaw + dyaw_icp)
 
         node = PoseNode(

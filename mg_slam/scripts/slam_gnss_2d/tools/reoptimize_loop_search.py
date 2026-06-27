@@ -7,7 +7,7 @@ import numpy as np
 from scipy.spatial import KDTree
 
 from slam_gnss_2d.core.data_types import OdomData, PoseEdge, PoseNode, ScanData
-from slam_gnss_2d.core.geometry import scan_to_points
+from slam_gnss_2d.core.geometry import angle_diff, scan_to_points, world_delta_to_local
 from slam_gnss_2d.scan_matching.base import ScanMatcherBase
 from slam_gnss_2d.tools.reoptimize_geometry import build_submap_points
 
@@ -64,15 +64,15 @@ def search_new_loop_edges(
             if src_pts is None or len(src_pts) == 0:
                 continue
 
-            cos_yaw = math.cos(-candidate.yaw)
-            sin_yaw = math.sin(-candidate.yaw)
             dx_w = node.x - candidate.x
             dy_w = node.y - candidate.y
+            dx_local, dy_local = world_delta_to_local(
+                dx_w, dy_w, candidate.yaw)
             initial_guess = OdomData(
                 timestamp=node.timestamp,
-                x=cos_yaw * dx_w - sin_yaw * dy_w,
-                y=sin_yaw * dx_w + cos_yaw * dy_w,
-                yaw=node.yaw - candidate.yaw,
+                x=dx_local,
+                y=dy_local,
+                yaw=angle_diff(node.yaw, candidate.yaw),
             )
 
             loop_matcher.set_target_cloud(src_pts)

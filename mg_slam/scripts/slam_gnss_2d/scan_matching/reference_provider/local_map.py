@@ -1,13 +1,15 @@
 from __future__ import annotations
-
-import math
 from collections import deque
 from typing import Optional
 
 import numpy as np
 
 from slam_gnss_2d.core.data_types import PoseNode, ScanData
-from slam_gnss_2d.core.geometry import scan_to_points
+from slam_gnss_2d.core.geometry import (
+    points_local_to_world,
+    points_world_to_local,
+    scan_to_points,
+)
 from slam_gnss_2d.scan_matching.reference_provider.base import ReferenceProviderBase
 
 
@@ -47,16 +49,12 @@ class LocalMapProvider(ReferenceProviderBase):
         entries = list(self._nodes)
 
         yaws = np.array([n.yaw for n, _ in entries])
-        cos_yaws = np.cos(yaws)
-        sin_yaws = np.sin(yaws)
 
         world_pts_list = []
         for i, (n, local_pts) in enumerate(entries):
-            c = float(cos_yaws[i])
-            s = float(sin_yaws[i])
-            wx = c * local_pts[:, 0] - s * local_pts[:, 1] + n.x
-            wy = s * local_pts[:, 0] + c * local_pts[:, 1] + n.y
-            world_pts_list.append(np.column_stack((wx, wy)))
+            world_pts_list.append(
+                points_local_to_world(local_pts, n.x, n.y, float(yaws[i]))
+            )
 
         if not world_pts_list:
             return None
@@ -71,6 +69,4 @@ class LocalMapProvider(ReferenceProviderBase):
             return None
 
         # 最後ノードのボディフレームに変換
-        c, s = math.cos(last.yaw), math.sin(last.yaw)
-        R_inv = np.array([[c, s], [-s, c]])  # R^T (回転行列の逆)
-        return (R_inv @ (world_pts - np.array([last.x, last.y])).T).T
+        return points_world_to_local(world_pts, last.x, last.y, last.yaw)

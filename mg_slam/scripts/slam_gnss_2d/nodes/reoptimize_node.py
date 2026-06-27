@@ -5,7 +5,7 @@ from slam_gnss_2d.core.slam_data_saver import SlamDataSaver
 from slam_gnss_2d.optimizer.gtsam_optimizer import GTSAMOptimizer
 from slam_gnss_2d.scan_matching.base import ScanMatcherBase
 from slam_gnss_2d.core.data_types import PoseNode, PoseEdge, GnssPrior, ScanData, OdomData, GnssData, MatchResult
-from slam_gnss_2d.core.geometry import scan_to_points
+from slam_gnss_2d.core.geometry import angle_diff, scan_to_points, world_delta_to_local
 from slam_gnss_2d.core.component_factory import build_gnss_source, _build_matcher, _build_loop_matcher, build_renderer
 from slam_gnss_2d.core.config_loader import ConfigLoader
 from slam_gnss_2d.map_manager.trajectory_noise_filter import TrajectoryNoiseFilter
@@ -352,15 +352,15 @@ class ReoptimizeNode(Node):
                 if f_idx < len(old_nodes) and t_idx < len(old_nodes):
                     nf = old_nodes[f_idx]
                     nt = old_nodes[t_idx]
-                    c = math.cos(-nf.yaw)
-                    s = math.sin(-nf.yaw)
                     dx_w = nt.x - nf.x
                     dy_w = nt.y - nf.y
+                    dx_local, dy_local = world_delta_to_local(
+                        dx_w, dy_w, nf.yaw)
                     gnss_guess = OdomData(
                         timestamp=node_t.timestamp,
-                        x=c * dx_w - s * dy_w,
-                        y=s * dx_w + c * dy_w,
-                        yaw=nt.yaw - nf.yaw,
+                        x=dx_local,
+                        y=dy_local,
+                        yaw=angle_diff(nt.yaw, nf.yaw),
                     )
 
                 matcher.set_target_cloud(src_pts)

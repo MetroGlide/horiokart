@@ -7,7 +7,7 @@ import numpy as np
 
 from slam_gnss_2d.pose_graph.base import PoseGraphBuilderBase
 from slam_gnss_2d.core.data_types import OdomData, PoseEdge, PoseNode, ScanData
-from slam_gnss_2d.core.geometry import angle_diff
+from slam_gnss_2d.core.geometry import angle_diff, world_delta_to_local
 
 _ODOM_INFORMATION = np.diag([100.0, 100.0, 50.0])
 
@@ -58,15 +58,14 @@ class OdomOnlyBuilder(PoseGraphBuilderBase):
 
         if len(self._nodes) > 1:
             prev = self._nodes[-2]
-            c = math.cos(-prev.yaw)
-            s = math.sin(-prev.yaw)
             dx_w = node.x - prev.x
             dy_w = node.y - prev.y
+            dx_local, dy_local = world_delta_to_local(dx_w, dy_w, prev.yaw)
             self._edges.append(PoseEdge(
                 from_index=prev.index,
                 to_index=node.index,
-                dx=c * dx_w - s * dy_w,
-                dy=s * dx_w + c * dy_w,
+                dx=dx_local,
+                dy=dy_local,
                 dyaw=angle_diff(node.yaw, prev.yaw),
                 information=_ODOM_INFORMATION.copy(),
             ))

@@ -5,7 +5,11 @@ import math
 import numpy as np
 
 from slam_gnss_2d.core.data_types import GnssData, PoseNode, ScanData
-from slam_gnss_2d.core.geometry import scan_to_points
+from slam_gnss_2d.core.geometry import (
+    points_local_to_world,
+    points_world_to_local,
+    scan_to_points,
+)
 from slam_gnss_2d.input.time_series import nearest_by_timestamp
 
 
@@ -30,23 +34,18 @@ def build_submap_points(
     world_pts_list = []
     for node, scan in near_nodes:
         local_pts = scan_to_points(scan)
-        cos_yaw = math.cos(node.yaw)
-        sin_yaw = math.sin(node.yaw)
-        wx = cos_yaw * local_pts[:, 0] - sin_yaw * local_pts[:, 1] + node.x
-        wy = sin_yaw * local_pts[:, 0] + cos_yaw * local_pts[:, 1] + node.y
-        world_pts_list.append(np.column_stack((wx, wy)))
+        world_pts_list.append(
+            points_local_to_world(local_pts, node.x, node.y, node.yaw)
+        )
 
     world_pts = np.concatenate(world_pts_list, axis=0)
 
-    cos_center = math.cos(center_node.yaw)
-    sin_center = math.sin(center_node.yaw)
-    rotation_inv = np.array(
-        [[cos_center, sin_center], [-sin_center, cos_center]])
-
-    relative_pts = (
-        rotation_inv @ (world_pts - np.array([center_node.x, center_node.y])).T
-    ).T
-    return relative_pts
+    return points_world_to_local(
+        world_pts,
+        center_node.x,
+        center_node.y,
+        center_node.yaw,
+    )
 
 
 def find_nearest_scan(
