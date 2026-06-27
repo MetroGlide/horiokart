@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import logging
-import math
 
 import numpy as np
 import cv2
 
 from slam_gnss_2d.map_manager.base import MapRendererBase
 from slam_gnss_2d.core.data_types import PoseNode
+from slam_gnss_2d.map_manager.grid_utils import (
+    build_trajectory_mask,
+    compute_square_bounds,
+    in_bounds,
+    scan_hits_to_pixels,
+    world_to_pixel,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -24,9 +30,9 @@ class CountingRenderer(MapRendererBase):
 
     def __init__(
         self,
-        resolution: float = 0.05,
-        expansion_margin: float = 100.0,
-        hit_threshold: float = 0.3,
+        resolution: float,
+        expansion_margin: float,
+        hit_threshold: float,
     ) -> None:
         """
         Args:
@@ -56,17 +62,10 @@ class CountingRenderer(MapRendererBase):
     def rerender_all(self, nodes: list[PoseNode]) -> None:
         if not nodes:
             return
-        xs = np.fromiter((n.x for n in nodes),
-                         dtype=np.float64, count=len(nodes))
-        ys = np.fromiter((n.y for n in nodes),
-                         dtype=np.float64, count=len(nodes))
-        new_origin_x = float(xs.min()) - self._expansion_margin
-        new_origin_y = float(ys.min()) - self._expansion_margin
-        new_max_x = float(xs.max()) + self._expansion_margin
-        new_max_y = float(ys.max()) + self._expansion_margin
-        new_size = max(
-            math.ceil((new_max_x - new_origin_x) / self._resolution),
-            math.ceil((new_max_y - new_origin_y) / self._resolution),
+        new_origin_x, new_origin_y, new_size = compute_square_bounds(
+            nodes,
+            self._resolution,
+            self._expansion_margin,
         )
         _logger.debug(
             f'Map recomputed (Counting): size={new_size}px '
@@ -93,7 +92,8 @@ class CountingRenderer(MapRendererBase):
         if np.any(valid_mask):
             # ゼロ除算を避けるために有効なセルのみ計算
             ratio = np.zeros_like(self._hit_map, dtype=np.float32)
-            ratio[valid_mask] = self._hit_map[valid_mask].astype(np.float32) / total[valid_mask]
+            ratio[valid_mask] = self._hit_map[valid_mask].astype(
+                np.float32) / total[valid_mask]
 
             occupied_mask = valid_mask & (ratio >= self._hit_threshold)
             free_mask = valid_mask & (ratio < self._hit_threshold)
@@ -107,75 +107,49 @@ class CountingRenderer(MapRendererBase):
         if not nodes:
             return
 
-        radius_px = max(1, int(radius_m / self._resolution))
-        pts = np.empty((1, len(nodes), 2), dtype=np.int32)
-        for i, node in enumerate(nodes):
-            px, py = self._world_to_pixel(node.x, node.y)
-            pts[0, i, 0] = px
-            pts[0, i, 1] = py
-
-        mask = np.zeros(self._hit_map.shape, dtype=np.uint8)
-        # 軌跡を描画。lineType=cv2.LINE_8
-        cv2.polylines(mask, pts, isClosed=False, color=1, thickness=radius_px * 2)
-
-        # 頂点の丸めのために各ノードに円も描画する（厚い線分では角が欠ける場合があるため）
-        for i in range(len(nodes)):
-            cv2.circle(mask, (int(pts[0, i, 0]), int(pts[0, i, 1])), radius_px, color=1, thickness=-1)
-
-        mask_bool = mask > 0
-
+        mask_bool = build_trajectory_mask(
+            self._hit_map.shape,
+            nodes,
+            radius_m,
+            self._origin_x,
+            self._origin_y,
+            self._resolution,
+        )
         if filter_type == 'clear':
             self._hit_map[mask_bool] = 0
             self._miss_map[mask_bool] += 1
         elif filter_type == 'attenuate':
             # ヒットカウントを減衰させる（微小なヒットは0にする）
-            self._hit_map[mask_bool] = np.maximum(0, self._hit_map[mask_bool] - 2)
+            self._hit_map[mask_bool] = np.maximum(
+                0, self._hit_map[mask_bool] - 2)
             self._hit_map[mask_bool] //= 2
-            
+
             # hitが減っても、missが0のままだと hit/(hit+miss) = 1.0 となり占有判定されてしまう。
             # ロボットの軌跡上である以上「空間が空いていた」という証拠でもあるため、missを追加する。
             self._miss_map[mask_bool] += 2
 
     def _world_to_pixel(self, wx: float, wy: float) -> tuple[int, int]:
-        px = int((wx - self._origin_x) / self._resolution)
-        py = int((wy - self._origin_y) / self._resolution)
-        return px, py
+        return world_to_pixel(
+            wx, wy, self._origin_x, self._origin_y, self._resolution)
 
     def _in_bounds(self, px: int, py: int) -> bool:
-        return 0 <= px < self._map_size and 0 <= py < self._map_size
+        return in_bounds(px, py, self._map_size)
 
     def _render_node(self, node: PoseNode) -> None:
-        scan = node.scan
-        angles = scan.angle_min + \
-            np.arange(len(scan.ranges)) * scan.angle_increment
-        ranges = np.asarray(scan.ranges, dtype=np.float64)
-        valid_mask = (ranges > scan.range_min) & (ranges < scan.range_max)
-
-        cos_yaw = np.cos(node.yaw)
-        sin_yaw = np.sin(node.yaw)
-
-        robot_px, robot_py = self._world_to_pixel(node.x, node.y)
+        robot_px, robot_py, hit_px, hit_py, in_bounds_mask = scan_hits_to_pixels(
+            node,
+            self._origin_x,
+            self._origin_y,
+            self._resolution,
+            self._map_size,
+        )
         if not self._in_bounds(robot_px, robot_py):
             return
 
         self._render_count += 1
 
-        # 有効点の座標変換を一括計算
-        r_v = ranges[valid_mask]
-        a_v = angles[valid_mask]
-        lx = r_v * np.cos(a_v)
-        ly = r_v * np.sin(a_v)
-        wx = node.x + cos_yaw * lx - sin_yaw * ly
-        wy = node.y + sin_yaw * lx + cos_yaw * ly
-
-        hit_px = ((wx - self._origin_x) / self._resolution).astype(np.int32)
-        hit_py = ((wy - self._origin_y) / self._resolution).astype(np.int32)
-        in_bounds = (
-            (hit_px >= 0) & (hit_px < self._map_size) &
-            (hit_py >= 0) & (hit_py < self._map_size)
-        )
-        hit_px_valid = hit_px[in_bounds]
-        hit_py_valid = hit_py[in_bounds]
+        hit_px_valid = hit_px[in_bounds_mask]
+        hit_py_valid = hit_py[in_bounds_mask]
         n_hits = len(hit_px_valid)
 
         if n_hits > 0:
@@ -210,11 +184,11 @@ class CountingRenderer(MapRendererBase):
         if self._render_count == 1:
             _logger.debug(
                 f'First render (Counting): robot=({node.x:.2f}, {node.y:.2f}), '
-                f'hits={n_hits}, oob_hits={int((~in_bounds).sum())}'
+                f'hits={n_hits}, oob_hits={int((~in_bounds_mask).sum())}'
             )
         elif self._render_count % 10 == 0:
             _logger.debug(
                 f'Render #{self._render_count} (Counting): '
                 f'robot=({node.x:.2f}, {node.y:.2f}), '
-                f'hits={n_hits}, oob_hits={int((~in_bounds).sum())}'
+                f'hits={n_hits}, oob_hits={int((~in_bounds_mask).sum())}'
             )

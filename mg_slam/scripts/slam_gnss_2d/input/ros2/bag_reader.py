@@ -1,32 +1,28 @@
 from __future__ import annotations
 
-import bisect
-import math
 from typing import Callable, Optional
 
 import numpy as np
 import rosbag2_py
 from nav_msgs.msg import Odometry
 from rclpy.serialization import deserialize_message
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, NavSatFix
 from tf2_msgs.msg import TFMessage
+from ublox_msgs.msg import NavPVT
 
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from slam_gnss_2d.core.data_types import GnssData, OdomData, ScanData
+from slam_gnss_2d.core.geometry import quaternion_to_yaw
+from slam_gnss_2d.gnss.utm import build_utm_transformer, transform_latlon
+from slam_gnss_2d.input.time_series import (
+    interpolate_gnss,
+    interpolate_odom,
+    nearest_by_timestamp,
+)
 
 import logging
 
 _logger = logging.getLogger(__name__)
-
-
-def _quaternion_to_yaw(q) -> float:
-    siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
-    cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-    return math.atan2(siny_cosp, cosy_cosp)
-
-
-def _angle_diff(a: float, b: float) -> float:
-    return math.atan2(math.sin(a - b), math.cos(a - b))
 
 
 def _open_reader(
@@ -131,7 +127,7 @@ class BagScanSource(ScanSourceBase):
                 return 0.0
             visited.add(current)
             parent, rot = child_to_parent[current]
-            yaw += _quaternion_to_yaw(rot)
+            yaw += quaternion_to_yaw(rot)
             current = parent
         return yaw
 
@@ -151,7 +147,7 @@ class BagOdomSource(OdomSourceBase):
             (_, data, _) = reader.read_next()
             msg = deserialize_message(data, Odometry)
             stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-            yaw = _quaternion_to_yaw(msg.pose.pose.orientation)
+            yaw = quaternion_to_yaw(msg.pose.pose.orientation)
             self._odom_list.append(OdomData(
                 timestamp=stamp,
                 x=msg.pose.pose.position.x,
@@ -167,23 +163,7 @@ class BagOdomSource(OdomSourceBase):
     def get_odom_at(self, timestamp: float) -> Optional[OdomData]:
         if not self._odom_list:
             return None
-        idx = bisect.bisect_left(self._timestamps, timestamp)
-        if idx == 0:
-            return self._odom_list[0]
-        if idx >= len(self._odom_list):
-            return self._odom_list[-1]
-        prev = self._odom_list[idx - 1]
-        next_ = self._odom_list[idx]
-        t_span = next_.timestamp - prev.timestamp
-        if t_span < 1e-9:
-            return prev
-        alpha = (timestamp - prev.timestamp) / t_span
-        return OdomData(
-            timestamp=timestamp,
-            x=prev.x + alpha * (next_.x - prev.x),
-            y=prev.y + alpha * (next_.y - prev.y),
-            yaw=prev.yaw + alpha * _angle_diff(next_.yaw, prev.yaw),
-        )
+        return interpolate_odom(self._odom_list, self._timestamps, timestamp)
 
 
 class BagGnssSource(GnssSourceBase):
@@ -203,9 +183,6 @@ class BagGnssSource(GnssSourceBase):
         self._raw_timestamps: list[float] = []
 
     def start(self) -> None:
-        from pyproj import CRS, Transformer
-        from sensor_msgs.msg import NavSatFix
-
         reader = _open_reader(self._bag_path, [self._gnss_topic])
         raw_fixes: list = []
         total_msgs = 0
@@ -228,15 +205,11 @@ class BagGnssSource(GnssSourceBase):
 
         # 最初の fix から UTM zone を自動決定して変換器を構築する
         first = raw_fixes[0]
-        zone = int((first.longitude + 180.0) / 6.0) + 1
-        south = first.latitude < 0.0
-        crs_utm = CRS.from_dict({'proj': 'utm', 'zone': zone, 'south': south})
-        transformer = Transformer.from_crs(
-            'EPSG:4326', crs_utm, always_xy=True)
+        transformer = build_utm_transformer(first.latitude, first.longitude)
 
         for msg in raw_fixes:
             stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-            x, y = transformer.transform(msg.longitude, msg.latitude)
+            x, y = transform_latlon(transformer, msg.latitude, msg.longitude)
 
             # NavSatFix.position_covariance は ENU 9 要素配列。East/North の 2x2 を取り出す
             # COVARIANCE_TYPE_UNKNOWN (0) の場合は共分散が信頼できないためゼロ行列にする
@@ -276,27 +249,7 @@ class BagGnssSource(GnssSourceBase):
     def get_gnss_at(self, timestamp: float) -> Optional[GnssData]:
         if not self._gnss_list:
             return None
-        idx = bisect.bisect_left(self._timestamps, timestamp)
-        if idx == 0:
-            return self._gnss_list[0]
-        if idx >= len(self._gnss_list):
-            return self._gnss_list[-1]
-        prev = self._gnss_list[idx - 1]
-        next_ = self._gnss_list[idx]
-        t_span = next_.timestamp - prev.timestamp
-        if t_span < 1e-9:
-            return prev
-        alpha = (timestamp - prev.timestamp) / t_span
-        return GnssData(
-            timestamp=timestamp,
-            x=prev.x + alpha * (next_.x - prev.x),
-            y=prev.y + alpha * (next_.y - prev.y),
-            covariance=prev.covariance + alpha *
-            (next_.covariance - prev.covariance),
-            fix_status=prev.fix_status,
-            latitude=prev.latitude + alpha * (next_.latitude - prev.latitude),
-            longitude=prev.longitude + alpha * (next_.longitude - prev.longitude),
-        )
+        return interpolate_gnss(self._gnss_list, self._timestamps, timestamp)
 
     def get_all_gnss(self) -> list[GnssData]:
         return list(self._gnss_list)
@@ -310,16 +263,8 @@ class BagGnssSource(GnssSourceBase):
         """
         if not self._raw_list:
             return None
-        idx = bisect.bisect_left(self._raw_timestamps, timestamp)
-        if idx == 0:
-            return self._raw_list[0]
-        if idx >= len(self._raw_list):
-            return self._raw_list[-1]
-        prev = self._raw_list[idx - 1]
-        next_ = self._raw_list[idx]
-        if abs(timestamp - prev[0]) <= abs(timestamp - next_[0]):
-            return prev
-        return next_
+        return nearest_by_timestamp(
+            self._raw_list, self._raw_timestamps, timestamp)
 
 
 class BagNavPVTSource(GnssSourceBase):
@@ -354,9 +299,6 @@ class BagNavPVTSource(GnssSourceBase):
         self._raw_timestamps: list[float] = []
 
     def start(self) -> None:
-        from pyproj import CRS, Transformer
-        from ublox_msgs.msg import NavPVT
-
         reader = _open_reader(self._bag_path, [self._navpvt_topic])
         raw_msgs: list = []
         total_msgs = 0
@@ -392,11 +334,7 @@ class BagNavPVTSource(GnssSourceBase):
         _, first = raw_msgs[0]
         first_lon = first.lon * 1e-7
         first_lat = first.lat * 1e-7
-        zone = int((first_lon + 180.0) / 6.0) + 1
-        south = first_lat < 0.0
-        crs_utm = CRS.from_dict({'proj': 'utm', 'zone': zone, 'south': south})
-        transformer = Transformer.from_crs(
-            'EPSG:4326', crs_utm, always_xy=True)
+        transformer = build_utm_transformer(first_lat, first_lon)
 
         for t, msg in raw_msgs:
             stamp = t * 1e-9  # rosbag の記録タイムスタンプ (ナノ秒) をフォールバックに使用する
@@ -406,7 +344,7 @@ class BagNavPVTSource(GnssSourceBase):
 
             lon = msg.lon * 1e-7
             lat = msg.lat * 1e-7
-            x, y = transformer.transform(lon, lat)
+            x, y = transform_latlon(transformer, lat, lon)
 
             # h_acc (mm) → 水平 1σ [m] → 等方性 2×2 共分散行列
             # h_acc == 0 はゼロ行列にして constraint_inserter のフォールバックに任せる
@@ -434,13 +372,11 @@ class BagNavPVTSource(GnssSourceBase):
             # get_raw_fix_at 用: NavSatFix 互換タプルを保存する
             # position_covariance は NavSatFix と同じ 9 要素フラット配列形式
             if msg.h_acc > 0:
-                from sensor_msgs.msg import NavSatFix as _NavSatFix
                 cov9 = [pos_var, 0.0, 0.0, 0.0, pos_var, 0.0, 0.0, 0.0, 0.0]
-                cov_type = _NavSatFix.COVARIANCE_TYPE_DIAGONAL_KNOWN
+                cov_type = NavSatFix.COVARIANCE_TYPE_DIAGONAL_KNOWN
             else:
-                from sensor_msgs.msg import NavSatFix as _NavSatFix
                 cov9 = [0.0] * 9
-                cov_type = _NavSatFix.COVARIANCE_TYPE_UNKNOWN
+                cov_type = NavSatFix.COVARIANCE_TYPE_UNKNOWN
             self._raw_list.append((stamp, lat, lon, carr_soln, cov9, cov_type))
 
         self._gnss_list.sort(key=lambda g: g.timestamp)
@@ -453,27 +389,7 @@ class BagNavPVTSource(GnssSourceBase):
     def get_gnss_at(self, timestamp: float) -> Optional[GnssData]:
         if not self._gnss_list:
             return None
-        idx = bisect.bisect_left(self._timestamps, timestamp)
-        if idx == 0:
-            return self._gnss_list[0]
-        if idx >= len(self._gnss_list):
-            return self._gnss_list[-1]
-        prev = self._gnss_list[idx - 1]
-        next_ = self._gnss_list[idx]
-        t_span = next_.timestamp - prev.timestamp
-        if t_span < 1e-9:
-            return prev
-        alpha = (timestamp - prev.timestamp) / t_span
-        return GnssData(
-            timestamp=timestamp,
-            x=prev.x + alpha * (next_.x - prev.x),
-            y=prev.y + alpha * (next_.y - prev.y),
-            covariance=prev.covariance + alpha *
-            (next_.covariance - prev.covariance),
-            fix_status=prev.fix_status,
-            latitude=prev.latitude + alpha * (next_.latitude - prev.latitude),
-            longitude=prev.longitude + alpha * (next_.longitude - prev.longitude),
-        )
+        return interpolate_gnss(self._gnss_list, self._timestamps, timestamp)
 
     def get_all_gnss(self) -> list[GnssData]:
         return list(self._gnss_list)
@@ -488,13 +404,5 @@ class BagNavPVTSource(GnssSourceBase):
         """
         if not self._raw_list:
             return None
-        idx = bisect.bisect_left(self._raw_timestamps, timestamp)
-        if idx == 0:
-            return self._raw_list[0]
-        if idx >= len(self._raw_list):
-            return self._raw_list[-1]
-        prev = self._raw_list[idx - 1]
-        next_ = self._raw_list[idx]
-        if abs(timestamp - prev[0]) <= abs(timestamp - next_[0]):
-            return prev
-        return next_
+        return nearest_by_timestamp(
+            self._raw_list, self._raw_timestamps, timestamp)

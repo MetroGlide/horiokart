@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
@@ -65,7 +65,7 @@ class ScanProcessResult:
     loop_closed: bool = False
     rerender_required: bool = False
     new_seq_edge: Optional[PoseEdge] = None
-    new_loop_edges: list[PoseEdge] = None
+    new_loop_edges: list[PoseEdge] = field(default_factory=list)
     new_gnss_prior: Optional[GnssPrior] = None
 
 

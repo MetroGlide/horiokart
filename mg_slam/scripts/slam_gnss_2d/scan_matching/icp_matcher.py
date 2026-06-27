@@ -7,20 +7,10 @@ from scipy.spatial import KDTree
 
 from slam_gnss_2d.scan_matching.base import ScanMatcherBase
 from slam_gnss_2d.core.data_types import MatchResult, OdomData, ScanData
+from slam_gnss_2d.core.geometry import scan_to_points
 
 _N_MIN_CORRESPONDENCES = 10
 _N_NORMAL_NEIGHBORS = 5
-
-
-def _scan_to_points(scan: ScanData) -> np.ndarray:
-    """有効レンジのみを2D点群 (N, 2) に変換する。"""
-    n = len(scan.ranges)
-    angles = scan.angle_min + np.arange(n) * scan.angle_increment
-    ranges = np.asarray(scan.ranges, dtype=np.float64)
-    valid = (ranges >= scan.range_min) & (ranges <= scan.range_max)
-    r = ranges[valid]
-    a = angles[valid]
-    return np.column_stack((r * np.cos(a), r * np.sin(a)))
 
 
 def _apply_transform(pts: np.ndarray, tx: float, ty: float, theta: float) -> np.ndarray:
@@ -47,12 +37,12 @@ class ICPMatcher(ScanMatcherBase):
 
     def __init__(
         self,
-        max_iterations: int = 30,
-        tolerance: float = 1e-4,
-        max_correspondence_dist: float = 0.5,
-        robust_kernel: str = 'huber',  # 'none', 'huber', 'cauchy'
-        robust_kernel_scale: float = 0.1,
-        yaw_information_multiplier: float = 1.0,
+        max_iterations: int,
+        tolerance: float,
+        max_correspondence_dist: float,
+        robust_kernel: str,  # 'none', 'huber', 'cauchy'
+        robust_kernel_scale: float,
+        yaw_information_multiplier: float,
     ) -> None:
         self._max_iterations = max_iterations
         self._tolerance = tolerance
@@ -60,7 +50,7 @@ class ICPMatcher(ScanMatcherBase):
         self._robust_kernel = robust_kernel.lower()
         self._robust_kernel_scale = robust_kernel_scale
         self._yaw_information_multiplier = yaw_information_multiplier
-        
+
         self._src_pts: np.ndarray | None = None
         self._src_tree: KDTree | None = None
         self._src_normals: np.ndarray | None = None
@@ -87,7 +77,7 @@ class ICPMatcher(ScanMatcherBase):
                 converged=False, information=np.zeros((3, 3)), score=0.0
             )
 
-        dst_pts = _scan_to_points(dst)
+        dst_pts = scan_to_points(dst)
         if len(dst_pts) < _N_MIN_CORRESPONDENCES:
             return MatchResult(
                 dx=initial_guess.x, dy=initial_guess.y, dyaw=initial_guess.yaw,
@@ -104,7 +94,7 @@ class ICPMatcher(ScanMatcherBase):
             dists, nn_idx = self._src_tree.query(p_trans)
             valid_mask = dists < self._max_correspondence_dist
             p_trans_v = p_trans[valid_mask]
-            
+
             if len(p_trans_v) < _N_MIN_CORRESPONDENCES:
                 return MatchResult(
                     dx=tx, dy=ty, dyaw=theta,
@@ -161,8 +151,9 @@ class ICPMatcher(ScanMatcherBase):
                 break
 
         n_valid = len(p_trans_v) if 'p_trans_v' in locals() else 0
-        information = H / n_valid + 1e-6 * np.eye(3) if n_valid > 0 else np.zeros((3, 3))
-        
+        information = H / n_valid + 1e-6 * \
+            np.eye(3) if n_valid > 0 else np.zeros((3, 3))
+
         # 直進性（Yaw）を保持するため、Yawの確信度を意図的に高く（yaw_information_multiplier倍）設定
         # これにより、GTSAMがGNSSのズレを吸収する際に「横滑り」は許容しても「曲がる」ことは許さなくなる
         if n_valid > 0:
@@ -179,7 +170,7 @@ class ICPMatcher(ScanMatcherBase):
                 q_f = self._src_pts[nn_f[valid_f]]
                 normals_f = self._src_normals[nn_f[valid_f]]
                 r_f = np.sum(normals_f * (p_f - q_f), axis=1)
-                
+
                 if self._robust_kernel == 'huber':
                     k = self._robust_kernel_scale
                     abs_r = np.abs(r_f)

@@ -8,6 +8,7 @@ import numpy as np
 
 from slam_gnss_2d.pose_graph.base import PoseGraphBuilderBase
 from slam_gnss_2d.core.data_types import OdomData, PoseEdge, PoseNode, ScanData
+from slam_gnss_2d.core.geometry import angle_diff, normalize_angle
 from slam_gnss_2d.scan_matching.base import ScanMatcherBase
 from slam_gnss_2d.scan_matching.reference_provider.base import ReferenceProviderBase
 
@@ -16,10 +17,6 @@ _logger = logging.getLogger(__name__)
 _ODOM_INFORMATION = np.diag([100.0, 100.0, 50.0])
 # streak 超過時の odom フォールバックに使用する低信頼度情報行列
 _ODOM_FALLBACK_INFORMATION = np.diag([10.0, 10.0, 5.0])
-
-
-def _angle_diff(a: float, b: float) -> float:
-    return math.atan2(math.sin(a - b), math.cos(a - b))
 
 
 class ScanMatchingBuilder(PoseGraphBuilderBase):
@@ -34,9 +31,9 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
         self,
         matcher: ScanMatcherBase,
         provider: ReferenceProviderBase,
-        min_translation: float = 0.3,
-        min_rotation: float = 0.1,
-        max_failure_streak: int = 5,
+        min_translation: float,
+        min_rotation: float,
+        max_failure_streak: int,
     ) -> None:
         self._matcher = matcher
         self._provider = provider
@@ -70,7 +67,7 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
         dx_w = odom.x - self._last_odom.x
         dy_w = odom.y - self._last_odom.y
         dist = math.hypot(dx_w, dy_w)
-        dyaw = abs(_angle_diff(odom.yaw, self._last_odom.yaw))
+        dyaw = abs(angle_diff(odom.yaw, self._last_odom.yaw))
         if dist < self._min_translation and dyaw < self._min_rotation:
             return None
 
@@ -84,7 +81,7 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
         s = math.sin(-self._last_odom.yaw)
         dx_local = c * dx_w - s * dy_w
         dy_local = s * dx_w + c * dy_w
-        dyaw_delta = _angle_diff(odom.yaw, self._last_odom.yaw)
+        dyaw_delta = angle_diff(odom.yaw, self._last_odom.yaw)
 
         initial_guess = OdomData(
             timestamp=scan.timestamp,
@@ -142,11 +139,7 @@ class ScanMatchingBuilder(PoseGraphBuilderBase):
         s_p = math.sin(prev_node.yaw)
         new_x = prev_node.x + c_p * dx_icp - s_p * dy_icp
         new_y = prev_node.y + s_p * dx_icp + c_p * dy_icp
-        new_yaw = prev_node.yaw + dyaw_icp
-        while new_yaw > math.pi:
-            new_yaw -= 2.0 * math.pi
-        while new_yaw < -math.pi:
-            new_yaw += 2.0 * math.pi
+        new_yaw = normalize_angle(prev_node.yaw + dyaw_icp)
 
         node = PoseNode(
             index=len(self._nodes),

@@ -7,12 +7,9 @@ import numpy as np
 
 from slam_gnss_2d.pose_graph.base import PoseGraphBuilderBase
 from slam_gnss_2d.core.data_types import OdomData, PoseEdge, PoseNode, ScanData
+from slam_gnss_2d.core.geometry import angle_diff
 
 _ODOM_INFORMATION = np.diag([100.0, 100.0, 50.0])
-
-
-def _angle_diff(a: float, b: float) -> float:
-    return math.atan2(math.sin(a - b), math.cos(a - b))
 
 
 class OdomOnlyBuilder(PoseGraphBuilderBase):
@@ -25,8 +22,8 @@ class OdomOnlyBuilder(PoseGraphBuilderBase):
 
     def __init__(
         self,
-        min_translation: float = 0.3,
-        min_rotation: float = 0.1,
+        min_translation: float,
+        min_rotation: float,
     ) -> None:
         """
         Args:
@@ -44,7 +41,7 @@ class OdomOnlyBuilder(PoseGraphBuilderBase):
             dx = odom.x - self._last_odom.x
             dy = odom.y - self._last_odom.y
             dist = math.hypot(dx, dy)
-            dyaw = abs(_angle_diff(odom.yaw, self._last_odom.yaw))
+            dyaw = abs(angle_diff(odom.yaw, self._last_odom.yaw))
             if dist < self._min_translation and dyaw < self._min_rotation:
                 return None
 
@@ -70,7 +67,7 @@ class OdomOnlyBuilder(PoseGraphBuilderBase):
                 to_index=node.index,
                 dx=c * dx_w - s * dy_w,
                 dy=s * dx_w + c * dy_w,
-                dyaw=_angle_diff(node.yaw, prev.yaw),
+                dyaw=angle_diff(node.yaw, prev.yaw),
                 information=_ODOM_INFORMATION.copy(),
             ))
 

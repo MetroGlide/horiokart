@@ -9,24 +9,10 @@ import numpy as np
 from slam_gnss_2d.pose_graph.base import PoseGraphBuilderBase
 from slam_gnss_2d.pose_graph.scan_matching_builder import ScanMatchingBuilder
 from slam_gnss_2d.core.data_types import OdomData, PoseEdge, PoseNode, ScanData
+from slam_gnss_2d.core.geometry import angle_diff, scan_to_points
 from slam_gnss_2d.scan_matching.base import ScanMatcherBase
 
 _logger = logging.getLogger(__name__)
-
-
-def _scan_to_points(scan: ScanData) -> np.ndarray:
-    """有効レンジのみを2D点群 (N, 2) に変換する。"""
-    n = len(scan.ranges)
-    angles = scan.angle_min + np.arange(n) * scan.angle_increment
-    ranges = np.asarray(scan.ranges, dtype=np.float64)
-    valid = (ranges >= scan.range_min) & (ranges <= scan.range_max)
-    r = ranges[valid]
-    a = angles[valid]
-    return np.column_stack((r * np.cos(a), r * np.sin(a)))
-
-
-def _angle_diff(a: float, b: float) -> float:
-    return math.atan2(math.sin(a - b), math.cos(a - b))
 
 
 class LoopClosureBuilder(PoseGraphBuilderBase):
@@ -43,13 +29,13 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         self,
         inner: ScanMatchingBuilder,
         loop_matcher: ScanMatcherBase,
-        loop_closure_search_radius: float = 2.0,
-        loop_closure_min_node_gap: int = 50,
-        loop_closure_max_failure_streak: int = 3,
-        max_loop_dyaw_deg: float = 145.0,
-        loop_closure_crossing_reject_deg: float = 0.0,
-        loop_closure_submap_radius: float = 5.0,
-        loop_closure_max_score: float = 0.0,
+        loop_closure_search_radius: float,
+        loop_closure_min_node_gap: int,
+        loop_closure_max_failure_streak: int,
+        max_loop_dyaw_deg: float,
+        loop_closure_crossing_reject_deg: float,
+        loop_closure_submap_radius: float,
+        loop_closure_max_score: float,
     ) -> None:
         self._inner = inner
         self._loop_matcher = loop_matcher
@@ -117,7 +103,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
         候補ノード1枚のスキャンのみを使用する。
         """
         if self._submap_radius <= 0.0:
-            return _scan_to_points(candidate.scan) if candidate.scan is not None else np.empty((0, 2))
+            return scan_to_points(candidate.scan) if candidate.scan is not None else np.empty((0, 2))
 
         world_pts_list: list[np.ndarray] = []
         for node in self._all_nodes_cache:
@@ -125,7 +111,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
                 continue
             if math.hypot(node.x - candidate.x, node.y - candidate.y) > self._submap_radius:
                 continue
-            pts = _scan_to_points(node.scan)
+            pts = scan_to_points(node.scan)
             if len(pts) == 0:
                 continue
             c = math.cos(node.yaw)
@@ -135,7 +121,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
             world_pts_list.append(np.column_stack((wx, wy)))
 
         if not world_pts_list:
-            return _scan_to_points(candidate.scan) if candidate.scan is not None else np.empty((0, 2))
+            return scan_to_points(candidate.scan) if candidate.scan is not None else np.empty((0, 2))
 
         world_pts = np.concatenate(world_pts_list, axis=0)
 
@@ -177,7 +163,7 @@ class LoopClosureBuilder(PoseGraphBuilderBase):
             timestamp=node.timestamp,
             x=c * dx_w - s * dy_w,
             y=s * dx_w + c * dy_w,
-            yaw=_angle_diff(node.yaw, candidate.yaw),
+            yaw=angle_diff(node.yaw, candidate.yaw),
         )
 
         self.loop_attempt_count += 1

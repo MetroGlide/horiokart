@@ -5,20 +5,17 @@ import numpy as np
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from slam_gnss_2d.core.data_types import GnssData, OdomData, PoseEdge, PoseNode, ScanData, SensorFrame, GnssPrior
+from slam_gnss_2d.core.data_types import (
+    GnssData,
+    GnssPrior,
+    PoseEdge,
+    PoseNode,
+    ScanProcessResult,
+    SensorFrame,
+)
 from slam_gnss_2d.pose_graph.base import PoseGraphBuilderBase
 from slam_gnss_2d.optimizer.isam2_optimizer import ISAM2Optimizer
 from slam_gnss_2d.gnss.anchor_manager import GnssAnchorManager
-
-
-@dataclass
-class ScanProcessResult:
-    node: Optional[PoseNode]
-    loop_closed: bool
-    rerender_required: bool
-    new_seq_edge: Optional[PoseEdge] = None
-    new_loop_edges: list[PoseEdge] = None
-    new_gnss_prior: Optional[GnssPrior] = None
 
 
 @dataclass
@@ -84,69 +81,102 @@ class GraphOrchestrator:
         return self._init_rotation
 
     def process_frame(self, frame: SensorFrame) -> ScanProcessResult:
-        new_seq_edge: Optional[PoseEdge] = None
-        new_loop_edges: list[PoseEdge] = []
-        new_gnss_prior: Optional[GnssPrior] = None
-
         node = self._pose_graph.add_scan(frame.scan, frame.odom)
         if node is None:
             return ScanProcessResult(node=None, loop_closed=False, rerender_required=False, new_loop_edges=[])
 
-        # 1. INITIALIZING 時のアンカー設定と初期方位推定
-        if self._use_gnss and self._state == 'INITIALIZING' and frame.gnss is not None and self._anchor_manager:
-            if not self._anchor_manager.is_initialized:
-                self._anchor_manager.try_set_anchor(
-                    frame.gnss, self._anchor_min_fix_status)
+        self._initialize_with_gnss_if_ready(frame)
 
-            if self._anchor_manager.is_initialized:
-                lx, ly = self._anchor_manager.to_local(frame.gnss)
-                dist = math.hypot(lx, ly)
-                if dist >= self._gnss_init_distance_m:
-                    theta0 = math.atan2(ly, lx)
-                    nodes = self._pose_graph.get_nodes()
-                    node0 = nodes[0]
-                    rot = theta0 - node0.yaw
-                    self._init_rotation = rot
-
-                    c = math.cos(rot)
-                    s = math.sin(rot)
-
-                    self._optimizer.initialize(
-                        node0.index, 0.0, 0.0, theta0, 0.05, 10.0)
-                    for n in nodes:
-                        dx = n.x - node0.x
-                        dy = n.y - node0.y
-                        n.x = c * dx - s * dy
-                        n.y = s * dx + c * dy
-                        n.yaw = n.yaw + rot
-                        if n.index != node0.index:
-                            self._optimizer.add_initial_estimate(
-                                n.index, n.x, n.y, n.yaw)
-
-                    edges = self._pose_graph.get_edges()
-                    for e in edges:
-                        self._optimizer.add_between_factor(
-                            e.from_index, e.to_index, e.dx, e.dy, e.dyaw, e.information)
-
-                    self._state = 'RUNNING'
-                    self._last_node_index = nodes[-1].index
-                    self._initialized = True
-                    self._logger.info(
-                        f"Graph initialized and aligned to UTM with rotation {rot:.3f} rad")
-
-        # 2. 状態による早期リターン
         if self._state == 'INITIALIZING':
-            # まだ初期方位が確定していないためオプティマイザには入れず、ローカルに蓄積するのみ
-            return ScanProcessResult(node=node, loop_closed=False, rerender_required=False, new_seq_edge=self._get_latest_seq_edge(node.index), new_loop_edges=[])
+            return ScanProcessResult(
+                node=node,
+                loop_closed=False,
+                rerender_required=False,
+                new_seq_edge=self._get_latest_seq_edge(node.index),
+                new_loop_edges=[],
+            )
 
-        # 3. RUNNING ステートの処理
-        if not self._initialized:
-            # GNSS無効時の初回初期化
-            self._optimizer.initialize(
-                node.index, node.x, node.y, node.yaw, 0.05, 10.0)
-            self._initialized = True
-            self._last_node_index = node.index
+        self._initialize_optimizer_if_needed(node)
+        new_seq_edge = self._add_latest_seq_edge(node)
+        new_loop_edges, loop_closed = self._add_new_loop_edges()
+        new_gnss_prior = self._add_gnss_prior(frame, node)
+        self._optimizer.update()
+        rerender_required = self._apply_optimized_poses(node, loop_closed)
 
+        return ScanProcessResult(
+            node=node,
+            loop_closed=loop_closed,
+            rerender_required=rerender_required,
+            new_seq_edge=new_seq_edge,
+            new_loop_edges=new_loop_edges,
+            new_gnss_prior=new_gnss_prior,
+        )
+
+    def _initialize_with_gnss_if_ready(self, frame: SensorFrame) -> None:
+        if (
+            not self._use_gnss
+            or self._state != 'INITIALIZING'
+            or frame.gnss is None
+            or self._anchor_manager is None
+        ):
+            return
+
+        if not self._anchor_manager.is_initialized:
+            self._anchor_manager.try_set_anchor(
+                frame.gnss, self._anchor_min_fix_status)
+
+        if not self._anchor_manager.is_initialized:
+            return
+
+        lx, ly = self._anchor_manager.to_local(frame.gnss)
+        if math.hypot(lx, ly) < self._gnss_init_distance_m:
+            return
+
+        theta0 = math.atan2(ly, lx)
+        nodes = self._pose_graph.get_nodes()
+        node0 = nodes[0]
+        rot = theta0 - node0.yaw
+        self._init_rotation = rot
+
+        c = math.cos(rot)
+        s = math.sin(rot)
+
+        self._optimizer.initialize(node0.index, 0.0, 0.0, theta0, 0.05, 10.0)
+        for node in nodes:
+            dx = node.x - node0.x
+            dy = node.y - node0.y
+            node.x = c * dx - s * dy
+            node.y = s * dx + c * dy
+            node.yaw = node.yaw + rot
+            if node.index != node0.index:
+                self._optimizer.add_initial_estimate(
+                    node.index, node.x, node.y, node.yaw)
+
+        for edge in self._pose_graph.get_edges():
+            self._optimizer.add_between_factor(
+                edge.from_index,
+                edge.to_index,
+                edge.dx,
+                edge.dy,
+                edge.dyaw,
+                edge.information,
+            )
+
+        self._state = 'RUNNING'
+        self._last_node_index = nodes[-1].index
+        self._initialized = True
+        self._logger.info(
+            f"Graph initialized and aligned to UTM with rotation {rot:.3f} rad")
+
+    def _initialize_optimizer_if_needed(self, node: PoseNode) -> None:
+        if self._initialized:
+            return
+        self._optimizer.initialize(
+            node.index, node.x, node.y, node.yaw, 0.05, 10.0)
+        self._initialized = True
+        self._last_node_index = node.index
+
+    def _add_latest_seq_edge(self, node: PoseNode) -> Optional[PoseEdge]:
         latest_seq_edge = self._get_latest_seq_edge(node.index)
         if latest_seq_edge is not None and node.index > self._last_node_index:
             prev_pose = self._optimizer.get_pose(latest_seq_edge.from_index)
@@ -162,9 +192,13 @@ class GraphOrchestrator:
                     latest_seq_edge.from_index, latest_seq_edge.to_index,
                     latest_seq_edge.dx, latest_seq_edge.dy, latest_seq_edge.dyaw, latest_seq_edge.information
                 )
-                new_seq_edge = latest_seq_edge
+                self._last_node_index = node.index
+                return latest_seq_edge
             self._last_node_index = node.index
+        return None
 
+    def _add_new_loop_edges(self) -> tuple[list[PoseEdge], bool]:
+        new_loop_edges: list[PoseEdge] = []
         loop_closed = False
         if hasattr(self._pose_graph, 'get_loop_edges'):
             loops = self._pose_graph.get_loop_edges()
@@ -178,44 +212,58 @@ class GraphOrchestrator:
                     new_loop_edges.append(edge)
                 self._last_loop_edge_count = len(loops)
                 loop_closed = True
+        return new_loop_edges, loop_closed
 
-        if self._use_gnss and frame.gnss is not None and self._anchor_manager and self._anchor_manager.is_initialized:
-            sigma_xy = self._sigma_from_gnss(frame.gnss)
-            if node is not None and 0 < sigma_xy <= self._gnss_max_sigma_m:
-                gx, gy = self._anchor_manager.to_local(frame.gnss)
-                self._optimizer.add_gnss_prior(
-                    node.index, gx, gy, sigma_xy, self._gnss_factor_yaw_variance
-                )
-                info_3x3 = np.zeros((2, 2), dtype=np.float64)
-                inv_var = 1.0 / max(sigma_xy * sigma_xy, 1e-12)
-                info_3x3[0, 0] = inv_var
-                info_3x3[1, 1] = inv_var
-                new_gnss_prior = GnssPrior(node_index=node.index, x=gx, y=gy, information=info_3x3)
+    def _add_gnss_prior(
+        self,
+        frame: SensorFrame,
+        node: PoseNode,
+    ) -> Optional[GnssPrior]:
+        if (
+            not self._use_gnss
+            or frame.gnss is None
+            or self._anchor_manager is None
+            or not self._anchor_manager.is_initialized
+        ):
+            return None
 
-        if node is not None:
-            self._optimizer.update()
+        sigma_xy = self._sigma_from_gnss(frame.gnss)
+        if sigma_xy <= 0 or sigma_xy > self._gnss_max_sigma_m:
+            return None
 
+        gx, gy = self._anchor_manager.to_local(frame.gnss)
+        self._optimizer.add_gnss_prior(
+            node.index, gx, gy, sigma_xy, self._gnss_factor_yaw_variance)
+        info_2x2 = np.zeros((2, 2), dtype=np.float64)
+        inv_var = 1.0 / max(sigma_xy * sigma_xy, 1e-12)
+        info_2x2[0, 0] = inv_var
+        info_2x2[1, 1] = inv_var
+        return GnssPrior(
+            node_index=node.index,
+            x=gx,
+            y=gy,
+            information=info_2x2,
+        )
+
+    def _apply_optimized_poses(self, node: PoseNode, loop_closed: bool) -> bool:
         all_poses = self._optimizer.get_all_poses()
         rerender_required = loop_closed
 
-        # オプティマイザの結果をノードに反映
         nodes = self._pose_graph.get_nodes()
-        if node is not None and self._use_gnss and self._last_node_index == node.index and self._init_rotation != 0.0 and len(nodes) > 1 and not hasattr(self, '_first_render_done'):
+        if (
+            self._use_gnss
+            and self._last_node_index == node.index
+            and self._init_rotation != 0.0
+            and len(nodes) > 1
+            and not hasattr(self, '_first_render_done')
+        ):
             rerender_required = True
             self._first_render_done = True
 
         for n in nodes:
             if n.index in all_poses:
                 n.x, n.y, n.yaw = all_poses[n.index]
-
-        return ScanProcessResult(
-            node=node,
-            loop_closed=loop_closed,
-            rerender_required=rerender_required,
-            new_seq_edge=new_seq_edge,
-            new_loop_edges=new_loop_edges,
-            new_gnss_prior=new_gnss_prior,
-        )
+        return rerender_required
 
     def _get_latest_seq_edge(self, node_index: int) -> Optional[PoseEdge]:
         all_edges = self._pose_graph.get_edges()

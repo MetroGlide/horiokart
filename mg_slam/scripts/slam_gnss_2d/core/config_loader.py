@@ -1,6 +1,6 @@
 from rclpy.node import Node
 from slam_gnss_2d.core.config import (
-    TopicsConfig, MapConfig, KeyframeConfig, ScanMatchingConfig, IcpConfig, NdtConfig, LocalMapConfig,
+    TopicsConfig, MapConfig, KeyframeConfig, ScanMatchingConfig, IcpConfig, NdtConfig, LocalMapConfig, CsmConfig,
     LoopClosureConfig, GnssConfig, GnssTopicsConfig, GnssValidationConfig, GnssAnchorConfig,
     GnssSigmaConfig, OptimizationConfig, Isam2Config, TrajectoryNoiseFilterConfig, SlamConfig
 )
@@ -30,7 +30,15 @@ class ConfigLoader:
         node.declare_parameter('scan_matching.icp.tolerance', 1e-5)
         node.declare_parameter(
             'scan_matching.icp.max_correspondence_dist', 1.0)
+        node.declare_parameter('scan_matching.icp.robust_kernel', 'huber')
+        node.declare_parameter('scan_matching.icp.robust_kernel_scale', 0.1)
         node.declare_parameter('scan_matching.ndt.cell_size', 1.0)
+        node.declare_parameter('scan_matching.ndt.cell_sizes', [1.0])
+        node.declare_parameter('scan_matching.ndt.use_bilinear', False)
+        node.declare_parameter('scan_matching.csm.linear_search_window', 1.0)
+        node.declare_parameter('scan_matching.csm.angular_search_window', 0.5)
+        node.declare_parameter('scan_matching.csm.linear_step', 0.05)
+        node.declare_parameter('scan_matching.csm.angular_step', 0.02)
         node.declare_parameter('scan_matching.local_map.window', 30)
         node.declare_parameter('scan_matching.local_map.radius', 30.0)
         node.declare_parameter('loop_closure.enabled', True)
@@ -43,7 +51,15 @@ class ConfigLoader:
         node.declare_parameter('loop_closure.icp.max_iterations', 100)
         node.declare_parameter('loop_closure.icp.tolerance', 1e-5)
         node.declare_parameter('loop_closure.icp.max_correspondence_dist', 1.0)
+        node.declare_parameter('loop_closure.icp.robust_kernel', 'huber')
+        node.declare_parameter('loop_closure.icp.robust_kernel_scale', 0.1)
         node.declare_parameter('loop_closure.ndt.cell_size', 1.0)
+        node.declare_parameter('loop_closure.ndt.cell_sizes', [1.0])
+        node.declare_parameter('loop_closure.ndt.use_bilinear', False)
+        node.declare_parameter('loop_closure.csm.linear_search_window', 1.0)
+        node.declare_parameter('loop_closure.csm.angular_search_window', 0.5)
+        node.declare_parameter('loop_closure.csm.linear_step', 0.05)
+        node.declare_parameter('loop_closure.csm.angular_step', 0.02)
         node.declare_parameter('loop_closure.max_dyaw_deg', 145.0)
         node.declare_parameter('loop_closure.crossing_reject_deg', 45.0)
         node.declare_parameter('loop_closure.submap_radius', 5.0)
@@ -103,10 +119,28 @@ class ConfigLoader:
                         'scan_matching.icp.tolerance').value,
                     max_correspondence_dist=node.get_parameter(
                         'scan_matching.icp.max_correspondence_dist').value,
+                    robust_kernel=node.get_parameter(
+                        'scan_matching.icp.robust_kernel').value,
+                    robust_kernel_scale=node.get_parameter(
+                        'scan_matching.icp.robust_kernel_scale').value,
                 ),
                 ndt=NdtConfig(
                     cell_size=node.get_parameter(
                         'scan_matching.ndt.cell_size').value,
+                    cell_sizes=tuple(node.get_parameter(
+                        'scan_matching.ndt.cell_sizes').value),
+                    use_bilinear=node.get_parameter(
+                        'scan_matching.ndt.use_bilinear').value,
+                ),
+                csm=CsmConfig(
+                    linear_search_window=node.get_parameter(
+                        'scan_matching.csm.linear_search_window').value,
+                    angular_search_window=node.get_parameter(
+                        'scan_matching.csm.angular_search_window').value,
+                    linear_step=node.get_parameter(
+                        'scan_matching.csm.linear_step').value,
+                    angular_step=node.get_parameter(
+                        'scan_matching.csm.angular_step').value,
                 ),
                 local_map=LocalMapConfig(
                     window=node.get_parameter(
@@ -134,10 +168,28 @@ class ConfigLoader:
                         'loop_closure.icp.tolerance').value,
                     max_correspondence_dist=node.get_parameter(
                         'loop_closure.icp.max_correspondence_dist').value,
+                    robust_kernel=node.get_parameter(
+                        'loop_closure.icp.robust_kernel').value,
+                    robust_kernel_scale=node.get_parameter(
+                        'loop_closure.icp.robust_kernel_scale').value,
                 ),
                 ndt=NdtConfig(
                     cell_size=node.get_parameter(
                         'loop_closure.ndt.cell_size').value,
+                    cell_sizes=tuple(node.get_parameter(
+                        'loop_closure.ndt.cell_sizes').value),
+                    use_bilinear=node.get_parameter(
+                        'loop_closure.ndt.use_bilinear').value,
+                ),
+                csm=CsmConfig(
+                    linear_search_window=node.get_parameter(
+                        'loop_closure.csm.linear_search_window').value,
+                    angular_search_window=node.get_parameter(
+                        'loop_closure.csm.angular_search_window').value,
+                    linear_step=node.get_parameter(
+                        'loop_closure.csm.linear_step').value,
+                    angular_step=node.get_parameter(
+                        'loop_closure.csm.angular_step').value,
                 ),
                 max_dyaw_deg=node.get_parameter(
                     'loop_closure.max_dyaw_deg').value,
@@ -184,8 +236,10 @@ class ConfigLoader:
                 )
             ),
             trajectory_noise_filter=TrajectoryNoiseFilterConfig(
-                enabled=node.get_parameter('trajectory_noise_filter.enabled').value,
+                enabled=node.get_parameter(
+                    'trajectory_noise_filter.enabled').value,
                 type=node.get_parameter('trajectory_noise_filter.type').value,
-                radius_m=node.get_parameter('trajectory_noise_filter.radius_m').value,
+                radius_m=node.get_parameter(
+                    'trajectory_noise_filter.radius_m').value,
             ),
         )

@@ -1,13 +1,19 @@
 from __future__ import annotations
 
 import logging
-import math
 
 import numpy as np
 import cv2
 
 from slam_gnss_2d.map_manager.base import MapRendererBase
 from slam_gnss_2d.core.data_types import PoseNode
+from slam_gnss_2d.map_manager.grid_utils import (
+    build_trajectory_mask,
+    compute_square_bounds,
+    in_bounds,
+    scan_hits_to_pixels,
+    world_to_pixel,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -26,8 +32,8 @@ class OverwriteRenderer(MapRendererBase):
 
     def __init__(
         self,
-        resolution: float = 0.05,
-        expansion_margin: float = 100.0,
+        resolution: float,
+        expansion_margin: float,
     ) -> None:
         """
         Args:
@@ -54,17 +60,10 @@ class OverwriteRenderer(MapRendererBase):
     def rerender_all(self, nodes: list[PoseNode]) -> None:
         if not nodes:
             return
-        xs = np.fromiter((n.x for n in nodes),
-                         dtype=np.float64, count=len(nodes))
-        ys = np.fromiter((n.y for n in nodes),
-                         dtype=np.float64, count=len(nodes))
-        new_origin_x = float(xs.min()) - self._expansion_margin
-        new_origin_y = float(ys.min()) - self._expansion_margin
-        new_max_x = float(xs.max()) + self._expansion_margin
-        new_max_y = float(ys.max()) + self._expansion_margin
-        new_size = max(
-            math.ceil((new_max_x - new_origin_x) / self._resolution),
-            math.ceil((new_max_y - new_origin_y) / self._resolution),
+        new_origin_x, new_origin_y, new_size = compute_square_bounds(
+            nodes,
+            self._resolution,
+            self._expansion_margin,
         )
         _logger.debug(
             f'Map recomputed (Overwrite): size={new_size}px '
@@ -91,68 +90,44 @@ class OverwriteRenderer(MapRendererBase):
         if not nodes:
             return
 
-        radius_px = max(1, int(radius_m / self._resolution))
-        pts = np.empty((1, len(nodes), 2), dtype=np.int32)
-        for i, node in enumerate(nodes):
-            px, py = self._world_to_pixel(node.x, node.y)
-            pts[0, i, 0] = px
-            pts[0, i, 1] = py
-
-        mask = np.zeros(self._map.shape, dtype=np.uint8)
-        cv2.polylines(mask, pts, isClosed=False, color=1, thickness=radius_px * 2)
-
-        for i in range(len(nodes)):
-            cv2.circle(mask, (int(pts[0, i, 0]), int(pts[0, i, 1])), radius_px, color=1, thickness=-1)
-
-        mask_bool = mask > 0
-
+        mask_bool = build_trajectory_mask(
+            self._map.shape,
+            nodes,
+            radius_m,
+            self._origin_x,
+            self._origin_y,
+            self._resolution,
+        )
         if filter_type == 'clear':
             self._map[mask_bool] = 255
         elif filter_type == 'attenuate':
-            _logger.warning("filter_type='attenuate' is not fully supported in OverwriteRenderer.")
+            _logger.warning(
+                "filter_type='attenuate' is not fully supported in OverwriteRenderer.")
             # 上書き方式では確率の減衰ができないため、暫定的にクリアする
             self._map[mask_bool] = 255
 
     def _world_to_pixel(self, wx: float, wy: float) -> tuple[int, int]:
-        px = int((wx - self._origin_x) / self._resolution)
-        py = int((wy - self._origin_y) / self._resolution)
-        return px, py
+        return world_to_pixel(
+            wx, wy, self._origin_x, self._origin_y, self._resolution)
 
     def _in_bounds(self, px: int, py: int) -> bool:
-        return 0 <= px < self._map_size and 0 <= py < self._map_size
+        return in_bounds(px, py, self._map_size)
 
     def _render_node(self, node: PoseNode) -> None:
-        scan = node.scan
-        angles = scan.angle_min + \
-            np.arange(len(scan.ranges)) * scan.angle_increment
-        ranges = np.asarray(scan.ranges, dtype=np.float64)
-        valid_mask = (ranges > scan.range_min) & (ranges < scan.range_max)
-
-        cos_yaw = np.cos(node.yaw)
-        sin_yaw = np.sin(node.yaw)
-
-        robot_px, robot_py = self._world_to_pixel(node.x, node.y)
+        robot_px, robot_py, hit_px, hit_py, in_bounds_mask = scan_hits_to_pixels(
+            node,
+            self._origin_x,
+            self._origin_y,
+            self._resolution,
+            self._map_size,
+        )
         if not self._in_bounds(robot_px, robot_py):
             return
 
         self._render_count += 1
 
-        # 有効点の座標変換を一括計算
-        r_v = ranges[valid_mask]
-        a_v = angles[valid_mask]
-        lx = r_v * np.cos(a_v)
-        ly = r_v * np.sin(a_v)
-        wx = node.x + cos_yaw * lx - sin_yaw * ly
-        wy = node.y + sin_yaw * lx + cos_yaw * ly
-
-        hit_px = ((wx - self._origin_x) / self._resolution).astype(np.int32)
-        hit_py = ((wy - self._origin_y) / self._resolution).astype(np.int32)
-        in_bounds = (
-            (hit_px >= 0) & (hit_px < self._map_size) &
-            (hit_py >= 0) & (hit_py < self._map_size)
-        )
-        hit_px_valid = hit_px[in_bounds]
-        hit_py_valid = hit_py[in_bounds]
+        hit_px_valid = hit_px[in_bounds_mask]
+        hit_py_valid = hit_py[in_bounds_mask]
         n_hits = len(hit_px_valid)
 
         if n_hits > 0:
@@ -171,11 +146,11 @@ class OverwriteRenderer(MapRendererBase):
         if self._render_count == 1:
             _logger.debug(
                 f'First render (Overwrite): robot=({node.x:.2f}, {node.y:.2f}), '
-                f'hits={n_hits}, oob_hits={int((~in_bounds).sum())}'
+                f'hits={n_hits}, oob_hits={int((~in_bounds_mask).sum())}'
             )
         elif self._render_count % 10 == 0:
             _logger.debug(
                 f'Render #{self._render_count} (Overwrite): '
                 f'robot=({node.x:.2f}, {node.y:.2f}), '
-                f'hits={n_hits}, oob_hits={int((~in_bounds).sum())}'
+                f'hits={n_hits}, oob_hits={int((~in_bounds_mask).sum())}'
             )

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import bisect
 import math
 from collections import deque
 from typing import Callable, Optional
@@ -11,29 +10,22 @@ import tf2_ros
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan, NavSatFix
+from ublox_msgs.msg import NavPVT
 
 from slam_gnss_2d.input.base import GnssSourceBase, OdomSourceBase, ScanSourceBase
 from slam_gnss_2d.core.data_types import GnssData, OdomData, ScanData
+from slam_gnss_2d.core.geometry import quaternion_to_yaw
+from slam_gnss_2d.gnss.utm import UtmTransformer, build_utm_transformer, transform_latlon
+from slam_gnss_2d.input.time_series import interpolate_odom, nearest_by_timestamp
 
 _ODOM_BUFFER_SIZE = 200
 _GNSS_BUFFER_SIZE = 1000
 
 
-def _quaternion_to_yaw(q) -> float:
-    siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
-    cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-    return math.atan2(siny_cosp, cosy_cosp)
-
-
-def _angle_diff(a: float, b: float) -> float:
-    """角度差 a - b を [-pi, pi] に正規化して返す。"""
-    return math.atan2(math.sin(a - b), math.cos(a - b))
-
-
 class ROS2ScanSource(ScanSourceBase):
     """ROS2 LaserScan トピックから ScanData を供給するアダプター。"""
 
-    def __init__(self, node: Node, topic: str = '/scan') -> None:
+    def __init__(self, node: Node, topic: str) -> None:
         self._node = node
         self._topic = topic
         self._callback: Optional[Callable[[ScanData], None]] = None
@@ -66,7 +58,7 @@ class ROS2ScanSource(ScanSourceBase):
                 tf = self._tf_buffer.lookup_transform(
                     'base_link', msg.header.frame_id, rclpy.time.Time()
                 )
-                self._lidar_yaw = _quaternion_to_yaw(tf.transform.rotation)
+                self._lidar_yaw = quaternion_to_yaw(tf.transform.rotation)
                 self._lidar_tf_ready = True
                 self._node.get_logger().info(
                     f'ScanSource: TF resolved '
@@ -104,7 +96,7 @@ class ROS2OdomSource(OdomSourceBase):
     topic 引数を '/odom/gnss' に変更するだけで GNSS補正オドメトリに差し替え可能。
     """
 
-    def __init__(self, node: Node, topic: str = '/odom') -> None:
+    def __init__(self, node: Node, topic: str) -> None:
         self._node = node
         self._topic = topic
         self._buffer: deque[OdomData] = deque(maxlen=_ODOM_BUFFER_SIZE)
@@ -132,9 +124,8 @@ class ROS2OdomSource(OdomSourceBase):
             return None
         buf = sorted(self._buffer, key=lambda o: o.timestamp)
         timestamps = [o.timestamp for o in buf]
-        idx = bisect.bisect_left(timestamps, timestamp)
-        if idx == 0 or idx >= len(buf):
-            best = buf[0] if idx == 0 else buf[-1]
+        if timestamp <= timestamps[0] or timestamp >= timestamps[-1]:
+            best = buf[0] if timestamp <= timestamps[0] else buf[-1]
             dt = abs(best.timestamp - timestamp)
             if dt > 0.5:
                 self._node.get_logger().warn(
@@ -142,22 +133,11 @@ class ROS2OdomSource(OdomSourceBase):
                     f'(scan={timestamp:.3f}, odom={best.timestamp:.3f})'
                 )
             return best
-        prev = buf[idx - 1]
-        next_ = buf[idx]
-        t_span = next_.timestamp - prev.timestamp
-        if t_span < 1e-9:
-            return prev
-        alpha = (timestamp - prev.timestamp) / t_span
-        return OdomData(
-            timestamp=timestamp,
-            x=prev.x + alpha * (next_.x - prev.x),
-            y=prev.y + alpha * (next_.y - prev.y),
-            yaw=prev.yaw + alpha * _angle_diff(next_.yaw, prev.yaw),
-        )
+        return interpolate_odom(buf, timestamps, timestamp)
 
     def _on_msg(self, msg: Odometry) -> None:
         stamp = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        yaw = _quaternion_to_yaw(msg.pose.pose.orientation)
+        yaw = quaternion_to_yaw(msg.pose.pose.orientation)
         self._recv_count += 1
         if self._recv_count == 1 or self._recv_count % 100 == 0:
             self._node.get_logger().info(
@@ -174,18 +154,15 @@ class ROS2OdomSource(OdomSourceBase):
         ))
 
 
-
-
-
 class ROS2GnssUtmSource(GnssSourceBase):
     """ROS2 NavSatFix を UTM に変換して GnssData を供給するアダプター。"""
 
-    def __init__(self, node: Node, topic: str = '/gps/fix') -> None:
+    def __init__(self, node: Node, topic: str) -> None:
         self._node = node
         self._topic = topic
         self._buffer: deque[GnssData] = deque(maxlen=_GNSS_BUFFER_SIZE)
         self._sub = None
-        self._transformer = None
+        self._transformer: UtmTransformer | None = None
         self._recv_count = 0
 
     def start(self) -> None:
@@ -201,7 +178,9 @@ class ROS2GnssUtmSource(GnssSourceBase):
     def get_gnss_at(self, timestamp: float) -> Optional[GnssData]:
         if not self._buffer:
             return None
-        return min(self._buffer, key=lambda g: abs(g.timestamp - timestamp))
+        buf = sorted(self._buffer, key=lambda g: g.timestamp)
+        timestamps = [g.timestamp for g in buf]
+        return nearest_by_timestamp(buf, timestamps, timestamp)
 
     def get_all_gnss(self) -> list[GnssData]:
         return list(self._buffer)
@@ -212,19 +191,14 @@ class ROS2GnssUtmSource(GnssSourceBase):
             return
 
         if self._transformer is None:
-            from pyproj import CRS, Transformer
-
-            zone = int((msg.longitude + 180.0) / 6.0) + 1
-            south = msg.latitude < 0.0
-            crs_utm = CRS.from_dict(
-                {'proj': 'utm', 'zone': zone, 'south': south})
-            self._transformer = Transformer.from_crs(
-                'EPSG:4326', crs_utm, always_xy=True)
+            self._transformer = build_utm_transformer(
+                msg.latitude, msg.longitude)
             self._node.get_logger().info(
-                f'GNSS UTM transformer initialized: zone={zone} south={south}'
+                f'GNSS UTM transformer initialized: '
+                f'zone={self._transformer.zone} south={self._transformer.south}'
             )
 
-        x, y = self._transformer.transform(msg.longitude, msg.latitude)
+        x, y = transform_latlon(self._transformer, msg.latitude, msg.longitude)
         cov = msg.position_covariance
         if msg.position_covariance_type == NavSatFix.COVARIANCE_TYPE_UNKNOWN:
             cov_2x2 = np.zeros((2, 2), dtype=np.float64)
@@ -256,17 +230,16 @@ class ROS2NavpvtSource(GnssSourceBase):
     _FLAGS_GNSS_FIX_OK = 0x01
     _FIX_TYPE_2D = 2
 
-    def __init__(self, node: Node, topic: str = '/navpvt', hacc_scale: float = 1.0) -> None:
+    def __init__(self, node: Node, topic: str, hacc_scale: float) -> None:
         self._node = node
         self._topic = topic
         self._hacc_scale = hacc_scale
         self._buffer: deque[GnssData] = deque(maxlen=_GNSS_BUFFER_SIZE)
         self._sub = None
-        self._transformer = None
+        self._transformer: UtmTransformer | None = None
         self._recv_count = 0
 
     def start(self) -> None:
-        from ublox_msgs.msg import NavPVT
         self._sub = self._node.create_subscription(
             NavPVT, self._topic, self._on_msg, 10
         )
@@ -279,7 +252,9 @@ class ROS2NavpvtSource(GnssSourceBase):
     def get_gnss_at(self, timestamp: float) -> Optional[GnssData]:
         if not self._buffer:
             return None
-        return min(self._buffer, key=lambda g: abs(g.timestamp - timestamp))
+        buf = sorted(self._buffer, key=lambda g: g.timestamp)
+        timestamps = [g.timestamp for g in buf]
+        return nearest_by_timestamp(buf, timestamps, timestamp)
 
     def get_all_gnss(self) -> list[GnssData]:
         return list(self._buffer)
@@ -297,21 +272,19 @@ class ROS2NavpvtSource(GnssSourceBase):
         lat = msg.lat * 1e-7
 
         if self._transformer is None:
-            from pyproj import CRS, Transformer
-            zone = int((lon + 180.0) / 6.0) + 1
-            south = lat < 0.0
-            crs_utm = CRS.from_dict({'proj': 'utm', 'zone': zone, 'south': south})
-            self._transformer = Transformer.from_crs('EPSG:4326', crs_utm, always_xy=True)
+            self._transformer = build_utm_transformer(lat, lon)
             self._node.get_logger().info(
-                f'GNSS UTM transformer initialized: zone={zone} south={south}'
+                f'GNSS UTM transformer initialized: '
+                f'zone={self._transformer.zone} south={self._transformer.south}'
             )
 
-        x, y = self._transformer.transform(lon, lat)
+        x, y = transform_latlon(self._transformer, lat, lon)
 
         if msg.h_acc > 0:
             pos_std = (msg.h_acc / 1000.0) * self._hacc_scale
             pos_var = pos_std * pos_std
-            cov_2x2 = np.array([[pos_var, 0.0], [0.0, pos_var]], dtype=np.float64)
+            cov_2x2 = np.array(
+                [[pos_var, 0.0], [0.0, pos_var]], dtype=np.float64)
         else:
             cov_2x2 = np.zeros((2, 2), dtype=np.float64)
 

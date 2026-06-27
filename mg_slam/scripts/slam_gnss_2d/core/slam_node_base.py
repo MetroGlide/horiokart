@@ -103,6 +103,7 @@ class SlamNodeBase(Node, ABC):
         raise NotImplementedError
 
     def _on_frame(self, frame: SensorFrame) -> None:
+        # 同期済みセンサフレームをポーズグラフへ投入し、採択されたキーフレームだけ後段へ流す。
         result = self._orchestrator.process_frame(frame)
         node = result.node
         if node is None:
@@ -112,6 +113,7 @@ class SlamNodeBase(Node, ABC):
             )
             return
 
+        # 最新キーフレームを基準に map->odom を更新する。
         self._tf_broadcaster.update(node, frame.odom)
         self._node_count += 1
         if self._node_count == 1 or self._node_count % 10 == 0:
@@ -120,6 +122,7 @@ class SlamNodeBase(Node, ABC):
                 f'yaw={math.degrees(node.yaw):.1f}deg'
             )
 
+        # ループ閉合やGNSS初期アライメント後は全描画、それ以外は差分描画で地図を更新する。
         if result.loop_closed or result.rerender_required:
             if result.loop_closed:
                 self._visualizer.publish_path_before_optimize()
@@ -135,6 +138,7 @@ class SlamNodeBase(Node, ABC):
                 self._renderer.rerender_all(self._pose_graph.get_nodes())
             self._visualizer.publish_path_increment(node)
 
+        # UI/可視化向けには、フルマーカーと差分メッセージの両方を配信する。
         self._visualizer.publish_pose_graph_markers(self._pose_graph)
 
         new_nodes = [node]

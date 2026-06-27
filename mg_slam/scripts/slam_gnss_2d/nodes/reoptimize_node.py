@@ -5,105 +5,33 @@ from slam_gnss_2d.core.slam_data_saver import SlamDataSaver
 from slam_gnss_2d.optimizer.gtsam_optimizer import GTSAMOptimizer
 from slam_gnss_2d.scan_matching.base import ScanMatcherBase
 from slam_gnss_2d.core.data_types import PoseNode, PoseEdge, GnssPrior, ScanData, OdomData, GnssData, MatchResult
+from slam_gnss_2d.core.geometry import scan_to_points
 from slam_gnss_2d.core.component_factory import build_gnss_source, _build_matcher, _build_loop_matcher, build_renderer
 from slam_gnss_2d.core.config_loader import ConfigLoader
 from slam_gnss_2d.map_manager.trajectory_noise_filter import TrajectoryNoiseFilter
+from slam_gnss_2d.tools.reoptimize_geometry import (
+    build_submap_points,
+    find_nearest_scan,
+    sigma_from_covariance_or_status,
+)
 import os
 import sys
-import json
 import math
-import yaml
-import bisect
 import datetime
 import logging
 import numpy as np
 import rclpy
 from rclpy.node import Node
 from std_srvs.srv import Trigger
+from slam_gnss_2d.tools.reoptimize_io import (
+    load_pose_graph_and_transform,
+    resolve_bag_path,
+)
+from slam_gnss_2d.tools.reoptimize_loop_search import search_new_loop_edges
 
 # scripts/slam_gnss_2d 階層を python パスに通す
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
-
-
-def _scan_to_points(scan: ScanData):
-    """有効レンジのみを2D点群 (N, 2) に変換する。"""
-    n = len(scan.ranges)
-    angles = scan.angle_min + np.arange(n) * scan.angle_increment
-    ranges = np.asarray(scan.ranges, dtype=np.float64)
-    valid = (ranges >= scan.range_min) & (ranges <= scan.range_max)
-    r = ranges[valid]
-    a = angles[valid]
-    return np.column_stack((r * np.cos(a), r * np.sin(a)))
-
-
-def build_submap_points(center_node_idx: int, nodes: list[PoseNode], node_scans: dict[int, ScanData], radius: float):
-    """指定ノード周辺の点群を合成してサブマップを構築する"""
-    center_node = nodes[center_node_idx]
-    near_nodes = []
-    for n in nodes:
-        if n.index in node_scans:
-            dist = math.hypot(n.x - center_node.x, n.y - center_node.y)
-            if dist <= radius:
-                near_nodes.append((n, node_scans[n.index]))
-
-    if not near_nodes:
-        return None
-
-    world_pts_list = []
-    for n, scan in near_nodes:
-        local_pts = _scan_to_points(scan)
-        c = math.cos(n.yaw)
-        s = math.sin(n.yaw)
-        wx = c * local_pts[:, 0] - s * local_pts[:, 1] + n.x
-        wy = s * local_pts[:, 0] + c * local_pts[:, 1] + n.y
-        world_pts_list.append(np.column_stack((wx, wy)))
-
-    world_pts = np.concatenate(world_pts_list, axis=0)
-
-    c = math.cos(center_node.yaw)
-    s = math.sin(center_node.yaw)
-    R_inv = np.array([[c, s], [-s, c]])
-
-    relative_pts = (
-        R_inv @ (world_pts - np.array([center_node.x, center_node.y])).T).T
-    return relative_pts
-
-
-def find_nearest_scan(scans: list[ScanData], timestamp: float, max_diff: float = 0.1) -> ScanData | None:
-    if not scans:
-        return None
-    timestamps = [s.timestamp for s in scans]
-    idx = bisect.bisect_left(timestamps, timestamp)
-    if idx == 0:
-        candidate = scans[0]
-    elif idx >= len(scans):
-        candidate = scans[-1]
-    else:
-        prev = scans[idx - 1]
-        next_ = scans[idx]
-        if abs(timestamp - prev.timestamp) <= abs(next_.timestamp - timestamp):
-            candidate = prev
-        else:
-            candidate = next_
-
-    if abs(candidate.timestamp - timestamp) <= max_diff:
-        return candidate
-    return None
-
-
-def sigma_from_covariance_or_status(gnss: GnssData, config) -> float:
-    cov_xx = float(gnss.covariance[0, 0]
-                   ) if gnss.covariance is not None else 0.0
-    if cov_xx > 0.0:
-        return math.sqrt(cov_xx)
-
-    status = gnss.fix_status
-    if status >= 2:
-        return config.gnss.sigma.fix_m
-    if status >= 0:
-        return config.gnss.sigma.float_m
-    return -1.0
 
 
 class ReadOnlyPoseGraph:
@@ -215,88 +143,19 @@ class ReoptimizeNode(Node):
         loop_matcher: ScanMatcherBase,
         config,
     ) -> list[PoseEdge]:
-        """KDTree を使いオンライン時に見逃した新規ループエッジを探索・追加する。"""
-        from scipy.spatial import KDTree
-
-        existing_pairs = {
-            (e.from_index, e.to_index) for e in existing_loop_edges
-        }
-        existing_pairs |= {
-            (e.to_index, e.from_index) for e in existing_loop_edges
-        }
-
-        search_radius = config.loop_closure.search_radius
-        min_node_gap = config.loop_closure.min_node_gap
-        submap_radius = config.loop_closure.submap_radius
-
-        valid_nodes = [n for n in optimized_nodes if n.index in node_scans]
-        if not valid_nodes:
-            return []
-
-        positions = np.array([[n.x, n.y] for n in valid_nodes])
-        tree = KDTree(positions)
-
-        new_edges = []
-        for i, node in enumerate(valid_nodes):
-            neighbor_idxs = tree.query_ball_point(
-                [node.x, node.y], search_radius)
-            for j in neighbor_idxs:
-                candidate = valid_nodes[j]
-                if abs(node.index - candidate.index) < min_node_gap:
-                    continue
-                pair = (min(node.index, candidate.index),
-                        max(node.index, candidate.index))
-                if pair in existing_pairs:
-                    continue
-
-                src_pts = build_submap_points(
-                    candidate.index, optimized_nodes, node_scans, submap_radius
-                ) if submap_radius > 0 else _scan_to_points(node_scans[candidate.index])
-                if src_pts is None or len(src_pts) == 0:
-                    continue
-
-                c = math.cos(-candidate.yaw)
-                s = math.sin(-candidate.yaw)
-                dx_w = node.x - candidate.x
-                dy_w = node.y - candidate.y
-                initial_guess = OdomData(
-                    timestamp=node.timestamp,
-                    x=c * dx_w - s * dy_w,
-                    y=s * dx_w + c * dy_w,
-                    yaw=node.yaw - candidate.yaw,
-                )
-
-                loop_matcher.set_target_cloud(src_pts)
-                result = loop_matcher.match(
-                    dst=node_scans[node.index], initial_guess=initial_guess)
-
-                if not result.converged:
-                    continue
-                if (config.loop_closure.max_score > 0.0
-                        and result.score > config.loop_closure.max_score):
-                    continue
-                abs_dyaw = abs(result.dyaw)
-                if abs_dyaw > math.radians(config.loop_closure.max_dyaw_deg):
-                    continue
-                crossing_rad = math.radians(
-                    config.loop_closure.crossing_reject_deg)
-                if (crossing_rad > 0.0
-                        and crossing_rad <= abs_dyaw <= math.pi - crossing_rad):
-                    continue
-
-                edge = PoseEdge(
-                    from_index=candidate.index, to_index=node.index,
-                    dx=result.dx, dy=result.dy, dyaw=result.dyaw,
-                    information=result.information,
-                )
-                new_edges.append(edge)
-                existing_pairs.add(pair)
-                self.get_logger().info(
-                    f"New loop edge found: {candidate.index} -> {node.index} "
-                    f"(score={result.score:.4f})"
-                )
-
-        return new_edges
+        return search_new_loop_edges(
+            optimized_nodes=optimized_nodes,
+            node_scans=node_scans,
+            existing_loop_edges=existing_loop_edges,
+            loop_matcher=loop_matcher,
+            search_radius=config.loop_closure.search_radius,
+            min_node_gap=config.loop_closure.min_node_gap,
+            submap_radius=config.loop_closure.submap_radius,
+            max_score=config.loop_closure.max_score,
+            max_dyaw_deg=config.loop_closure.max_dyaw_deg,
+            crossing_reject_deg=config.loop_closure.crossing_reject_deg,
+            logger_info=self.get_logger().info,
+        )
 
     def _run_optimization(self) -> None:
         self._timer.cancel()
@@ -308,35 +167,20 @@ class ReoptimizeNode(Node):
 
         self.get_logger().info(
             f"Starting reoptimization. Input directory: {input_dir}")
-        pose_graph_path = os.path.join(input_dir, "pose_graph.json")
-        gnss_transform_path = os.path.join(input_dir, "gnss_transform.yaml")
-
-        if not os.path.exists(pose_graph_path):
-            self.get_logger().error(
-                f"pose_graph.json not found in {input_dir}!")
-            return
-        if not os.path.exists(gnss_transform_path):
-            self.get_logger().error(
-                f"gnss_transform.yaml not found in {input_dir}!")
-            return
-
         try:
-            with open(pose_graph_path, 'r') as f:
-                pose_graph_data = json.load(f)
-            with open(gnss_transform_path, 'r') as f:
-                self._gnss_transform_data = yaml.safe_load(f)
+            pose_graph_data, self._gnss_transform_data = load_pose_graph_and_transform(
+                input_dir)
         except Exception as e:
             self.get_logger().error(f"Failed to load input files: {e}")
             return
 
-        # Resolve Bag Path
-        bag_path = self.get_parameter('bag_path').value
-        if not bag_path:
-            bag_path = pose_graph_data.get("metadata", {}).get("bag_path", "")
-
-        if not bag_path or not os.path.exists(bag_path):
-            self.get_logger().error(
-                f"ROS Bag path '{bag_path}' is invalid or file does not exist!")
+        try:
+            bag_path = resolve_bag_path(
+                self.get_parameter('bag_path').value,
+                pose_graph_data,
+            )
+        except Exception as e:
+            self.get_logger().error(str(e))
             return
 
         self._bag_path = bag_path
@@ -500,9 +344,9 @@ class ReoptimizeNode(Node):
                     src_pts = build_submap_points(
                         f_idx, old_nodes, node_scans, config.scan_matching.local_map.radius)
                     if src_pts is None:
-                        src_pts = _scan_to_points(node_scans[f_idx])
+                        src_pts = scan_to_points(node_scans[f_idx])
                 else:
-                    src_pts = _scan_to_points(node_scans[f_idx])
+                    src_pts = scan_to_points(node_scans[f_idx])
 
                 gnss_guess = None
                 if f_idx < len(old_nodes) and t_idx < len(old_nodes):
@@ -567,7 +411,7 @@ class ReoptimizeNode(Node):
                     src_pts = build_submap_points(
                         f_idx, old_nodes, node_scans, submap_radius)
                 else:
-                    src_pts = _scan_to_points(node_scans[f_idx])
+                    src_pts = scan_to_points(node_scans[f_idx])
 
                 if src_pts is None:
                     edge = PoseEdge(from_index=f_idx, to_index=t_idx, dx=e_data["dx"], dy=e_data["dy"], dyaw=e_data["dyaw"], information=np.array(
@@ -635,7 +479,8 @@ class ReoptimizeNode(Node):
         self._renderer.rerender_all(self._optimized_nodes)
 
         if config.trajectory_noise_filter.enabled:
-            noise_filter = TrajectoryNoiseFilter(config.trajectory_noise_filter)
+            noise_filter = TrajectoryNoiseFilter(
+                config.trajectory_noise_filter)
             noise_filter.apply(self._renderer, self._optimized_nodes)
 
         # Publish results

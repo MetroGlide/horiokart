@@ -25,12 +25,10 @@ class SlamGnss2DNode(SlamNodeBase):
     def __init__(self) -> None:
         super().__init__('slam_gnss_2d_node')
 
-    def _setup_io(self, cfg: SlamConfig):
-        from slam_gnss_2d.input.ros2.ros_adapter import ROS2OdomSource, ROS2ScanSource
+    def _setup_io(self, cfg: SlamConfig) -> tuple[ScanSourceBase, OdomSourceBase]:
         return ROS2ScanSource(self, cfg.topics.scan), ROS2OdomSource(self, cfg.topics.odom)
 
-    def _setup_gnss_source(self, cfg: SlamConfig):
-        from slam_gnss_2d.input.ros2.ros_adapter import ROS2GnssUtmSource, ROS2NavpvtSource
+    def _setup_gnss_source(self, cfg: SlamConfig) -> GnssSourceBase:
         if cfg.gnss.source == 'navpvt':
             return ROS2NavpvtSource(
                 self,

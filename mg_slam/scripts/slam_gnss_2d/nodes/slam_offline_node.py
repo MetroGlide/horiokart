@@ -42,7 +42,6 @@ class SlamOfflineNode(SlamNodeBase):
         self.declare_parameter('offline_step_hz', 30.0)
 
     def _setup_io(self, cfg: SlamConfig) -> tuple[ScanSourceBase, OdomSourceBase]:
-        from slam_gnss_2d.input.ros2.bag_reader import BagOdomSource, BagScanSource
         bag_path: str = self.get_parameter('bag_path').value
         scan_source = BagScanSource(bag_path, cfg.topics.scan)
         odom_source = BagOdomSource(bag_path, cfg.topics.odom)

@@ -8,6 +8,7 @@ from sensor_msgs.msg import NavSatFix
 from std_msgs.msg import ColorRGBA
 from visualization_msgs.msg import Marker, MarkerArray
 from mg_msgs.msg import PoseGraphDiff
+from slam_gnss_2d.ros.pose_graph_message_builder import build_pose_graph_diff
 
 
 class SlamVisualizer:
@@ -171,38 +172,12 @@ class SlamVisualizer:
         self._pg_marker_pub.publish(array)
 
     def publish_pose_graph_diff(self, new_nodes, new_seq_edges, new_priors, new_loop_edges, loop_closed: bool, full_refresh_needed: bool) -> None:
-        msg = PoseGraphDiff()
-        msg.loop_closed = loop_closed
-        msg.full_refresh_needed = full_refresh_needed
-
-        for n in new_nodes:
-            msg.new_node_indices.append(n.index)
-            msg.new_node_x.append(float(n.x))
-            msg.new_node_y.append(float(n.y))
-            msg.new_node_yaw.append(float(n.yaw))
-            msg.new_node_timestamps.append(float(n.timestamp))
-
-        for e in new_seq_edges:
-            msg.seq_edge_from.append(e.from_index)
-            msg.seq_edge_to.append(e.to_index)
-            msg.seq_edge_score.append(float(getattr(e, 'score', 0.0)))
-            msg.seq_edge_type.append(1 if getattr(e, 'is_odom_fallback', False) else 0)
-            msg.seq_edge_info_diag.extend([float(e.information[0,0]), float(e.information[1,1]), float(e.information[2,2])])
-
-        for p in new_priors:
-            msg.prior_node_indices.append(p.node_index)
-            if p.information[0,0] > 0:
-                sigma = 1.0 / math.sqrt(p.information[0,0])
-            else:
-                sigma = -1.0
-            msg.prior_sigma_m.append(float(sigma))
-            msg.prior_gnss_status.append(0) # 0=fix as default
-
-        for e in new_loop_edges:
-            msg.loop_edge_from.append(e.from_index)
-            msg.loop_edge_to.append(e.to_index)
-            msg.loop_edge_score.append(float(getattr(e, 'score', 0.0)))
-            msg.loop_edge_info_diag.extend([float(e.information[0,0]), float(e.information[1,1]), float(e.information[2,2])])
-
+        msg = build_pose_graph_diff(
+            nodes=new_nodes,
+            seq_edges=new_seq_edges,
+            loop_edges=new_loop_edges,
+            priors=new_priors,
+            loop_closed=loop_closed,
+            full_refresh_needed=full_refresh_needed,
+        )
         self._diff_pub.publish(msg)
-
