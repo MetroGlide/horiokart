@@ -5,13 +5,14 @@ This module is imported by the installed script wrapper so that package
 import time
 import threading
 
+import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseWithCovarianceStamped
 
 from .metrics import compute
-from .detectors import ConsecutiveThresholdDetector
+from .detector import ConsecutiveThresholdDetector, RecoveryContext
 from .handlers import GnssAmclInitializerHandler
-from .types import RecoveryContext
+
 
 
 class AmclWatchdogNode(Node):
@@ -26,6 +27,7 @@ class AmclWatchdogNode(Node):
 
         # state
         self._last_recovery_time = 0.0
+        self._recovery_lock = threading.Lock()
         self._in_recovery = False
 
         self.get_logger().info(
@@ -46,7 +48,7 @@ class AmclWatchdogNode(Node):
         self.call_timeout = float(self.declare_parameter(
             'initializer.call_timeout_sec', 5.0).get_parameter_value().double_value)
         self._recovery_backoff = float(self.declare_parameter(
-            'recovery_backoff_sec', 60.0).get_parameter_value().double_value)
+            'recovery_backoff_sec', 20.0).get_parameter_value().double_value)
         self._max_retries = int(self.declare_parameter(
             'max_retries', 3).get_parameter_value().integer_value)
         self.min_interval = float(self.declare_parameter(
@@ -73,22 +75,15 @@ class AmclWatchdogNode(Node):
             raise RuntimeError(
                 f"Unknown initializer.type '{self.initializer_type}'")
 
-        # NOTE:
-        # The current implementation performs recovery by calling the
-        # configured handler synchronously. To avoid blocking the node's
-        # main executor and to prevent races when waiting on service
-        # futures, recovery is executed in a background thread (see
-        # _on_amcl_pose). A more robust long-term approach is to refactor
-        # recovery to a fully asynchronous model where service futures are
-        # managed by the node's executor (e.g. storing futures and
-        # processing them in timers or via executor callbacks) instead of
-        # using blocking waits like `spin_until_future_complete`.
+        # Recovery is executed in a background thread to avoid blocking the main
+        # executor loop. The handler performs non-blocking polling on service futures.
 
     def _on_amcl_pose(self, msg: PoseWithCovarianceStamped) -> None:
         # safe compute metric
         # If we're already performing recovery, ignore incoming pose samples.
-        if self._in_recovery:
-            return
+        with self._recovery_lock:
+            if self._in_recovery:
+                return
         try:
             metric_value = compute(self.metric_name, msg.pose.covariance)
         except Exception as e:
@@ -108,16 +103,18 @@ class AmclWatchdogNode(Node):
             return
 
         # Run recovery in a background thread to avoid blocking the main
-        # rclpy spin loop. The handler may perform blocking service waits
-        # (via spin_until_future_complete); running it in a separate
-        # thread prevents interference with the node's executor.
+        # rclpy spin loop. The handler performs non-blocking polling on service
+        # futures; running it in a separate thread prevents interference with the
+        # node's executor.
 
         def _recovery_worker(amcl_msg: PoseWithCovarianceStamped, ev):
-            self._in_recovery = True
+            with self._recovery_lock:
+                self._in_recovery = True
             try:
                 self._run_recovery(amcl_msg, ev)
             finally:
-                self._in_recovery = False
+                with self._recovery_lock:
+                    self._in_recovery = False
 
         t = threading.Thread(target=_recovery_worker,
                              args=(msg, event), daemon=True)
@@ -155,7 +152,6 @@ class AmclWatchdogNode(Node):
 
 
 def main(args=None):
-    import rclpy
     rclpy.init(args=args)
     node = AmclWatchdogNode()
     try:

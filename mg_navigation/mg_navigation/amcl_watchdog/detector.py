@@ -1,8 +1,31 @@
-"""Anomaly detectors for scalar metrics."""
+"""Anomaly detectors and related types for scalar metrics."""
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 import time
 from typing import Optional
-from .types import AnomalyEvent
+from geometry_msgs.msg import PoseWithCovarianceStamped
+
+
+@dataclass
+class AnomalyEvent:
+    metric_name: str
+    metric_value: float
+    threshold: float
+    consecutive_count: int
+
+
+@dataclass
+class RecoveryContext:
+    # original amcl pose message
+    amcl_pose_msg: PoseWithCovarianceStamped
+    metric_name: str
+    metric_value: float
+
+
+@dataclass
+class RecoveryResult:
+    success: bool
+    message: Optional[str] = None
 
 
 class AnomalyDetector(ABC):
