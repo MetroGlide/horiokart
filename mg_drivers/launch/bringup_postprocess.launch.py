@@ -8,6 +8,7 @@ from launch.substitutions import LaunchConfiguration
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from ament_index_python.packages import get_package_share_directory
 from launch_ros.actions import Node
+import os
 
 from mg_utils.launch_argument import LaunchArgumentCreator
 
@@ -149,6 +150,19 @@ def generate_launch_description():
                     ("points", "/camera/camera/depth/color/points"),
                     ("points_filtered", "/camera/depth/points_postprocessed"),
                 ],
+                condition=launch.conditions.IfCondition(
+                    use_realsense_arg.launch_config
+                ),
+            ),
+
+            # Obstacle Detection 3D
+            launch.actions.IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(pkg_share, "launch", "obstacle_detection_3d.launch.py")
+                ),
+                launch_arguments={
+                    "use_sim_time": simulation_arg.launch_config,
+                }.items(),
                 condition=launch.conditions.IfCondition(
                     use_realsense_arg.launch_config
                 ),

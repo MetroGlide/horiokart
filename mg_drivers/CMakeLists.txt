@@ -34,6 +34,8 @@ find_package(PCL REQUIRED COMPONENTS common io filters)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_sensor_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 ################################################################################
 # Build
@@ -69,6 +71,8 @@ set(DEPENDENCIES
   "tf2"
   "tf2_ros"
   "tf2_geometry_msgs"
+  "tf2_sensor_msgs"
+  "visualization_msgs"
 
   "pcl_ros"
   "pcl_conversions"
@@ -103,6 +107,16 @@ target_include_directories(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} PRIVATE include)
 target_link_libraries(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} ${PCL_LIBRARIES})
 ament_target_dependencies(${DEPTH_POSTPROCESS_EXECUTABLE_NAME} ${DEPENDENCIES})
 
+# obstacle_detection_3d node
+set(OBSTACLE_DETECTION_3D_EXECUTABLE_NAME "obstacle_detection_3d_node")
+add_executable(${OBSTACLE_DETECTION_3D_EXECUTABLE_NAME}
+  src/obstacle_detection/obstacle_detection_3d_node.cpp
+  src/obstacle_detection/obstacle_detector.cpp
+)
+target_include_directories(${OBSTACLE_DETECTION_3D_EXECUTABLE_NAME} PRIVATE include)
+target_link_libraries(${OBSTACLE_DETECTION_3D_EXECUTABLE_NAME} ${PCL_LIBRARIES})
+ament_target_dependencies(${OBSTACLE_DETECTION_3D_EXECUTABLE_NAME} ${DEPENDENCIES})
+
 ################################################################################
 # Install
 ################################################################################
@@ -123,6 +137,10 @@ install(TARGETS ${PCL_DOWNSAMPLING_EXECUTABLE_NAME}
 )
 
 install(TARGETS ${DEPTH_POSTPROCESS_EXECUTABLE_NAME}
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(TARGETS ${OBSTACLE_DETECTION_3D_EXECUTABLE_NAME}
   DESTINATION lib/${PROJECT_NAME}
 )
 
