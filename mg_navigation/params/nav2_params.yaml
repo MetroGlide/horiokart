@@ -189,12 +189,12 @@ local_costmap:
 
       footprint: "[[0.4, 0.3], [0.4, -0.3], [-0.2, -0.3], [-0.2, 0.3]]"
 
-      plugins:
-        [
+      plugins: [
           "top_obstacle_layer",
-          "obstacle_layer",
-          "depth_voxel_layer",
-          "denoise_layer",
+          # "obstacle_layer",
+          # "depth_voxel_layer",
+          "obstacle_stvl_layer",
+          # "denoise_layer",
           "inflation_layer",
         ]
 
@@ -247,6 +247,40 @@ local_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 2.0
           obstacle_min_range: 0.0
+      obstacle_stvl_layer:
+        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"
+        enabled: True
+        voxel_decay: 5.0
+        decay_model: 0
+        voxel_size: 0.05
+        track_unknown_space: True
+        observation_persistence: 0.0
+        max_obstacle_height: 2.0
+        mark_threshold: 0
+        update_footprint_enabled: True
+        combination_method: 1
+        origin_z: 0.0
+        publish_voxel_map: True
+        transform_tolerance: 0.5
+        mapping_mode: False
+        map_save_duration: 60.0
+        observation_sources: obstacle_points
+        obstacle_points:
+          data_type: PointCloud2
+          topic: /obstacle_detection_3d_node/points_obstacle
+          marking: True
+          clearing: True
+          obstacle_range: 2.5
+          raytrace_range: 3.0
+          min_obstacle_height: 0.0
+          max_obstacle_height: 2.0
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+          inf_is_valid: False
+          filter: "voxel"
+          voxel_min_points: 1
+          qos_overrides:
+            reliability: reliable
       always_send_full_costmap: True
 
 global_costmap:
@@ -264,16 +298,16 @@ global_costmap:
       resolution: 0.05
       track_unknown_space: true
 
-      plugins:
-        [
+      plugins: [
           "static_layer",
           "top_obstacle_layer",
-          "obstacle_layer",
-          "denoise_layer",
+          # "obstacle_layer",
+          "obstacle_stvl_layer",
+          # "denoise_layer",
           "inflation_layer",
         ]
 
-      filters: ["speed_filter"]
+      # filters: ["speed_filter"]
 
       top_obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -325,6 +359,45 @@ global_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 2.5
           obstacle_min_range: 0.0
+
+      obstacle_stvl_layer:
+        plugin: "spatio_temporal_voxel_layer/SpatioTemporalVoxelLayer"
+        enabled: true
+        voxel_decay: 25.0
+        decay_model: 0
+        voxel_size: 0.05
+        track_unknown_space: true
+        unknown_threshold: 15
+        mark_threshold: 0
+        update_footprint_enabled: true
+        combination_method: 1
+        origin_z: 0.0
+        publish_voxel_map: false
+        transform_tolerance: 0.2
+        mapping_mode: false
+        map_save_duration: 60.0
+        observation_sources: pointcloud
+        pointcloud:
+          data_type: PointCloud2
+          topic: /obstacle_detection_3d_node/points_obstacle
+          marking: true
+          clearing: true
+          obstacle_range: 3.0
+          min_obstacle_height: 0.0
+          max_obstacle_height: 2.0
+          expected_update_rate: 0.0
+          observation_persistence: 0.0
+          inf_is_valid: false
+          voxel_filter: true
+          clear_after_reading: true
+          max_z: 2.0
+          min_z: 0.0
+          vertical_fov_angle: 0.8745
+          horizontal_fov_angle: 1.047
+          decay_acceleration: 1.0
+          model_type: 0
+          qos_overrides:
+            reliability: reliable
 
       denoise_layer:
         plugin: "nav2_costmap_2d::DenoiseLayer"
