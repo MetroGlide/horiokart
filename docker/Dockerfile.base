@@ -22,7 +22,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   ros-${ROS_DISTRO}-imu-tools \
   ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
   ros-${ROS_DISTRO}-librealsense2* \
-  ros-${ROS_DISTRO}-realsense2-*
+  ros-${ROS_DISTRO}-realsense2-* \
+  ros-${ROS_DISTRO}-spatio-temporal-voxel-layer
 
 RUN pip3 install --no-cache-dir -U transforms3d
 
