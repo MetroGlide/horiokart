@@ -10,11 +10,15 @@ from launch_ros.actions import Node
 
 from mg_utils.launch_argument import LaunchArgumentCreator
 
+
 def generate_launch_description():
     launch_argument_creator = LaunchArgumentCreator()
 
     use_sim_time_arg = launch_argument_creator.create(
         "use_sim_time", default="false")
+
+    use_sensor_data_qos_arg = launch_argument_creator.create(
+        "use_sensor_data_qos", default="false")
 
     pkg_name = "mg_drivers"
     pkg_share = get_package_share_directory(pkg_name)
@@ -28,10 +32,12 @@ def generate_launch_description():
         output="screen",
         parameters=[
             param_file,
-            {"use_sim_time": use_sim_time_arg.launch_config}
+            {"use_sim_time": use_sim_time_arg.launch_config},
+            {"use_sensor_data_qos": use_sensor_data_qos_arg.launch_config},
         ],
         remappings=[
-            ("points", "/camera/camera/depth/color/points"),
+            # ("points", "/camera/camera/depth/color/points"),
+            ("points", "/rs_d435i/depth/color/points"),
             # Outputs: ~/points_obstacle, ~/cluster_markers
         ],
     )

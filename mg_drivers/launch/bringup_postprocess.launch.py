@@ -29,6 +29,8 @@ def generate_launch_description():
         "use_lidar", default="true")
     use_gps_arg = launch_argument_creator.create(
         "use_gps", default="true")
+    use_sensor_data_qos_arg = launch_argument_creator.create(
+        "use_sensor_data_qos", default="false")
 
 
     pkg_name = "mg_drivers"
@@ -162,6 +164,7 @@ def generate_launch_description():
                 ),
                 launch_arguments={
                     "use_sim_time": simulation_arg.launch_config,
+                    "use_sensor_data_qos": use_sensor_data_qos_arg.launch_config,
                 }.items(),
                 condition=launch.conditions.IfCondition(
                     use_realsense_arg.launch_config
