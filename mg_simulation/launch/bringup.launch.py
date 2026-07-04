@@ -4,7 +4,8 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, SetEnvironmentVariable
+from mg_utils.launch_argument import LaunchArgumentCreator
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import (
@@ -21,19 +22,23 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     pkg_sim = get_package_share_directory("mg_simulation")
 
+    # default_world = os.path.join(pkg_sim, "worlds", "solar_farm.sdf")
     default_world = os.path.join(pkg_sim, "worlds", "warehouse.sdf")
 
-    world_arg = DeclareLaunchArgument("world", default_value=default_world)
-    robot_name_arg = DeclareLaunchArgument(
-        "robot_name", default_value="mg")
-    spawn_x_arg = DeclareLaunchArgument("spawn_x", default_value="0.0")
-    spawn_y_arg = DeclareLaunchArgument("spawn_y", default_value="0.0")
-    spawn_z_arg = DeclareLaunchArgument("spawn_z", default_value="0.05")
-    spawn_yaw_arg = DeclareLaunchArgument("spawn_yaw", default_value="0.0")
-    headless_arg = DeclareLaunchArgument("headless", default_value="false")
-    publish_gazebo_tf_arg = DeclareLaunchArgument(
+    models_path = os.path.join(pkg_sim, "models")
+    set_env = SetEnvironmentVariable('IGN_GAZEBO_RESOURCE_PATH', models_path)
+
+    arg = LaunchArgumentCreator()
+    arg.create("world", default=default_world)
+    arg.create("robot_name", default="mg")
+    arg.create("spawn_x", default="0.0")
+    arg.create("spawn_y", default="0.0")
+    arg.create("spawn_z", default="0.05")
+    arg.create("spawn_yaw", default="0.0")
+    arg.create("headless", default="false")
+    arg.create(
         "publish_gazebo_tf",
-        default_value=EnvironmentVariable(
+        default=EnvironmentVariable(
             "PUBLISH_GAZEBO_TF", default_value="false"),
     )
 
@@ -99,14 +104,8 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        world_arg,
-        robot_name_arg,
-        spawn_x_arg,
-        spawn_y_arg,
-        spawn_z_arg,
-        spawn_yaw_arg,
-        headless_arg,
-        publish_gazebo_tf_arg,
+        set_env,
+        *arg.get_created_declare_launch_args(),
         robot_state_publisher,
         gz_sim_headless,
         gz_sim_gui,
