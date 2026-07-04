@@ -1,15 +1,16 @@
+#include <pcl_conversions/pcl_conversions.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+
 #include <memory>
 #include <string>
+#include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
 #include <vector>
 
 #include "obstacle_detection/obstacle_detector.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/point_cloud2.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
-#include <pcl_conversions/pcl_conversions.h>
-#include <tf2_ros/buffer.h>
-#include <tf2_ros/transform_listener.h>
-#include <tf2_sensor_msgs/tf2_sensor_msgs.hpp>
 
 using std::placeholders::_1;
 
@@ -19,6 +20,7 @@ public:
   ObstacleDetection3DNode() : Node("obstacle_detection_3d_node")
   {
     // Declare parameters
+    this->declare_parameter<bool>("use_sensor_data_qos", false);
     this->declare_parameter<double>("voxel_leaf_size", 0.05);
     this->declare_parameter<double>("cropbox_x_min", 0.0);
     this->declare_parameter<double>("cropbox_x_max", 3.0);
@@ -55,11 +57,15 @@ public:
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-    rclcpp::QoS qos = rclcpp::SensorDataQoS();
-    
+    const bool use_sensor_data_qos =
+      this->get_parameter("use_sensor_data_qos").as_bool();
+    rclcpp::QoS qos = use_sensor_data_qos ?
+      rclcpp::SensorDataQoS() : rclcpp::QoS(10).reliable();
+
     pub_obstacle_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("~/points_obstacle", qos);
-    pub_markers_ = this->create_publisher<visualization_msgs::msg::MarkerArray>("~/cluster_markers", qos);
-    
+    pub_markers_ =
+      this->create_publisher<visualization_msgs::msg::MarkerArray>("~/cluster_markers", qos);
+
     sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
       "points", qos, std::bind(&ObstacleDetection3DNode::pointcloudCallback, this, _1));
   }
@@ -67,6 +73,8 @@ public:
 private:
   void pointcloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
   {
+    // RCLCPP_INFO(
+    // this->get_logger(), "Received point cloud with %d points", msg->width * msg->height);
     // 1. TF transformation
     sensor_msgs::msg::PointCloud2 transformed_msg;
     try {
@@ -74,8 +82,9 @@ private:
         "base_link", msg->header.frame_id, msg->header.stamp, rclcpp::Duration::from_seconds(0.1));
       tf2::doTransform(*msg, transformed_msg, transform);
     } catch (const tf2::TransformException & ex) {
-      RCLCPP_WARN(this->get_logger(), "Could not transform %s to base_link: %s",
-                  msg->header.frame_id.c_str(), ex.what());
+      RCLCPP_WARN(
+        this->get_logger(), "Could not transform %s to base_link: %s", msg->header.frame_id.c_str(),
+        ex.what());
       return;
     }
 
@@ -86,9 +95,9 @@ private:
     // 3. Process
     pcl::PointCloud<pcl::PointXYZRGB> obstacle_cloud;
     std::vector<pcl::PointIndices> clusters;
-    
+
     if (!detector_->process(input_cloud, obstacle_cloud, clusters)) {
-        return;
+      return;
     }
 
     // 4. Publish PointCloud2
@@ -102,19 +111,19 @@ private:
     publishMarkers(obstacle_cloud, clusters, msg->header.stamp);
   }
 
-  void publishMarkers(const pcl::PointCloud<pcl::PointXYZRGB>& cloud, 
-                      const std::vector<pcl::PointIndices>& clusters,
-                      const rclcpp::Time& stamp)
+  void publishMarkers(
+    const pcl::PointCloud<pcl::PointXYZRGB> & cloud,
+    const std::vector<pcl::PointIndices> & clusters, const rclcpp::Time & stamp)
   {
     visualization_msgs::msg::MarkerArray marker_array;
-    
+
     // Delete all previous markers
     visualization_msgs::msg::Marker delete_all;
     delete_all.action = visualization_msgs::msg::Marker::DELETEALL;
     marker_array.markers.push_back(delete_all);
 
     int id = 0;
-    for (const auto& cluster : clusters) {
+    for (const auto & cluster : clusters) {
       if (cluster.indices.empty()) continue;
 
       float min_x = std::numeric_limits<float>::max();
@@ -124,8 +133,8 @@ private:
       float min_z = std::numeric_limits<float>::max();
       float max_z = std::numeric_limits<float>::lowest();
 
-      for (const auto& idx : cluster.indices) {
-        const auto& p = cloud.points[idx];
+      for (const auto & idx : cluster.indices) {
+        const auto & p = cloud.points[idx];
         min_x = std::min(min_x, p.x);
         max_x = std::max(max_x, p.x);
         min_y = std::min(min_y, p.y);
@@ -142,7 +151,7 @@ private:
       bbox.type = visualization_msgs::msg::Marker::LINE_LIST;
       bbox.action = visualization_msgs::msg::Marker::ADD;
       bbox.pose.orientation.w = 1.0;
-      bbox.scale.x = 0.02; // Line width
+      bbox.scale.x = 0.02;  // Line width
       bbox.color.r = 1.0;
       bbox.color.g = 0.0;
       bbox.color.b = 0.0;
@@ -151,35 +160,63 @@ private:
 
       // 8 corners of the bounding box
       geometry_msgs::msg::Point p1, p2, p3, p4, p5, p6, p7, p8;
-      p1.x = min_x; p1.y = min_y; p1.z = min_z;
-      p2.x = max_x; p2.y = min_y; p2.z = min_z;
-      p3.x = max_x; p3.y = max_y; p3.z = min_z;
-      p4.x = min_x; p4.y = max_y; p4.z = min_z;
-      p5.x = min_x; p5.y = min_y; p5.z = max_z;
-      p6.x = max_x; p6.y = min_y; p6.z = max_z;
-      p7.x = max_x; p7.y = max_y; p7.z = max_z;
-      p8.x = min_x; p8.y = max_y; p8.z = max_z;
+      p1.x = min_x;
+      p1.y = min_y;
+      p1.z = min_z;
+      p2.x = max_x;
+      p2.y = min_y;
+      p2.z = min_z;
+      p3.x = max_x;
+      p3.y = max_y;
+      p3.z = min_z;
+      p4.x = min_x;
+      p4.y = max_y;
+      p4.z = min_z;
+      p5.x = min_x;
+      p5.y = min_y;
+      p5.z = max_z;
+      p6.x = max_x;
+      p6.y = min_y;
+      p6.z = max_z;
+      p7.x = max_x;
+      p7.y = max_y;
+      p7.z = max_z;
+      p8.x = min_x;
+      p8.y = max_y;
+      p8.z = max_z;
 
       // Bottom rectangle
-      bbox.points.push_back(p1); bbox.points.push_back(p2);
-      bbox.points.push_back(p2); bbox.points.push_back(p3);
-      bbox.points.push_back(p3); bbox.points.push_back(p4);
-      bbox.points.push_back(p4); bbox.points.push_back(p1);
+      bbox.points.push_back(p1);
+      bbox.points.push_back(p2);
+      bbox.points.push_back(p2);
+      bbox.points.push_back(p3);
+      bbox.points.push_back(p3);
+      bbox.points.push_back(p4);
+      bbox.points.push_back(p4);
+      bbox.points.push_back(p1);
 
       // Top rectangle
-      bbox.points.push_back(p5); bbox.points.push_back(p6);
-      bbox.points.push_back(p6); bbox.points.push_back(p7);
-      bbox.points.push_back(p7); bbox.points.push_back(p8);
-      bbox.points.push_back(p8); bbox.points.push_back(p5);
+      bbox.points.push_back(p5);
+      bbox.points.push_back(p6);
+      bbox.points.push_back(p6);
+      bbox.points.push_back(p7);
+      bbox.points.push_back(p7);
+      bbox.points.push_back(p8);
+      bbox.points.push_back(p8);
+      bbox.points.push_back(p5);
 
       // Vertical lines
-      bbox.points.push_back(p1); bbox.points.push_back(p5);
-      bbox.points.push_back(p2); bbox.points.push_back(p6);
-      bbox.points.push_back(p3); bbox.points.push_back(p7);
-      bbox.points.push_back(p4); bbox.points.push_back(p8);
+      bbox.points.push_back(p1);
+      bbox.points.push_back(p5);
+      bbox.points.push_back(p2);
+      bbox.points.push_back(p6);
+      bbox.points.push_back(p3);
+      bbox.points.push_back(p7);
+      bbox.points.push_back(p4);
+      bbox.points.push_back(p8);
 
       marker_array.markers.push_back(bbox);
-      
+
       // Text label
       visualization_msgs::msg::Marker text;
       text.header.frame_id = "base_link";
@@ -193,24 +230,25 @@ private:
       text.pose.position.y = (min_y + max_y) / 2.0;
       text.pose.position.z = max_z + 0.1;
       text.pose.orientation.w = 1.0;
-      text.scale.z = 0.1; // Text height
+      text.scale.z = 0.1;  // Text height
       text.color.r = 1.0;
       text.color.g = 1.0;
       text.color.b = 1.0;
       text.color.a = 1.0;
-      text.text = "Cluster " + std::to_string(cluster_num) + " (" + std::to_string(cluster.indices.size()) + " pts)";
+      text.text = "Cluster " + std::to_string(cluster_num) + " (" +
+                  std::to_string(cluster.indices.size()) + " pts)";
       text.lifetime = rclcpp::Duration::from_seconds(0.5);
-      
+
       marker_array.markers.push_back(text);
     }
-    
+
     pub_markers_->publish(marker_array);
   }
 
   std::unique_ptr<obstacle_detection::ObstacleDetector> detector_;
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
-  
+
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_obstacle_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr pub_markers_;
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr sub_;
