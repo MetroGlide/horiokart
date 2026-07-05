@@ -1,0 +1,5 @@
+<library path="mg_navigation_bt_plugins">
+  <class name="IsCollisionDetected" type="mg_navigation::IsCollisionDetected" base_class_type="nav2_core::Condition">
+    <description>Check if collision is detected in collision_detector_state</description>
+  </class>
+</library>

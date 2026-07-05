@@ -37,16 +37,22 @@ class WaypointNavigator:
         self._path_computed: bool = False
         self._waypoint: Optional[Waypoint] = None
 
-        bt_xml_path = (
+        self._bt_xml_normal = node.declare_parameter(
+            "bt_xml_normal",
             get_package_share_directory("mg_waypoint_navigation")
-            + "/behavior_trees/mg_navigate_to_pose_recovery_only_wait.xml"
-        )
-        self._bt_xml = bt_xml_path
+            + "/behavior_trees/mg_navigate_to_pose.xml"
+        ).value
+        self._bt_xml_queue_wait = node.declare_parameter(
+            "bt_xml_queue_wait",
+            get_package_share_directory("mg_waypoint_navigation")
+            + "/behavior_trees/mg_navigate_to_pose_queue_wait.xml"
+        ).value
 
     def send_goal(
         self,
         waypoint: Waypoint,
         result_callback: Callable[[NavigationResult], None],
+        navigation_mode: str = "normal",
     ) -> None:
         self._result_callback = result_callback
         self._through_tolerance = (
@@ -65,7 +71,11 @@ class WaypointNavigator:
 
         goal = NavigateToPose.Goal()
         goal.pose = waypoint.pose
-        goal.behavior_tree = self._bt_xml
+        goal.behavior_tree = (
+            self._bt_xml_queue_wait
+            if navigation_mode == "queue_wait"
+            else self._bt_xml_normal
+        )
 
         future = self._action_client.send_goal_async(
             goal, feedback_callback=self._feedback_callback

@@ -8,6 +8,7 @@ from mg_waypoint_navigation.waypoint_sequencer.actions.builtins import (
     LoadMapAction,
     WaitAction,
     WaitTriggerAction,
+    SetNavigationModeAction,
 )
 from mg_waypoint_navigation.waypoint_sequencer.actions.generic import (
     GenericPublishAction,
@@ -25,15 +26,14 @@ _ACTION_REGISTRY = {
     "amcl_reset": AmclResetAction,
     "wait": WaitAction,
     "wait_trigger": WaitTriggerAction,
+    "set_navigation_mode": SetNavigationModeAction,
 }
-
 
 def build_action(config: "ActionConfig", node: "rclpy.node.Node") -> BaseAction:
     cls = _ACTION_REGISTRY.get(config.type)
     if cls is None:
         raise ValueError(f"Unknown action type: {config.type!r}")
     return cls(config, node)
-
 
 __all__ = [
     "BaseAction",
@@ -44,4 +44,5 @@ __all__ = [
     "AmclResetAction",
     "WaitAction",
     "WaitTriggerAction",
+    "SetNavigationModeAction",
 ]

@@ -101,6 +101,7 @@ class WaypointSequencerFSM:
         self._pause_pending: bool = False
         self._pre_suspend_state: SequencerState = SequencerState.IDLE
         self._saved_countdown_ms: int = 0
+        self._navigation_mode: str = "normal"
 
         self._countdown_timer = CountdownTimer(self._on_starting_done)
         self._pause_manager = PauseSlotManager(node)
@@ -256,9 +257,16 @@ class WaypointSequencerFSM:
     def _enter_navigating(self) -> None:
         waypoint = self._waypoints.get(self._current_index)
         self._transition(SequencerState.NAVIGATING)
-        self._navigator.send_goal(waypoint, self._on_navigation_result)
+        self._navigator.send_goal(
+            waypoint,
+            self._on_navigation_result,
+            navigation_mode=self._navigation_mode
+        )
 
     def _enter_on_arriving(self, actions) -> None:
+        for action in actions:
+            if action.type == "set_navigation_mode":
+                self._navigation_mode = getattr(action, "mode", "normal")
         self._transition(SequencerState.ON_ARRIVING)
         self._executor.execute(actions, self._on_arriving_done)
 

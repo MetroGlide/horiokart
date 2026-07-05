@@ -50,7 +50,8 @@ def generate_launch_description():
         'behavior_server',
         'bt_navigator',
         'velocity_smoother',
-        'costmap_filter_info_server',
+        # 'costmap_filter_info_server',
+        'collision_monitor',
         'collision_detector',
     ]
 
@@ -189,7 +190,7 @@ def generate_launch_description():
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings +
-                        [('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'cmd_vel')]),
+                        [('cmd_vel', 'cmd_vel_collision'), ('cmd_vel_smoothed', 'cmd_vel')]),
             Node(
                 package='nav2_map_server',
                 executable='costmap_filter_info_server',
@@ -206,6 +207,18 @@ def generate_launch_description():
                 package='nav2_collision_monitor',
                 executable='collision_detector',
                 name='collision_detector',
+                output='screen',
+                emulate_tty=True,
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[configured_params],
+                arguments=['--ros-args', '--log-level', log_level],
+                remappings=remappings,
+            ),
+            Node(
+                package='nav2_collision_monitor',
+                executable='collision_monitor',
+                name='collision_monitor',
                 output='screen',
                 emulate_tty=True,
                 respawn=use_respawn,
@@ -280,7 +293,7 @@ def generate_launch_description():
                 name='velocity_smoother',
                 parameters=[configured_params],
                 remappings=remappings +
-                [('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'cmd_vel')]),
+                [('cmd_vel', 'cmd_vel_collision'), ('cmd_vel_smoothed', 'cmd_vel')]),
             ComposableNode(
                 package='nav2_map_server',
                 plugin='nav2_map_server::CostmapFilterInfoServer',
@@ -291,6 +304,13 @@ def generate_launch_description():
                 package='nav2_collision_monitor',
                 plugin='nav2_collision_monitor::CollisionDetector',
                 name='collision_detector',
+                parameters=[configured_params],
+                remappings=remappings
+            ),
+            ComposableNode(
+                package='nav2_collision_monitor',
+                plugin='nav2_collision_monitor::CollisionMonitor',
+                name='collision_monitor',
                 parameters=[configured_params],
                 remappings=remappings
             ),

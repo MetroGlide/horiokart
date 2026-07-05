@@ -41,6 +41,9 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 
+find_package(behaviortree_cpp_v3 REQUIRED)
+find_package(nav2_behavior_tree REQUIRED)
+
 ################################################################################
 # Build
 ################################################################################
@@ -50,6 +53,10 @@ include_directories(
 
 add_library(${PROJECT_NAME}_lib
   "src/waypoint_navigator.cpp"
+)
+
+add_library(${PROJECT_NAME}_bt_plugins SHARED
+  src/is_collision_detected.cpp
 )
 
 set(DEPENDENCIES
@@ -75,6 +82,15 @@ set(DEPENDENCIES
   "tf2_ros"
   "tf2_geometry_msgs"
 )
+
+ament_target_dependencies(${PROJECT_NAME}_bt_plugins
+  "rclcpp"
+  "nav2_msgs"
+  "nav2_util"
+  "behaviortree_cpp_v3"
+  "nav2_behavior_tree"
+)
+pluginlib_export_plugin_description_file(nav2_core mg_navigation_bt_plugins.xml)
 
 target_link_libraries(${PROJECT_NAME}_lib)
 ament_target_dependencies(${PROJECT_NAME}_lib ${DEPENDENCIES})
@@ -103,15 +119,16 @@ install(TARGETS ${COSTMAP_FOR_BAG_PLAY}
   DESTINATION lib/${PROJECT_NAME}
 )
 
+install(TARGETS ${PROJECT_NAME}_bt_plugins
+  DESTINATION lib
+)
+
 ################################################################################
 # for python nodes
 ################################################################################
 ament_python_install_package(${PROJECT_NAME})
 
-install(PROGRAMS
-  scripts/collision_behavior_node.py
-  DESTINATION lib/${PROJECT_NAME}
-)
+
 
 install(PROGRAMS
   scripts/gnss_amcl_initializer/gnss_amcl_initializer_node.py

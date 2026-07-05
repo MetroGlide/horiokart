@@ -32,8 +32,6 @@ def generate_launch_description():
     # Launch arguments
     launch_argument_creator = LaunchArgumentCreator()
 
-    use_collision_behavior_arg = launch_argument_creator.create(
-        'use_collision_behavior', default="true")
     use_waypoints_follower_arg = launch_argument_creator.create(
         'use_waypoints_follower', default="true")
     waypoints_load_path_arg = launch_argument_creator.create(
@@ -149,15 +147,6 @@ def generate_launch_description():
                               'use_respawn': use_respawn_arg.launch_config,
                               'planning_map': planning_map_yaml_file_arg.launch_config,
                               'container_name': 'nav2_container'}.items()
-        ),
-
-        # Collision Avoidance Node
-        Node(
-            package='mg_navigation',
-            executable='collision_behavior_node.py',
-            parameters=[configured_params],
-            output='screen',
-            condition=IfCondition(use_collision_behavior_arg.launch_config),
         ),
 
         # Waypoint Sequencer

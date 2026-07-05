@@ -1,0 +1,22 @@
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+
+    <!-- リトライ上限なし: 失敗しても永続的に再試行 -->
+    <RecoveryNode number_of_retries="99999" name="QueueWaitNavigation">
+
+      <PipelineSequence name="NavigateWithReplanning">
+        <!-- グローバルパス再計画（センサー入力無効なので既存地図で計算される） -->
+        <RateController hz="0.5">
+          <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+        </RateController>
+        <!-- FollowPath: RPP コントローラーが前方障害物を考慮して前進・停止を自律制御する -->
+        <FollowPath path="{path}" controller_id="FollowPath"/>
+      </PipelineSequence>
+
+      <!-- リカバリーは Wait のみ（バック・スピンなし） -->
+      <Wait wait_duration="5.0"/>
+
+    </RecoveryNode>
+
+  </BehaviorTree>
+</root>

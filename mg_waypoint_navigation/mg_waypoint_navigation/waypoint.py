@@ -16,7 +16,7 @@ class NavigationConfig:
 
 @dataclass
 class ActionConfig:
-    type: str  # "service" | "publish" | "load_map" | "amcl_reset" | "wait" | "wait_trigger"
+    type: str  # "service" | "publish" | "load_map" | "amcl_reset" | "wait" | "wait_trigger" | "set_navigation_mode"
 
     # service
     service: str = ""
@@ -36,6 +36,9 @@ class ActionConfig:
 
     # wait
     countdown_ms: int = 3000
+
+    # set_navigation_mode
+    mode: str = "normal"
 
     def to_dict(self) -> dict:
         d: Dict[str, Any] = {"type": self.type}
@@ -58,6 +61,8 @@ class ActionConfig:
             d["countdown_ms"] = self.countdown_ms
         elif self.type == "wait_trigger":
             pass
+        elif self.type == "set_navigation_mode":
+            d["mode"] = self.mode
         return d
 
     @classmethod
@@ -91,6 +96,8 @@ class ActionConfig:
             return cls(type=action_type, countdown_ms=d.get("countdown_ms", 3000))
         elif action_type == "wait_trigger":
             return cls(type=action_type)
+        elif action_type == "set_navigation_mode":
+            return cls(type=action_type, mode=d.get("mode", "normal"))
         else:
             return cls(type=action_type)
 
