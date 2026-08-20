@@ -90,6 +90,7 @@ ament_target_dependencies(${PROJECT_NAME}_bt_plugins
   "behaviortree_cpp_v3"
   "nav2_behavior_tree"
 )
+target_compile_definitions(${PROJECT_NAME}_bt_plugins PRIVATE BT_PLUGIN_EXPORT)
 pluginlib_export_plugin_description_file(nav2_core mg_navigation_bt_plugins.xml)
 
 target_link_libraries(${PROJECT_NAME}_lib)
